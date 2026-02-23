@@ -1,10 +1,9 @@
--- Add unique partial index on source_url to enable UPSERT deduplication
--- Partial index (WHERE source_url IS NOT NULL) avoids conflicts on null values
--- since multiple listings without a source_url can legitimately coexist
+-- Add UNIQUE constraint on source_url to enable UPSERT deduplication
+-- PostgreSQL allows multiple NULLs in a UNIQUE constraint (NULLs are distinct)
+-- so listings without source_url can coexist without conflicts
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_listings_source_url
-  ON public.car_listings (source_url)
-  WHERE source_url IS NOT NULL;
+ALTER TABLE public.car_listings
+  ADD CONSTRAINT car_listings_source_url_unique UNIQUE (source_url);
 
 -- Add composite index on brand, model, scraped_at for efficient cache TTL queries
 CREATE INDEX IF NOT EXISTS idx_listings_scraped_at
