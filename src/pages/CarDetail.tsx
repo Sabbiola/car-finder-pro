@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ArrowLeft, ExternalLink, Loader2, ChevronLeft, ChevronRight, Award, FileText, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,9 @@ const ratingConfig: Record<string, { label: string; className: string }> = {
 const CarDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { addRecent } = useRecentlyViewed();
+  const canGoBack = location.key !== 'default'; // true if there's real history
   const [car, setCar] = useState<ExtendedListing | null>(null);
   const [similar, setSimilar] = useState<CarListing[]>([]);
   const [allPrices, setAllPrices] = useState<CarListing[]>([]);
@@ -180,7 +182,7 @@ const CarDetail = () => {
 
         {/* Back */}
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => canGoBack ? navigate(-1) : navigate('/')}
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors animate-brutal-in"
         >
           <ArrowLeft className="h-4 w-4" /> Indietro
@@ -279,8 +281,9 @@ const CarDetail = () => {
               )}
 
               <Button
-                className="w-full gap-2 font-semibold rounded-xl h-12 bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 border-0 text-white shadow-md hover:shadow-violet-200 transition-all"
-                onClick={() => window.open(listing.url, '_blank')}
+                className="w-full gap-2 font-semibold rounded-xl h-12 bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 border-0 text-white shadow-md hover:shadow-violet-200 transition-all disabled:opacity-40"
+                onClick={() => listing.url !== '#' && window.open(listing.url, '_blank')}
+                disabled={listing.url === '#'}
               >
                 <ExternalLink className="h-4 w-4" /> Vai all'annuncio originale
               </Button>

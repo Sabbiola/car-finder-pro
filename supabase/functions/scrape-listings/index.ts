@@ -197,9 +197,24 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
     const imgMatch = block.match(/!\[\]\((https:\/\/prod\.pictures\.autoscout24\.net\/listing-images\/[^\s)]+)\)/);
     const imageUrl = imgMatch ? imgMatch[1] : null;
 
-    // NEW: extract listing source_url from markdown link
-    const urlMatch = block.match(/\[(?:\*\*)?[^\]]+(?:\*\*)?\]\((https:\/\/www\.autoscout24\.it\/annunci\/[^\s)]+)\)/);
-    const sourceUrl = urlMatch ? urlMatch[1] : null;
+    // Extract listing source_url — multiple strategies
+    let sourceUrl: string | null = null;
+    // 1. Markdown link [text](https://www.autoscout24.it/annunci/...)
+    const urlMatch1 = block.match(/\[(?:\*\*)?[^\]]+(?:\*\*)?\]\((https:\/\/www\.autoscout24\.it\/annunci\/[^\s)]+)\)/);
+    if (urlMatch1) sourceUrl = urlMatch1[1];
+    // 2. Plain URL anywhere in block
+    if (!sourceUrl) {
+      const urlMatch2 = block.match(/(https:\/\/www\.autoscout24\.it\/annunci\/[^\s)>"]+)/);
+      if (urlMatch2) sourceUrl = urlMatch2[1];
+    }
+    // 3. Construct from image UUID + title slug (AutoScout24 URL = /annunci/{slug}-{uuid})
+    if (!sourceUrl && imageUrl) {
+      const idMatch = imageUrl.match(/listing-images\/([a-f0-9-]{36})/);
+      if (idMatch) {
+        const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        sourceUrl = `https://www.autoscout24.it/annunci/${slug}-${idMatch[1]}`;
+      }
+    }
 
     let year = 0;
     const dateMatch = block.match(/\n(\d{2})\/(\d{4})\n/);
@@ -602,10 +617,12 @@ Deno.serve(async (req) => {
       scrapeJobs.push({ url, parser: (md) => parseBrumBrumListings(md, brand, model, trim) });
     }
 
-    console.log(`Starting ${scrapeJobs.length} scrape jobs in parallel...`);
+    console.log(`Starting ${scrapeJobs.length} scrape jobs in batches...`);
 
+    // Stagger requests to avoid Firecrawl rate limiting (max ~5 concurrent)
     const results = await Promise.allSettled(
-      scrapeJobs.map(async (job) => {
+      scrapeJobs.map(async (job, i) => {
+        if (i >= 5) await new Promise(r => setTimeout(r, (i - 4) * 800));
         const md = await scrapeUrl(apiKey, job.url);
         if (!md) return [];
         const parsed = job.parser(md);
