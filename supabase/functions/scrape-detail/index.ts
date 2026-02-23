@@ -90,6 +90,7 @@ Deno.serve(async (req) => {
     if (details.seats) updateData.seats = details.seats;
     if (details.condition) updateData.condition = details.condition;
     if (details.doors) updateData.doors = details.doors;
+    if (details.color) updateData.color = details.color;
     if (imageUrls.length > 0) updateData.image_urls = imageUrls;
 
     await supabase
@@ -252,7 +253,7 @@ function isCarImage(url: string, sourceUrl: string): boolean {
 
 // ─── Detail parsing ─────────────────────────────────────────────────
 
-function parseDetails(markdown: string, sourceUrl: string) {
+function parseDetails(markdown: string, _sourceUrl: string) {
   const details: {
     description: string | null;
     emission_class: string | null;
@@ -260,6 +261,7 @@ function parseDetails(markdown: string, sourceUrl: string) {
     seats: number | null;
     condition: string | null;
     doors: number | null;
+    color: string | null;
   } = {
     description: null,
     emission_class: null,
@@ -267,14 +269,18 @@ function parseDetails(markdown: string, sourceUrl: string) {
     seats: null,
     condition: null,
     doors: null,
+    color: null,
   };
 
   const fullText = markdown.toLowerCase();
 
   // ─── Emission class ───
+  // AutoScout24 uses "Classe emissioni" (plural), Subito uses "Classe emissione" (singular)
+  // Table format: | Classe emissioni | Euro 6 |   Key-value: Classe emissioni: Euro 6
   const emissionPatterns = [
-    /classe\s*(?:di\s*)?emissione[:\s]*euro\s*(\d)/i,
-    /classe\s*(?:di\s*)?emissione[:\s]*(\d)/i,
+    /\|\s*classe\s*emission[ei]\s*\|\s*euro\s*(\d)/i,          // table format (AutoScout24)
+    /classe\s*(?:di\s*)?emission[ei][:\s]*euro\s*(\d)/i,       // key-value, both singular/plural
+    /classe\s*(?:di\s*)?emission[ei][:\s]*(\d)/i,
     /emissioni[:\s]*euro\s*(\d)/i,
     /normativa\s*(?:anti)?inquinamento[:\s]*euro\s*(\d)/i,
     /standard\s*emissioni?[:\s]*euro\s*(\d)/i,
@@ -287,7 +293,9 @@ function parseDetails(markdown: string, sourceUrl: string) {
   }
 
   // ─── Seats ───
+  // AutoScout24 table: | Posti | 5 |   Subito key-value: Posti: 5
   const seatsPatterns = [
+    /\|\s*posti\s*\|\s*(\d+)/i,                            // table format (AutoScout24)
     /numero\s*(?:di\s*)?posti[:\s]*(\d)/i,
     /posti\s*(?:a\s*sedere)?[:\s]*(\d)/i,
     /(\d)\s*posti\s*(?:a\s*sedere)?/i,
@@ -298,7 +306,9 @@ function parseDetails(markdown: string, sourceUrl: string) {
   }
 
   // ─── Doors ───
+  // AutoScout24 table: | Porte | 5 |   Subito: Porte: 5
   const doorsPatterns = [
+    /\|\s*porte\s*\|\s*(\d+)/i,                            // table format (AutoScout24)
     /numero\s*(?:di\s*)?porte[:\s]*(\d)/i,
     /porte[:\s]*(\d)/i,
     /(\d)\s*[\/\-]\s*\d?\s*porte/i,
@@ -309,7 +319,9 @@ function parseDetails(markdown: string, sourceUrl: string) {
   }
 
   // ─── Condition ───
+  // AutoScout24: | Condizioni | Usato |   Subito: Condizione: Usato
   const condPatterns = [
+    /\|\s*condizion[ei]\s*\|\s*(nuovo|usato)/i,             // table format (AutoScout24)
     /condizion[ei][:\s]*(nuovo|usato|km\s*0|km\s*zero|semi[- ]?nuovo)/i,
     /tipo\s*(?:di\s*)?veicolo[:\s]*(nuovo|usato|km\s*0)/i,
     /stato[:\s]*(nuovo|usato)/i,
@@ -327,10 +339,9 @@ function parseDetails(markdown: string, sourceUrl: string) {
   }
 
   // ─── Version / trim (strict: only from structured data, NOT descriptions) ───
-  // Only match if preceded by a label and followed by a line break or pipe
   const versionPatterns = [
+    /\|\s*(?:versione|allestimento|variante)\s*\|\s*([^\|]{3,60})\s*\|/i,  // table (AutoScout24)
     /(?:versione|allestimento|variante)\s*[:\|]\s*([^\n\|]{3,60})/i,
-    /\|\s*(?:versione|allestimento|variante)\s*\|\s*([^\|]{3,60})\s*\|/i,
   ];
   for (const pat of versionPatterns) {
     const m = markdown.match(pat);
@@ -339,9 +350,27 @@ function parseDetails(markdown: string, sourceUrl: string) {
         .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
         .replace(/[*_]+/g, '')
         .trim();
-      // Reject if it looks like a sentence (description text, not a version name)
       if (ver.length > 2 && ver.length < 80 && !ver.includes('.') && !/\b(che|con|per|del|dal|quindi|ottimo|buono)\b/i.test(ver)) {
         details.version = ver;
+        break;
+      }
+    }
+  }
+
+  // ─── Color ───
+  // AutoScout24: | Colore | Rosso |  or  | Colore esterno | Rosso |
+  // Subito: Colore: Rosso
+  const colorPatterns = [
+    /\|\s*colore\s*(?:esterno)?\s*\|\s*([^|\n]{2,30})\s*\|/i,   // table format (AutoScout24)
+    /colore\s*esterno[:\s]+([^\n|,]{2,30})/i,
+    /colore(?!\s*interno)[:\s]+([^\n|,\|]{2,30})/i,
+  ];
+  for (const pat of colorPatterns) {
+    const m = markdown.match(pat);
+    if (m) {
+      const color = m[1].trim().replace(/[*_\[\]()]+/g, '').trim();
+      if (color.length >= 2 && color.length <= 40 && !color.toLowerCase().includes('interno')) {
+        details.color = color;
         break;
       }
     }
