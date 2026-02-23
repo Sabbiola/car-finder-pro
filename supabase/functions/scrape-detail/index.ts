@@ -198,6 +198,9 @@ function getBaseUrl(url: string): string {
 }
 
 function cleanImageUrl(url: string, sourceUrl: string): string {
+  // Normalize protocol-relative URLs to https
+  if (url.startsWith('//')) url = 'https:' + url;
+
   // For subito.it, upgrade to full size
   if (sourceUrl.includes('subito.it') && url.includes('rule=')) {
     return url.replace(/rule=[^&]+/, 'rule=gallery-2x');
