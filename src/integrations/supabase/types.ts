@@ -24,6 +24,7 @@ export type Database = {
           description: string | null
           detail_scraped: boolean | null
           doors: number | null
+          extra_data: Record<string, unknown> | null
           emission_class: string | null
           fuel: string | null
           id: string
@@ -57,6 +58,7 @@ export type Database = {
           detail_scraped?: boolean | null
           doors?: number | null
           emission_class?: string | null
+          extra_data?: Record<string, unknown> | null
           fuel?: string | null
           id?: string
           image_url?: string | null
@@ -89,6 +91,7 @@ export type Database = {
           detail_scraped?: boolean | null
           doors?: number | null
           emission_class?: string | null
+          extra_data?: Record<string, unknown> | null
           fuel?: string | null
           id?: string
           image_url?: string | null

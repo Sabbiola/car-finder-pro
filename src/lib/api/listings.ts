@@ -31,6 +31,7 @@ export interface CarListing {
   condition?: string | null;
   detail_scraped?: boolean;
   image_urls?: string[] | null;
+  extra_data?: Record<string, unknown> | null;
 }
 
 export async function scrapeListings(filters: SearchFiltersState) {

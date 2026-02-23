@@ -21,6 +21,7 @@ interface ExtendedListing extends CarListing {
   condition?: string | null;
   detail_scraped?: boolean;
   image_urls?: string[] | null;
+  extra_data?: Record<string, unknown> | null;
 }
 
 const ratingConfig: Record<string, { label: string; className: string }> = {
@@ -341,6 +342,80 @@ const CarDetail = () => {
             </div>
           </div>
         )}
+
+        {/* Extra data sections (Dati tecnici, Colore e interni, Equipaggiamento) */}
+        {(() => {
+          const ex = car.extra_data as Record<string, unknown> | null | undefined;
+          if (!ex) return null;
+
+          const techFields = [
+            { label: 'Trazione',     value: ex.drive_type as string },
+            { label: 'Cilindrata',   value: ex.displacement as string },
+            { label: 'Marce',        value: ex.gears != null ? String(ex.gears) : undefined },
+            { label: 'Cilindri',     value: ex.cylinders != null ? String(ex.cylinders) : undefined },
+            { label: 'Peso a vuoto', value: ex.weight as string },
+            { label: 'Consumo',      value: ex.fuel_consumption as string },
+          ].filter(f => f.value);
+
+          const interiorFields = [
+            { label: 'Tipo vernice',    value: ex.paint_type as string },
+            { label: 'Colore interni',  value: ex.interior_color as string },
+            { label: 'Materiale',       value: ex.interior_material as string },
+          ].filter(f => f.value);
+
+          const equipment = Array.isArray(ex.equipment) ? (ex.equipment as string[]) : [];
+
+          return (
+            <>
+              {techFields.length > 0 && (
+                <div className="rounded-2xl border border-border/60 overflow-hidden animate-brutal-up" style={{ animationDelay: '120ms' }}>
+                  <div className="border-b border-border/60 px-5 py-3 bg-muted/40">
+                    <h2 className="text-sm font-semibold">Dati tecnici</h2>
+                  </div>
+                  <div className="p-5 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {techFields.map(f => (
+                      <div key={f.label} className="bg-muted/60 rounded-xl px-3 py-2.5">
+                        <div className="text-[10px] font-medium text-muted-foreground mb-0.5">{f.label}</div>
+                        <div className="text-sm font-bold">{f.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {interiorFields.length > 0 && (
+                <div className="rounded-2xl border border-border/60 overflow-hidden animate-brutal-up" style={{ animationDelay: '140ms' }}>
+                  <div className="border-b border-border/60 px-5 py-3 bg-muted/40">
+                    <h2 className="text-sm font-semibold">Colore e interni</h2>
+                  </div>
+                  <div className="p-5 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {interiorFields.map(f => (
+                      <div key={f.label} className="bg-muted/60 rounded-xl px-3 py-2.5">
+                        <div className="text-[10px] font-medium text-muted-foreground mb-0.5">{f.label}</div>
+                        <div className="text-sm font-bold">{f.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {equipment.length > 0 && (
+                <div className="rounded-2xl border border-border/60 overflow-hidden animate-brutal-up" style={{ animationDelay: '160ms' }}>
+                  <div className="border-b border-border/60 px-5 py-3 bg-muted/40">
+                    <h2 className="text-sm font-semibold">Equipaggiamento <span className="text-muted-foreground font-normal">({equipment.length})</span></h2>
+                  </div>
+                  <div className="p-5 flex flex-wrap gap-1.5">
+                    {equipment.map((item, i) => (
+                      <span key={i} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 border border-violet-200 dark:border-violet-700/50">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {/* Price comparison chart */}
         {chartData.length > 1 && (

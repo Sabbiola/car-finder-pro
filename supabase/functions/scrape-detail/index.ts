@@ -95,6 +95,20 @@ Deno.serve(async (req) => {
     if (details.power) updateData.power = details.power;
     if (imageUrls.length > 0) updateData.image_urls = imageUrls;
 
+    // Extra structured data (JSONB)
+    const extraData: Record<string, unknown> = {};
+    if (details.drive_type) extraData.drive_type = details.drive_type;
+    if (details.displacement) extraData.displacement = details.displacement;
+    if (details.gears) extraData.gears = details.gears;
+    if (details.cylinders) extraData.cylinders = details.cylinders;
+    if (details.weight) extraData.weight = details.weight;
+    if (details.fuel_consumption) extraData.fuel_consumption = details.fuel_consumption;
+    if (details.paint_type) extraData.paint_type = details.paint_type;
+    if (details.interior_color) extraData.interior_color = details.interior_color;
+    if (details.interior_material) extraData.interior_material = details.interior_material;
+    if (details.equipment.length > 0) extraData.equipment = details.equipment;
+    if (Object.keys(extraData).length > 0) updateData.extra_data = extraData;
+
     await supabase
       .from('car_listings')
       .update(updateData)
@@ -266,6 +280,16 @@ function parseDetails(markdown: string, _sourceUrl: string) {
     color: string | null;
     transmission: string | null;
     power: string | null;
+    drive_type: string | null;
+    displacement: string | null;
+    gears: number | null;
+    cylinders: number | null;
+    weight: string | null;
+    fuel_consumption: string | null;
+    paint_type: string | null;
+    interior_color: string | null;
+    interior_material: string | null;
+    equipment: string[];
   } = {
     description: null,
     emission_class: null,
@@ -276,6 +300,16 @@ function parseDetails(markdown: string, _sourceUrl: string) {
     color: null,
     transmission: null,
     power: null,
+    drive_type: null,
+    displacement: null,
+    gears: null,
+    cylinders: null,
+    weight: null,
+    fuel_consumption: null,
+    paint_type: null,
+    interior_color: null,
+    interior_material: null,
+    equipment: [],
   };
 
   const fullText = markdown.toLowerCase();
@@ -415,10 +449,178 @@ function parseDetails(markdown: string, _sourceUrl: string) {
     }
   }
 
+  // ─── Drive type (Trazione) ───
+  const drivePatterns = [
+    /\|\s*trazione\s*\|\s*([^|\n]{2,30})\s*\|/i,
+    /trazione[:\s]+([^\n|,]{2,30})/i,
+  ];
+  for (const pat of drivePatterns) {
+    const m = markdown.match(pat);
+    if (m) {
+      const v = m[1].trim().replace(/[*_\[\]()]+/g, '').trim();
+      if (v.length >= 2) { details.drive_type = v; break; }
+    }
+  }
+
+  // ─── Displacement (Cilindrata) ───
+  const displacementPatterns = [
+    /\|\s*cilindrata\s*\|\s*([^|\n]{2,30})\s*\|/i,
+    /cilindrata[:\s]+([^\n|,]{2,30})/i,
+  ];
+  for (const pat of displacementPatterns) {
+    const m = markdown.match(pat);
+    if (m) {
+      const v = m[1].trim().replace(/[*_\[\]()]+/g, '').trim();
+      if (v.length >= 2) { details.displacement = v; break; }
+    }
+  }
+
+  // ─── Gears (Marce) ───
+  const gearsPatterns = [
+    /\|\s*marce\s*\|\s*(\d+)/i,
+    /marce[:\s]+(\d+)/i,
+    /numero\s*(?:di\s*)?marce[:\s]*(\d+)/i,
+  ];
+  for (const pat of gearsPatterns) {
+    const m = markdown.match(pat);
+    if (m) { details.gears = parseInt(m[1]); break; }
+  }
+
+  // ─── Cylinders (Cilindri) ───
+  const cylinderPatterns = [
+    /\|\s*cilindri\s*\|\s*(\d+)/i,
+    /cilindri[:\s]+(\d+)/i,
+    /numero\s*(?:di\s*)?cilindri[:\s]*(\d+)/i,
+  ];
+  for (const pat of cylinderPatterns) {
+    const m = markdown.match(pat);
+    if (m) { details.cylinders = parseInt(m[1]); break; }
+  }
+
+  // ─── Weight (Peso a vuoto) ───
+  const weightPatterns = [
+    /\|\s*peso\s*(?:a\s*vuoto)?\s*\|\s*([^|\n]{2,30})\s*\|/i,
+    /peso\s*(?:a\s*vuoto)?[:\s]+([^\n|,]{2,30})/i,
+  ];
+  for (const pat of weightPatterns) {
+    const m = markdown.match(pat);
+    if (m) {
+      const v = m[1].trim().replace(/[*_\[\]()]+/g, '').trim();
+      if (v.length >= 2) { details.weight = v; break; }
+    }
+  }
+
+  // ─── Fuel consumption (Consumo di carburante) ───
+  const consumptionPatterns = [
+    /\|\s*consumo\s*(?:di\s*carburante|combinato)?\s*\|\s*([^|\n]{2,40})\s*\|/i,
+    /consumo\s*(?:di\s*carburante|combinato)?[:\s]+([^\n|]{2,40})/i,
+  ];
+  for (const pat of consumptionPatterns) {
+    const m = markdown.match(pat);
+    if (m) {
+      const v = m[1].trim().replace(/[*_\[\]()]+/g, '').trim();
+      if (v.length >= 2) { details.fuel_consumption = v; break; }
+    }
+  }
+
+  // ─── Paint type (Tipo di vernice) ───
+  const paintPatterns = [
+    /\|\s*tipo\s*(?:di\s*)?vernice\s*\|\s*([^|\n]{2,30})\s*\|/i,
+    /tipo\s*(?:di\s*)?vernice[:\s]+([^\n|,]{2,30})/i,
+  ];
+  for (const pat of paintPatterns) {
+    const m = markdown.match(pat);
+    if (m) {
+      const v = m[1].trim().replace(/[*_\[\]()]+/g, '').trim();
+      if (v.length >= 2) { details.paint_type = v; break; }
+    }
+  }
+
+  // ─── Interior color (Colore finiture interne) ───
+  const intColorPatterns = [
+    /\|\s*colore\s*(?:finiture\s*)?intern[eio]\s*\|\s*([^|\n]{2,30})\s*\|/i,
+    /colore\s*(?:finiture\s*)?intern[eio][:\s]+([^\n|,]{2,30})/i,
+  ];
+  for (const pat of intColorPatterns) {
+    const m = markdown.match(pat);
+    if (m) {
+      const v = m[1].trim().replace(/[*_\[\]()]+/g, '').trim();
+      if (v.length >= 2) { details.interior_color = v; break; }
+    }
+  }
+
+  // ─── Interior material (Materiale interni) ───
+  const materialPatterns = [
+    /\|\s*materiale\s*(?:intern[io])?\s*\|\s*([^|\n]{2,40})\s*\|/i,
+    /materiale\s*(?:intern[io])?[:\s]+([^\n|,]{2,40})/i,
+  ];
+  for (const pat of materialPatterns) {
+    const m = markdown.match(pat);
+    if (m) {
+      const v = m[1].trim().replace(/[*_\[\]()]+/g, '').trim();
+      if (v.length >= 2) { details.interior_material = v; break; }
+    }
+  }
+
+  // ─── Equipment (Equipaggiamento) ───
+  details.equipment = extractEquipment(markdown, fullText);
+
   // ─── Description ───
   details.description = extractDescription(markdown, fullText);
 
   return details;
+}
+
+function extractEquipment(markdown: string, fullText: string): string[] {
+  const items: string[] = [];
+
+  // Find the equipment section by heading
+  const headings = [
+    'equipaggiamento',
+    'dotazioni',
+    'optional',
+    'caratteristiche principali',
+  ];
+
+  let sectionText = '';
+  for (const heading of headings) {
+    const idx = fullText.indexOf(heading);
+    if (idx > -1) {
+      const after = markdown.slice(idx + heading.length).trim().replace(/^[:\s#]+/, '');
+      // End at the next major section heading or known boundary
+      const endMatch = after.search(/\n#{1,3}\s|contatta|invia un messaggio|inserisci|pubblica|descrizione\s*del\s*veicolo|descrizione\s*venditore|confronto\s*prezzi|annunci\s*simili|dati\s*(?:di\s*base|tecnici)|ambiente|cronologia|colore\s*e\s*interni/i);
+      sectionText = endMatch > 0 ? after.slice(0, endMatch).trim() : after.slice(0, 5000).trim();
+      if (sectionText.length > 20) break;
+      sectionText = '';
+    }
+  }
+
+  if (!sectionText) return items;
+
+  // Extract items from different formats:
+  // 1. Bullet points: "- Item" or "* Item" or "• Item"
+  // 2. Lines with checkmarks: "✓ Item" or "✔ Item"
+  // 3. Simple lines (one item per line in equipment sections)
+  const lines = sectionText.split('\n');
+  for (const line of lines) {
+    let cleaned = line
+      .replace(/^[\s\-*•✓✔✅►▸▹→]+/, '')  // Remove bullet markers
+      .replace(/[*_#]+/g, '')                 // Remove markdown formatting
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // Remove markdown links
+      .trim();
+
+    // Skip empty, too short, or header-like lines
+    if (!cleaned || cleaned.length < 2 || cleaned.length > 80) continue;
+    if (cleaned.startsWith('|') || cleaned.startsWith('---')) continue;
+    // Skip sub-headings like "Comfort", "Sicurezza", "Intrattenimento/Media"
+    if (/^(comfort|sicurezza|intrattenimento|media|extra|altro|esterno|interno)\s*$/i.test(cleaned)) continue;
+    // Skip if it looks like a section header (all caps or very short with colon)
+    if (/^[A-Z\s]{2,20}$/.test(cleaned)) continue;
+
+    items.push(cleaned);
+  }
+
+  return items;
 }
 
 function extractDescription(markdown: string, fullText: string): string | null {
