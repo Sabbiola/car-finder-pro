@@ -166,11 +166,11 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
   const seenUuids = new Set<string>();
   const brandLow = brand.toLowerCase();
 
-  // Strategy 1: split on CDN image lines (primary)
-  const parts = markdown.split(/(?=!\[\]\(https:\/\/prod\.pictures\.autoscout24\.net\/listing-images\/)/);
+  // Strategy 1: split on CDN image lines — allow any alt text (AS24 now uses non-empty alt)
+  const parts = markdown.split(/(?=!\[[^\]]*\]\(https:\/\/prod\.pictures\.autoscout24\.net\/listing-images\/)/);
 
   for (const block of parts) {
-    const imgMatch = block.match(/^!\[\]\((https:\/\/prod\.pictures\.autoscout24\.net\/listing-images\/([a-f0-9\-]{36})[^\s)]*)\)/);
+    const imgMatch = block.match(/^!\[[^\]]*\]\((https:\/\/prod\.pictures\.autoscout24\.net\/listing-images\/([a-f0-9\-]{36})[^\s)]*)\)/);
     if (!imgMatch) continue;
 
     const rawImageUrl = imgMatch[1];
@@ -276,9 +276,9 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
     });
   }
 
-  // Strategy 2 fallback: if no images found, try brand-bold-title split (old approach)
+  // Strategy 2: brand-bold-title split (if no CDN images found)
   if (listings.length === 0) {
-    console.log('AutoScout: no images found, trying brand-title fallback');
+    console.log('AutoScout S2: no images, trying brand-title fallback');
     const brandEscaped = brand.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
     const brandPattern = new RegExp(`\\n(?=\\*\\*${brandEscaped}[\\s\\-])`, 'i');
     const fallbackBlocks = markdown.split(brandPattern);
@@ -292,7 +292,7 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
       if (!priceMatch) continue;
       const price = parseInt(priceMatch[1].replace(/\./g, ''));
       if (!price || price < 1000) continue;
-      const imgM = block.match(/!\[\]\((https:\/\/prod\.pictures\.autoscout24\.net\/listing-images\/([a-f0-9\-]{36})[^\s)]*)\)/);
+      const imgM = block.match(/!\[[^\]]*\]\((https:\/\/prod\.pictures\.autoscout24\.net\/listing-images\/([a-f0-9\-]{36})[^\s)]*)\)/);
       const imageUrl = imgM ? imgM[1].replace(/\/\d+x\d+(\.\w+)$/, '/800x600$1') : null;
       const imageUuid = imgM ? imgM[2] : null;
       if (imageUuid && seenUuids.has(imageUuid)) continue;
@@ -321,7 +321,49 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
     }
   }
 
-  console.log(`AutoScout parser: ${listings.length} listings found`);
+  // Strategy 3: split on listing URLs — last resort when images/bold titles missing
+  if (listings.length === 0) {
+    console.log('AutoScout S3: trying URL-anchor split');
+    const seenUrls = new Set<string>();
+    const urlRegex = /https:\/\/www\.autoscout24\.it\/annunci\/[a-z0-9][a-z0-9\-]{5,120}/g;
+    const urlMatches = [...markdown.matchAll(urlRegex)];
+    for (const match of urlMatches) {
+      const sourceUrl = match[0];
+      if (seenUrls.has(sourceUrl)) continue;
+      seenUrls.add(sourceUrl);
+      // Context: 300 chars around the URL
+      const start = Math.max(0, match.index! - 200);
+      const end = Math.min(markdown.length, match.index! + 400);
+      const ctx = markdown.slice(start, end);
+      if (!ctx.toLowerCase().includes(brandLow.slice(0, 3))) continue;
+      const priceMatch = ctx.match(/€\s*([\d.]+)/);
+      if (!priceMatch) continue;
+      const price = parseInt(priceMatch[1].replace(/\./g, ''));
+      if (!price || price < 1000 || price > 900000) continue;
+      const imgM = ctx.match(/!\[[^\]]*\]\((https:\/\/prod\.pictures\.autoscout24\.net\/listing-images\/([a-f0-9\-]{36})[^\s)]*)\)/);
+      const imageUrl = imgM ? imgM[1].replace(/\/\d+x\d+(\.\w+)$/, '/800x600$1') : null;
+      // Title from link text or bold
+      let title = '';
+      const linkT = ctx.match(/\[([^\]]{5,100}?)\]\(https:\/\/www\.autoscout24\.it\/annunci\//);
+      if (linkT && linkT[1].toLowerCase().includes(brandLow.slice(0, 3))) title = linkT[1].replace(/\*\*/g, '').trim();
+      if (!title) title = `${brand} ${model}`;
+      let year = 0;
+      const dM = ctx.match(/\b(\d{1,2})\/(\d{4})\b/);
+      if (dM) year = parseInt(dM[2]);
+      let km = 0;
+      const kM = ctx.match(/([\d.]+)\s*km\b/i);
+      if (kM) km = parseInt(kM[1].replace(/\./g, ''));
+      listings.push({
+        title, brand, model, trim: trim || extractTrimFromTitle(title, brand, model),
+        year: year || new Date().getFullYear(), price, km,
+        fuel: detectFuel(ctx), transmission: detectTransmission(ctx), power: null, color: null,
+        doors: null, body_type: detectBodyType(title), source: 'autoscout24', source_url: sourceUrl,
+        image_url: imageUrl, location: null, is_new: km < 100,
+      });
+    }
+  }
+
+  console.log(`AutoScout parser: ${listings.length} listings found (md length: ${markdown.length})`);
   return listings;
 }
 
@@ -331,7 +373,47 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
 function parseAutomobileListings(markdown: string, brand: string, model: string, trim: string | null): ParsedListing[] {
   const listings: ParsedListing[] = [];
   const modelRegex = new RegExp(model.replace(/\s+/g, '\\s*'), 'i');
-  const sections = markdown.split(/(?=\[!\[)/);
+
+  // Try two splitting strategies: linked-image pattern first, then listing URL anchors
+  let sections = markdown.split(/(?=\[!\[)/).filter(s => s.length > 40);
+
+  // Fallback: split on automobile.it/annunci URL anchors
+  if (sections.length <= 2) {
+    const seenUrls = new Set<string>();
+    const urlRegex = /https?:\/\/(?:www\.)?automobile\.it\/annunci\/[^\s)>"]{10,}/g;
+    for (const match of markdown.matchAll(urlRegex)) {
+      const url = match[0].replace(/[)>"]+$/, '');
+      if (seenUrls.has(url)) continue;
+      seenUrls.add(url);
+      const start = Math.max(0, match.index! - 100);
+      const end = Math.min(markdown.length, match.index! + 500);
+      const ctx = markdown.slice(start, end);
+      if (!modelRegex.test(ctx)) continue;
+      const priceMatch = ctx.match(/€\s*([\d.]+)/);
+      if (!priceMatch) continue;
+      const price = parseInt(priceMatch[1].replace(/\./g, ''));
+      if (!price || price < 1000) continue;
+      let year = 0;
+      const yM = ctx.match(/(?:Gennaio|Febbraio|Marzo|Aprile|Maggio|Giugno|Luglio|Agosto|Settembre|Ottobre|Novembre|Dicembre)\s+(\d{4})/i);
+      if (yM) year = parseInt(yM[1]);
+      if (!year) { const yf = ctx.match(/\b(20[0-2]\d)\b/); if (yf) year = parseInt(yf[1]); }
+      let km = 0;
+      const kM = ctx.match(/\b(\d{1,3}(?:\.\d{3})*)\s*km\b/i);
+      if (kM) km = parseInt(kM[1].replace(/\./g, ''));
+      const imgM = ctx.match(/!\[.*?\]\((https?:\/\/[^\s)]+\.(?:jpg|jpeg|png|webp)[^\s)]*)\)/);
+      const titleM = ctx.match(/(?:\*\*|###?\s*)([^\n*]+)/i);
+      const title = titleM ? titleM[1].trim() : `${brand} ${model}`;
+      listings.push({
+        title, brand, model, trim: trim || null,
+        year: year || new Date().getFullYear(), price, km,
+        fuel: detectFuel(ctx), transmission: detectTransmission(ctx), power: null, color: null, doors: null,
+        body_type: detectBodyType(title), source: 'automobile', source_url: url,
+        image_url: imgM ? imgM[1] : null, location: null, is_new: false,
+      });
+    }
+    console.log(`Automobile.it URL-anchor fallback: ${listings.length} listings`);
+    return listings;
+  }
 
   for (const section of sections) {
     if (!modelRegex.test(section)) continue;
@@ -392,8 +474,8 @@ function parseBrumBrumListings(markdown: string, brand: string, model: string, t
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    // BrumBrum listing links: [Title](https://www.brumbrum.it/auto/...)
-    const linkMatch = line.match(/\[([^\]]+)\]\((https:\/\/www\.brumbrum\.it\/auto\/[^\s)]+)\)/);
+    // BrumBrum listing links: /auto/ or /usato/ paths
+    const linkMatch = line.match(/\[([^\]]+)\]\((https:\/\/www\.brumbrum\.it\/(?:auto|usato|catalogo)\/[^\s)]+)\)/);
     if (!linkMatch) continue;
 
     const title = linkMatch[1].trim();
@@ -682,7 +764,7 @@ Deno.serve(async (req) => {
           const combined = [asParamStr, pageParam].filter(Boolean).join('&');
           url = combined ? `${asBaseUrl}&${combined}` : asBaseUrl;
         }
-        scrapeJobs.push({ url, parser: (md) => parseAutoScoutListings(md, brand, model, trim), waitFor: 9000 });
+        scrapeJobs.push({ url, parser: (md) => parseAutoScoutListings(md, brand, model, trim), waitFor: 12000 });
       }
     }
 
