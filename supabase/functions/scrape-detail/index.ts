@@ -91,6 +91,8 @@ Deno.serve(async (req) => {
     if (details.condition) updateData.condition = details.condition;
     if (details.doors) updateData.doors = details.doors;
     if (details.color) updateData.color = details.color;
+    if (details.transmission) updateData.transmission = details.transmission;
+    if (details.power) updateData.power = details.power;
     if (imageUrls.length > 0) updateData.image_urls = imageUrls;
 
     await supabase
@@ -262,6 +264,8 @@ function parseDetails(markdown: string, _sourceUrl: string) {
     condition: string | null;
     doors: number | null;
     color: string | null;
+    transmission: string | null;
+    power: string | null;
   } = {
     description: null,
     emission_class: null,
@@ -270,6 +274,8 @@ function parseDetails(markdown: string, _sourceUrl: string) {
     condition: null,
     doors: null,
     color: null,
+    transmission: null,
+    power: null,
   };
 
   const fullText = markdown.toLowerCase();
@@ -373,6 +379,39 @@ function parseDetails(markdown: string, _sourceUrl: string) {
         details.color = color;
         break;
       }
+    }
+  }
+
+  // ─── Transmission (fills in if search scrape missed it) ───
+  // AutoScout24: "Tipo di cambio  Automatico"   Subito: "Cambio: Manuale"
+  const transPatterns = [
+    /\|\s*(?:tipo\s*(?:di\s*)?)?cambio\s*\|\s*(automatico|manuale|sequenziale)/i,  // table
+    /(?:tipo\s*(?:di\s*)?)?cambio[:\s]+(automatico|manuale|sequenziale)/i,
+    /trasmissione[:\s]+(automatica|manuale|sequenziale)/i,
+  ];
+  for (const pat of transPatterns) {
+    const m = markdown.match(pat);
+    if (m) {
+      const v = m[1].toLowerCase();
+      details.transmission = v.startsWith('auto') || v === 'sequenziale' ? 'Automatico' : 'Manuale';
+      break;
+    }
+  }
+
+  // ─── Power (fills in if search scrape missed it) ───
+  // AutoScout24: "Potenza  190 kW (258 CV)"   Subito: "Potenza: 258 CV"
+  const powerPatterns = [
+    /\|\s*potenza\s*\|\s*\d+\s*kW\s*\((\d+)\s*CV\)/i,               // table: | Potenza | 190 kW (258 CV) |
+    /potenza[:\s]+\d+\s*kW\s*\((\d+)\s*CV\)/i,                       // "Potenza 190 kW (258 CV)"
+    /potenza[:\s]+(\d+)\s*CV/i,                                        // "Potenza: 258 CV"
+    /(\d+)\s*kW\s*\((\d+)\s*CV\)/,                                    // standalone "190 kW (258 CV)"
+  ];
+  for (const pat of powerPatterns) {
+    const m = markdown.match(pat);
+    if (m) {
+      const cv = m[2] || m[1]; // last pattern has 2 groups
+      details.power = `${cv} CV`;
+      break;
     }
   }
 
