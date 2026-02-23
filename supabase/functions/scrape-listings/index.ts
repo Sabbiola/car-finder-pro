@@ -126,8 +126,8 @@ function parseSubitoListings(markdown: string, brand: string, model: string, tri
       isNew = /^Nuovo/i.test(specs);
       const dateMatch = specs.match(/(\d{2})\/(\d{4})/);
       if (dateMatch) year = parseInt(dateMatch[2]);
-      const kmMatch = specs.match(/\d{2}\/\d{4}(\d+)\s*Km/i);
-      if (kmMatch) km = parseInt(kmMatch[1]);
+      const kmMatch = specs.match(/\d{2}\/\d{4}\s*([\d.]+)\s*Km/i);
+      if (kmMatch) km = parseInt(kmMatch[1].replace(/\./g, ''));
     } else {
       const dateMatch = block.match(/(\d{2})\/(\d{4})/);
       if (dateMatch) year = parseInt(dateMatch[2]);
@@ -339,6 +339,10 @@ function parseAutomobileListings(markdown: string, brand: string, model: string,
     const imgMatch = section.match(/!\[.*?\]\((https:\/\/[^\s)]+\.(?:jpg|jpeg|png|webp)[^\s)]*)\)/);
     const imageUrl = imgMatch ? imgMatch[1] : null;
 
+    // Extract listing page URL from [![img](img_url)](page_url) pattern
+    const srcUrlMatch = section.match(/\[!\[[^\]]*\]\([^)]*\)\]\((https?:\/\/[^\s)]*automobile\.it[^\s)]+)\)/);
+    const sourceUrl = srcUrlMatch ? srcUrlMatch[1].replace(/[)>"]+$/, '') : null;
+
     const priceMatch = section.match(/€\s*([\d.]+)/);
     if (!priceMatch) continue;
     const price = parseInt(priceMatch[1].replace(/\./g, ''));
@@ -366,7 +370,7 @@ function parseAutomobileListings(markdown: string, brand: string, model: string,
       title, brand, model, trim: trim || null,
       year: year || new Date().getFullYear(), price, km,
       fuel, transmission, power: null, color: null, doors: null,
-      body_type: bodyType, source: 'automobile', source_url: null,
+      body_type: bodyType, source: 'automobile', source_url: sourceUrl,
       image_url: imageUrl, location: null, is_new: false,
     });
   }
@@ -608,10 +612,15 @@ Deno.serve(async (req) => {
     const model = filters?.model || '';
     const trim = filters?.trim || null;
 
-    // P3: extract additional filter params to narrow scraping URLs
     const yearMin = filters?.yearMin ? parseInt(filters.yearMin) : null;
+    const yearMax = filters?.yearMax ? parseInt(filters.yearMax) : null;
+    const priceMin = filters?.priceMin ? parseInt(filters.priceMin) : null;
     const priceMax = filters?.priceMax ? parseInt(filters.priceMax) : null;
+    const kmMin = filters?.kmMin ? parseInt(filters.kmMin) : null;
+    const kmMax = filters?.kmMax ? parseInt(filters.kmMax) : null;
     const fuelFilter = filters?.fuel || null;
+    const transmissionFilter = filters?.transmission || null;
+    const sources: string[] = filters?.sources?.length ? filters.sources : ['autoscout24', 'subito', 'automobile', 'brumbrum'];
 
     if (!brand) {
       return new Response(JSON.stringify({ success: false, error: 'Brand is required' }),
@@ -624,61 +633,75 @@ Deno.serve(async (req) => {
     const scrapeJobs: { url: string; parser: (md: string) => ParsedListing[]; waitFor?: number }[] = [];
 
     // --- Subito.it ---
-    for (let page = 1; page <= 4; page++) {
-      const url = page === 1
-        ? `https://www.subito.it/annunci-italia/vendita/auto/?q=${query}`
-        : `https://www.subito.it/annunci-italia/vendita/auto/?q=${query}&o=${page}`;
-      scrapeJobs.push({ url, parser: (md) => parseSubitoListings(md, brand, model, trim) });
+    if (sources.includes('subito')) {
+      for (let page = 1; page <= 4; page++) {
+        const url = page === 1
+          ? `https://www.subito.it/annunci-italia/vendita/auto/?q=${query}`
+          : `https://www.subito.it/annunci-italia/vendita/auto/?q=${query}&o=${page}`;
+        scrapeJobs.push({ url, parser: (md) => parseSubitoListings(md, brand, model, trim) });
+      }
     }
 
     // --- AutoScout24 ---
-    // P3: build filter params for AutoScout24 URL
     const fuelCodeMap: Record<string, string> = {
       'Benzina': 'B', 'Diesel': 'D', 'Elettrica': 'E',
       'Ibrida': 'H', 'GPL': 'L', 'Metano': 'M',
     };
+    const gearCodeMap: Record<string, string> = { 'Automatico': 'A', 'Manuale': 'M' };
     const asParams = new URLSearchParams();
     if (yearMin) asParams.set('fregfrom', String(yearMin));
+    if (yearMax) asParams.set('fregto', String(yearMax));
+    if (priceMin) asParams.set('pricefrom', String(priceMin));
     if (priceMax) asParams.set('priceto', String(priceMax));
+    if (kmMin) asParams.set('kmfrom', String(kmMin));
+    if (kmMax) asParams.set('kmto', String(kmMax));
     if (fuelFilter && fuelCodeMap[fuelFilter]) asParams.set('fuelc', fuelCodeMap[fuelFilter]);
+    if (transmissionFilter && gearCodeMap[transmissionFilter]) asParams.set('gear', gearCodeMap[transmissionFilter]);
     const asParamStr = asParams.toString();
 
     const asSlug = getAutoScoutModelSlug(brand, model);
-    const brandSlug = brand.toLowerCase().replace(/\s+/g, '-');
+    // Normalize brand slug: remove accents/diacritics (handles Škoda, Citroën, etc.)
+    const brandSlug = brand.toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\w]+/g, '-').replace(/^-|-$/g, '');
 
     // Use model-specific slug if available, otherwise fall back to brand + query param
     const asBaseUrl = asSlug
       ? `https://www.autoscout24.it/lst/${brandSlug}/${asSlug}`
       : `https://www.autoscout24.it/lst/${brandSlug}?q=${encodeURIComponent(model)}`;
 
-    for (let page = 1; page <= 3; page++) {
-      let url: string;
-      if (asSlug) {
-        // slug-based URL: /lst/brand/model?filterParams&page=N
-        const pageParam = page > 1 ? `page=${page}` : '';
-        const combined = [asParamStr, pageParam].filter(Boolean).join('&');
-        url = combined ? `${asBaseUrl}?${combined}` : asBaseUrl;
-      } else {
-        // query-based URL: /lst/brand?q=model&filterParams&page=N
-        const pageParam = page > 1 ? `page=${page}` : '';
-        const combined = [asParamStr, pageParam].filter(Boolean).join('&');
-        url = combined ? `${asBaseUrl}&${combined}` : asBaseUrl;
+    if (sources.includes('autoscout24')) {
+      for (let page = 1; page <= 3; page++) {
+        let url: string;
+        if (asSlug) {
+          const pageParam = page > 1 ? `page=${page}` : '';
+          const combined = [asParamStr, pageParam].filter(Boolean).join('&');
+          url = combined ? `${asBaseUrl}?${combined}` : asBaseUrl;
+        } else {
+          const pageParam = page > 1 ? `page=${page}` : '';
+          const combined = [asParamStr, pageParam].filter(Boolean).join('&');
+          url = combined ? `${asBaseUrl}&${combined}` : asBaseUrl;
+        }
+        scrapeJobs.push({ url, parser: (md) => parseAutoScoutListings(md, brand, model, trim), waitFor: 9000 });
       }
-      scrapeJobs.push({ url, parser: (md) => parseAutoScoutListings(md, brand, model, trim), waitFor: 9000 });
     }
 
     // --- Automobile.it ---
-    for (let page = 1; page <= 2; page++) {
-      const pageParam = page > 1 ? `&p=${page}` : '';
-      const url = `https://www.automobile.it/annunci?q=${query}${pageParam}`;
-      scrapeJobs.push({ url, parser: (md) => parseAutomobileListings(md, brand, model, trim) });
+    if (sources.includes('automobile')) {
+      for (let page = 1; page <= 2; page++) {
+        const pageParam = page > 1 ? `&p=${page}` : '';
+        const url = `https://www.automobile.it/annunci?q=${query}${pageParam}`;
+        scrapeJobs.push({ url, parser: (md) => parseAutomobileListings(md, brand, model, trim) });
+      }
     }
 
     // --- BrumBrum ---
-    for (let page = 1; page <= 2; page++) {
-      const pageParam = page > 1 ? `&p=${page}` : '';
-      const url = `https://www.brumbrum.it/usato/?q=${query}${pageParam}`;
-      scrapeJobs.push({ url, parser: (md) => parseBrumBrumListings(md, brand, model, trim) });
+    if (sources.includes('brumbrum')) {
+      for (let page = 1; page <= 2; page++) {
+        const pageParam = page > 1 ? `&p=${page}` : '';
+        const url = `https://www.brumbrum.it/usato/?q=${query}${pageParam}`;
+        scrapeJobs.push({ url, parser: (md) => parseBrumBrumListings(md, brand, model, trim) });
+      }
     }
 
     console.log(`Starting ${scrapeJobs.length} scrape jobs in batches...`);
