@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { ArrowUpDown, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Header from '@/components/Header';
@@ -9,14 +9,18 @@ import { scrapeListings, fetchListings, type CarListing } from '@/lib/api/listin
 import { toCardListing } from '@/lib/toCardListing';
 import { useToast } from '@/hooks/use-toast';
 
-type SortOption = 'price-asc' | 'price-desc' | 'km-asc' | 'year-desc';
+type SortOption = 'price-asc' | 'price-desc' | 'km-asc' | 'year-desc' | 'value-asc' | 'best-deal';
 
 const sortLabels: Record<SortOption, string> = {
   'price-asc': 'Prezzo ↑',
   'price-desc': 'Prezzo ↓',
   'km-asc': 'Km ↑',
   'year-desc': 'Anno ↓',
+  'value-asc': 'Miglior valore',
+  'best-deal': 'Migliori affari',
 };
+
+const PAGE_SIZE = 12;
 
 function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
   return {
@@ -37,6 +41,7 @@ function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
     doors: params.get('doors') || '',
     bodyType: params.get('bodyType') || '',
     location: params.get('location') || '',
+    sellerType: (params.get('sellerType') as 'all' | 'private' | 'dealer') || 'all',
   };
 }
 
@@ -48,6 +53,8 @@ const SearchResults = () => {
   const [listings, setListings] = useState<CarListing[]>([]);
   const [loading, setLoading] = useState(false);
   const [scraped, setScraped] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   const CACHE_TTL_HOURS = 6;
@@ -101,14 +108,50 @@ const SearchResults = () => {
 
   const results = useMemo(() => {
     const list = [...listings];
+    const currentYear = new Date().getFullYear();
     switch (sort) {
       case 'price-asc': list.sort((a, b) => a.price - b.price); break;
       case 'price-desc': list.sort((a, b) => b.price - a.price); break;
       case 'km-asc': list.sort((a, b) => a.km - b.km); break;
       case 'year-desc': list.sort((a, b) => b.year - a.year); break;
+      // Miglior valore: prezzo / (anni età + 1) — più basso è meglio
+      case 'value-asc':
+        list.sort((a, b) => {
+          const scoreA = a.price / (currentYear - a.year + 1);
+          const scoreB = b.price / (currentYear - b.year + 1);
+          return scoreA - scoreB;
+        });
+        break;
+      // Migliori affari: best > good > normal, poi prezzo asc
+      case 'best-deal':
+        list.sort((a, b) => {
+          const order: Record<string, number> = { best: 0, good: 1, normal: 2 };
+          const ra = order[a.price_rating || 'normal'] ?? 2;
+          const rb = order[b.price_rating || 'normal'] ?? 2;
+          return ra !== rb ? ra - rb : a.price - b.price;
+        });
+        break;
     }
     return list;
   }, [sort, listings]);
+
+  const visibleResults = useMemo(() => results.slice(0, visibleCount), [results, visibleCount]);
+  const hasMore = visibleCount < results.length;
+
+  // Infinite scroll sentinel
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      entries => { if (entries[0].isIntersecting && hasMore) setVisibleCount(c => c + PAGE_SIZE); },
+      { rootMargin: '200px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore]);
+
+  // Reset visible count when results change
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [listings, sort]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -161,10 +204,23 @@ const SearchResults = () => {
         </div>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 stagger-children">
-          {results.map((listing, i) => (
+          {visibleResults.map((listing, i) => (
             <CarCard key={listing.id} listing={toCardListing(listing)} index={i} showCompare />
           ))}
         </div>
+
+        {/* Infinite scroll sentinel */}
+        <div ref={sentinelRef} className="h-4" />
+        {hasMore && (
+          <div className="flex justify-center py-4">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        )}
+        {!loading && scraped && results.length > 0 && !hasMore && (
+          <p className="text-center text-xs text-muted-foreground uppercase tracking-[0.1em] py-4">
+            Tutti i {results.length} risultati caricati
+          </p>
+        )}
 
         {!loading && scraped && results.length === 0 && (
           <div className="text-center py-16 text-muted-foreground space-y-2">

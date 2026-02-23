@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Share2, Check } from 'lucide-react';
 import Header from '@/components/Header';
 import { fetchListingsByIds } from '@/lib/api/fetchByIds';
 import type { CarListing } from '@/lib/api/listings';
@@ -49,6 +49,13 @@ const Confronta = () => {
   const ids = (searchParams.get('ids') || '').split(',').filter(Boolean);
   const [cars, setCars] = useState<CarListing[]>([]);
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  const handleShareComparison = async () => {
+    await navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   useEffect(() => {
     if (!ids.length) { setLoading(false); return; }
@@ -70,11 +77,22 @@ const Confronta = () => {
           <ArrowLeft className="h-3 w-3" /> Indietro
         </button>
 
-        <div className="flex items-baseline gap-3 animate-brutal-up">
-          <h1 className="text-xl font-bold uppercase tracking-wide">Confronto auto</h1>
-          <span className="text-muted-foreground text-sm uppercase tracking-[0.1em]">
-            ({cars.length} selezionate)
-          </span>
+        <div className="flex items-center justify-between animate-brutal-up">
+          <div className="flex items-baseline gap-3">
+            <h1 className="text-xl font-bold uppercase tracking-wide">Confronto auto</h1>
+            <span className="text-muted-foreground text-sm uppercase tracking-[0.1em]">
+              ({cars.length} selezionate)
+            </span>
+          </div>
+          {ids.length >= 2 && (
+            <button
+              onClick={handleShareComparison}
+              className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.15em] text-muted-foreground hover:text-accent transition-colors border border-border px-3 py-1.5"
+            >
+              {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Share2 className="h-3 w-3" />}
+              {copied ? 'Copiato!' : 'Copia link'}
+            </button>
+          )}
         </div>
 
         {loading && (

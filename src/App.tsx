@@ -10,29 +10,32 @@ import Preferiti from "./pages/Preferiti";
 import Confronta from "./pages/Confronta";
 import NotFound from "./pages/NotFound";
 import { CompareProvider } from "./hooks/useCompare";
+import { AuthProvider } from "./contexts/AuthContext";
 import CompareBar from "./components/CompareBar";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <CompareProvider>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/risultati" element={<SearchResults />} />
-            <Route path="/auto/:id" element={<CarDetail />} />
-            <Route path="/preferiti" element={<Preferiti />} />
-            <Route path="/confronta" element={<Confronta />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-          <CompareBar />
-        </CompareProvider>
-      </BrowserRouter>
-    </TooltipProvider>
+    <AuthProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <CompareProvider>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/risultati" element={<SearchResults />} />
+              <Route path="/auto/:id" element={<CarDetail />} />
+              <Route path="/preferiti" element={<Preferiti />} />
+              <Route path="/confronta" element={<Confronta />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+            <CompareBar />
+          </CompareProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 

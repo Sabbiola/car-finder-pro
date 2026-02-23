@@ -12,6 +12,8 @@ import type { CarListing } from '@/lib/api/listings';
 import { toCardListing } from '@/lib/toCardListing';
 import { useRecentlyViewed } from '@/hooks/useRecentlyViewed';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
+import LoanCalculator from '@/components/LoanCalculator';
+import PriceAlertButton from '@/components/PriceAlertButton';
 
 interface ExtendedListing extends CarListing {
   description?: string | null;
@@ -311,16 +313,19 @@ const CarDetail = () => {
                 </div>
               )}
 
-              <Button
-                className="w-full gap-2 font-semibold rounded-xl h-12 bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 border-0 text-white shadow-md hover:shadow-violet-200 transition-all disabled:opacity-40"
-                onClick={() => {
-                  const url = listing.url !== '#' ? listing.url : resolvedUrl;
-                  if (url) window.open(url, '_blank');
-                }}
-                disabled={listing.url === '#' && !resolvedUrl}
-              >
-                <ExternalLink className="h-4 w-4" /> Vai all'annuncio originale
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1 gap-2 font-semibold rounded-xl h-12 bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 border-0 text-white shadow-md hover:shadow-violet-200 transition-all disabled:opacity-40"
+                  onClick={() => {
+                    const url = listing.url !== '#' ? listing.url : resolvedUrl;
+                    if (url) window.open(url, '_blank');
+                  }}
+                  disabled={listing.url === '#' && !resolvedUrl}
+                >
+                  <ExternalLink className="h-4 w-4" /> Vai all'annuncio
+                </Button>
+                <PriceAlertButton listingId={listing.id} currentPrice={listing.price} title={listing.title} />
+              </div>
             </div>
           </div>
         </div>
@@ -432,6 +437,11 @@ const CarDetail = () => {
             </>
           );
         })()}
+
+        {/* Loan Calculator */}
+        <div className="animate-brutal-up" style={{ animationDelay: '180ms' }}>
+          <LoanCalculator price={car.price} />
+        </div>
 
         {/* Price comparison chart */}
         {chartData.length > 1 && (

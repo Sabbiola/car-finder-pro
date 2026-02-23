@@ -676,6 +676,57 @@ function getAutoScoutModelSlug(brand: string, model: string): string | null {
   return slugMap[brandKey]?.[modelKey] || null;
 }
 
+// Cross-source deduplication: same car listed on multiple portals
+function deduplicateCrossSource(listings: ParsedListing[]): ParsedListing[] {
+  const result: ParsedListing[] = [];
+  for (const candidate of listings) {
+    const isDuplicate = result.some(existing => {
+      if (existing.brand !== candidate.brand || existing.model !== candidate.model) return false;
+      if (existing.year !== candidate.year) return false;
+      const priceDiff = Math.abs(existing.price - candidate.price) / Math.max(existing.price, 1);
+      if (priceDiff > 0.03) return false;
+      if (existing.km > 0 && candidate.km > 0) {
+        const kmDiff = Math.abs(existing.km - candidate.km) / Math.max(existing.km, 1);
+        if (kmDiff > 0.05) return false;
+      }
+      return true;
+    });
+    if (!isDuplicate) result.push(candidate);
+  }
+  console.log(`Cross-source dedup: ${listings.length} → ${result.length}`);
+  return result;
+}
+
+// Rate limiting: max 10 scrape requests per client per hour
+async function checkRateLimit(supabase: ReturnType<typeof createClient>, clientKey: string): Promise<boolean> {
+  const MAX_REQUESTS = 10;
+  const WINDOW_MINUTES = 60;
+  try {
+    const { data: existing } = await supabase
+      .from('api_rate_limits').select('*')
+      .eq('client_key', clientKey).eq('action', 'scrape-listings').single();
+    const windowStart = new Date(Date.now() - WINDOW_MINUTES * 60 * 1000).toISOString();
+    if (existing) {
+      if (existing.window_start < windowStart) {
+        await supabase.from('api_rate_limits').update({
+          request_count: 1, window_start: new Date().toISOString(), last_request: new Date().toISOString(),
+        }).eq('id', existing.id);
+        return true;
+      }
+      if (existing.request_count >= MAX_REQUESTS) return false;
+      await supabase.from('api_rate_limits').update({
+        request_count: existing.request_count + 1, last_request: new Date().toISOString(),
+      }).eq('id', existing.id);
+    } else {
+      await supabase.from('api_rate_limits').insert({
+        client_key: clientKey, action: 'scrape-listings',
+        request_count: 1, window_start: new Date().toISOString(), last_request: new Date().toISOString(),
+      });
+    }
+    return true;
+  } catch { return true; } // fail open
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -692,6 +743,17 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Rate limiting
+    const authHeader = req.headers.get('authorization') || req.headers.get('apikey') || 'anonymous';
+    const clientKey = authHeader.slice(-16);
+    const allowed = await checkRateLimit(supabase, clientKey);
+    if (!allowed) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Troppe richieste. Riprova tra qualche minuto.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '60' } }
+      );
+    }
 
     const brand = filters?.brand || '';
     const model = filters?.model || '';
@@ -807,10 +869,10 @@ Deno.serve(async (req) => {
       if (result.status === 'fulfilled') allListings.push(...result.value);
     }
 
-    // Deduplication: prefer source_url as unique key; fall back to title+price for null-URL parsers
+    // Step 1: Same-source deduplication (source_url or title+price)
     const seenUrls = new Set<string>();
     const seenTitlePrice = new Set<string>();
-    const unique = allListings.filter(l => {
+    const sameSourceUnique = allListings.filter(l => {
       if (l.source_url) {
         if (seenUrls.has(l.source_url)) return false;
         seenUrls.add(l.source_url);
@@ -821,6 +883,9 @@ Deno.serve(async (req) => {
       seenTitlePrice.add(key);
       return true;
     });
+
+    // Step 2: Cross-source deduplication (same car on multiple portals)
+    const unique = deduplicateCrossSource(sameSourceUnique);
 
     // Calculate price ratings
     if (unique.length >= 3) {

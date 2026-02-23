@@ -64,6 +64,13 @@ export async function fetchListings(filters: SearchFiltersState): Promise<CarLis
   if (filters.bodyType) query = query.eq('body_type', filters.bodyType);
   if (filters.sources?.length) query = query.in('source', filters.sources);
 
+  // Seller type filter: brumbrum = dealer, subito = mostly private
+  if (filters.sellerType === 'dealer') {
+    query = query.in('source', ['brumbrum', 'automobile']);
+  } else if (filters.sellerType === 'private') {
+    query = query.in('source', ['subito']);
+  }
+
   const { data, error } = await query.order('price', { ascending: true });
   if (error) throw error;
   return (data as CarListing[]) || [];

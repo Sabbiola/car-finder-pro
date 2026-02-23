@@ -29,6 +29,7 @@ export interface SearchFiltersState {
   doors: string;
   bodyType: string;
   location: string;
+  sellerType: 'all' | 'private' | 'dealer';
 }
 
 const defaultFilters: SearchFiltersState = {
@@ -37,6 +38,7 @@ const defaultFilters: SearchFiltersState = {
   fuel: '', transmission: '', isNew: null,
   sources: ['autoscout24', 'subito', 'automobile', 'brumbrum'],
   color: '', doors: '', bodyType: '', location: '',
+  sellerType: 'all',
 };
 
 interface Props {
@@ -98,7 +100,8 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
     filters.kmMin || filters.kmMax ||
     filters.fuel || filters.transmission ||
     filters.color || filters.doors || filters.bodyType ||
-    filters.location || filters.isNew !== null
+    filters.location || filters.isNew !== null ||
+    filters.sellerType !== 'all'
   );
 
   return (
@@ -182,6 +185,28 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
               onClick={() => update('isNew', value)}
               className={`px-3 py-2 transition-colors ${
                 filters.isNew === value
+                  ? 'bg-foreground text-background'
+                  : 'hover:bg-muted text-muted-foreground'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Seller type toggle */}
+        <div className="flex rounded-lg border border-border/60 overflow-hidden text-xs font-medium">
+          {([
+            { value: 'all', label: 'Tutti' },
+            { value: 'private', label: 'Privati' },
+            { value: 'dealer', label: 'Concessionarie' },
+          ] as { value: 'all' | 'private' | 'dealer'; label: string }[]).map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => update('sellerType', value)}
+              className={`px-3 py-2 transition-colors ${
+                filters.sellerType === value
                   ? 'bg-foreground text-background'
                   : 'hover:bg-muted text-muted-foreground'
               }`}
