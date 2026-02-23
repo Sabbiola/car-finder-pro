@@ -8,8 +8,15 @@ import { Bookmark, X } from 'lucide-react';
 function buildParams(filters: SearchFiltersState): string {
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([k, v]) => {
-    if (Array.isArray(v)) params.set(k, v.join(','));
-    else if (v !== '' && v !== false) params.set(k, String(v));
+    if (k === 'isNew') {
+      if (v === true) params.set('isNew', 'true');
+      else if (v === false) params.set('isNew', 'false');
+      // null = omit (show all)
+    } else if (Array.isArray(v)) {
+      params.set(k, v.join(','));
+    } else if (v !== '' && v !== null) {
+      params.set(k, String(v));
+    }
   });
   return params.toString();
 }

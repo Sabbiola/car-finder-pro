@@ -251,60 +251,60 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Alimentazione</Label>
-                <Select value={filters.fuel} onValueChange={v => update('fuel', v)}>
+                <Select value={filters.fuel || '_all'} onValueChange={v => update('fuel', v === '_all' ? '' : v)}>
                   <SelectTrigger className="bg-background">
                     <SelectValue placeholder="Tutte" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Tutte</SelectItem>
+                    <SelectItem value="_all">Tutte</SelectItem>
                     {fuelTypes.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Cambio</Label>
-                <Select value={filters.transmission} onValueChange={v => update('transmission', v)}>
+                <Select value={filters.transmission || '_all'} onValueChange={v => update('transmission', v === '_all' ? '' : v)}>
                   <SelectTrigger className="bg-background">
                     <SelectValue placeholder="Tutti" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Tutti</SelectItem>
+                    <SelectItem value="_all">Tutti</SelectItem>
                     {transmissionTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Colore</Label>
-                <Select value={filters.color} onValueChange={v => update('color', v)}>
+                <Select value={filters.color || '_all'} onValueChange={v => update('color', v === '_all' ? '' : v)}>
                   <SelectTrigger className="bg-background">
                     <SelectValue placeholder="Tutti" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Tutti</SelectItem>
+                    <SelectItem value="_all">Tutti</SelectItem>
                     {carColors.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">N° Porte</Label>
-                <Select value={filters.doors} onValueChange={v => update('doors', v)}>
+                <Select value={filters.doors || '_all'} onValueChange={v => update('doors', v === '_all' ? '' : v)}>
                   <SelectTrigger className="bg-background">
                     <SelectValue placeholder="Tutte" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Tutte</SelectItem>
+                    <SelectItem value="_all">Tutte</SelectItem>
                     {doorOptions.map(d => <SelectItem key={d} value={String(d)}>{d} porte</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Carrozzeria</Label>
-                <Select value={filters.bodyType} onValueChange={v => update('bodyType', v)}>
+                <Select value={filters.bodyType || '_all'} onValueChange={v => update('bodyType', v === '_all' ? '' : v)}>
                   <SelectTrigger className="bg-background">
                     <SelectValue placeholder="Tutte" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Tutte</SelectItem>
+                    <SelectItem value="_all">Tutte</SelectItem>
                     {bodyTypes.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                   </SelectContent>
                 </Select>
