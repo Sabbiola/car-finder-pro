@@ -42,7 +42,14 @@ const CarDetail = () => {
 
   const galleryImages = useMemo(() => {
     if (!car) return [];
-    const normalize = (u: string) => u.startsWith('//') ? 'https:' + u : u;
+    const normalize = (u: string) => {
+      let url = u.startsWith('//') ? 'https:' + u : u;
+      // New Subito.it CDN uses fullscreen-1x-auto; gallery-2x only worked on the old static.sbito.it
+      if (url.includes('images.sbito.it') && url.includes('rule=')) {
+        url = url.replace(/rule=[^&]+/, 'rule=fullscreen-1x-auto');
+      }
+      return url;
+    };
     const main = normalize(car.image_url || '') || 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=80';
     const extras = (car.image_urls ?? []).map(normalize).filter(u => u && u !== main);
     return [main, ...extras];

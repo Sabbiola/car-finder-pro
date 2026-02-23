@@ -202,8 +202,10 @@ function cleanImageUrl(url: string, sourceUrl: string): string {
   if (url.startsWith('//')) url = 'https:' + url;
 
   // For subito.it, upgrade to full size
+  // New CDN (images.sbito.it) uses fullscreen-1x-auto; old CDN (static.sbito.it) uses gallery-2x
   if (sourceUrl.includes('subito.it') && url.includes('rule=')) {
-    return url.replace(/rule=[^&]+/, 'rule=gallery-2x');
+    const rule = url.includes('images.sbito.it') ? 'fullscreen-1x-auto' : 'gallery-2x';
+    return url.replace(/rule=[^&]+/, `rule=${rule}`);
   }
   // For autoscout24, get full size
   if (sourceUrl.includes('autoscout24') && url.includes('/images/')) {

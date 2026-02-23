@@ -27,7 +27,12 @@ const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1494976388531-d1058494
 
 function normalizeUrl(url: string | null | undefined): string | null {
   if (!url) return null;
-  return url.startsWith('//') ? 'https:' + url : url;
+  let u = url.startsWith('//') ? 'https:' + url : url;
+  // New Subito.it CDN uses fullscreen-1x-auto; gallery-2x only worked on old static.sbito.it
+  if (u.includes('images.sbito.it') && u.includes('rule=')) {
+    u = u.replace(/rule=[^&]+/, 'rule=fullscreen-1x-auto');
+  }
+  return u;
 }
 
 export function toCardListing(l: CarListing): CardListing {
