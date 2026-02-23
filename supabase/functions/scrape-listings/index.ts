@@ -1,0 +1,718 @@
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+};
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+interface ParsedListing {
+  title: string;
+  brand: string;
+  model: string;
+  trim: string | null;
+  year: number;
+  price: number;
+  km: number;
+  fuel: string | null;
+  transmission: string | null;
+  power: string | null;
+  color: string | null;
+  doors: number | null;
+  body_type: string | null;
+  source: string;
+  source_url: string | null;
+  image_url: string | null;
+  location: string | null;
+  is_new: boolean;
+}
+
+function detectFuel(text: string): string | null {
+  if (/diesel/i.test(text)) return 'Diesel';
+  if (/benzina/i.test(text)) return 'Benzina';
+  if (/elettrica/i.test(text)) return 'Elettrica';
+  if (/ibrida|hybrid|mhev|phev/i.test(text)) return 'Ibrida';
+  if (/gpl/i.test(text)) return 'GPL';
+  if (/metano/i.test(text)) return 'Metano';
+  return null;
+}
+
+function detectTransmission(text: string): string | null {
+  if (/automatico|automatic|sequenziale|dsg|dct|tiptronic/i.test(text)) return 'Automatico';
+  if (/manuale|manual/i.test(text)) return 'Manuale';
+  return null;
+}
+
+function detectBodyType(text: string): string | null {
+  const t = text.toLowerCase();
+  if (t.includes('gran coupé') || t.includes('gran coupe')) return 'Gran Coupé';
+  if (t.includes('coupé') || t.includes('coupe')) return 'Coupé';
+  if (t.includes('cabrio') || t.includes('convertible') || t.includes('cabriolet')) return 'Cabrio';
+  if (t.includes('touring') || t.includes('wagon') || t.includes('station')) return 'Station Wagon';
+  if (t.includes('berlina') || t.includes('sedan')) return 'Berlina';
+  if (t.includes('suv') || t.includes('crossover')) return 'SUV';
+  return null;
+}
+
+// P3: Extract trim from AutoScout24 title (portion after brand+model+engine code)
+function extractTrimFromTitle(title: string, brand: string, model: string): string | null {
+  const brandEsc = brand.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+  const modelEsc = model.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+  const stripPattern = new RegExp(
+    `^${brandEsc}\\s+(?:${modelEsc}\\s+)?(?:[A-Z]?\\d{2,3}[a-z]{0,3}\\s+|\\d\\.\\d\\s+\\w+\\s+)?`,
+    'i'
+  );
+  const remainder = title.replace(stripPattern, '').trim();
+
+  const trimKeywords = /\b(Sport\s*Line|M\s*Sport|xDrive|S\s*Line|AMG|Avantgarde|Elegance|Executive|Urban|Night|Plus|Premium|Business|Style|Active|Competition|GT|GTS|Luxury|Pack|Edition|Sport\s*Plus|e-Power)\b/i;
+  const trimMatch = remainder.match(trimKeywords);
+  if (trimMatch) {
+    const idx = remainder.toLowerCase().indexOf(trimMatch[1].toLowerCase());
+    const extracted = remainder.slice(idx).trim().replace(/\s+/g, ' ');
+    if (extracted.length >= 3 && extracted.length <= 60) return extracted;
+  }
+  return null;
+}
+
+// ==========================================
+// SUBITO.IT PARSER - Based on actual markdown structure
+// ==========================================
+function parseSubitoListings(markdown: string, brand: string, model: string, trim: string | null): ParsedListing[] {
+  const listings: ParsedListing[] = [];
+  const modelRegex = new RegExp(model.replace(/\s+/g, '\\s*'), 'i');
+
+  const blocks: string[] = [];
+  const lines = markdown.split('\n');
+  let currentBlock = '';
+
+  for (const line of lines) {
+    if (/^!\[.*\]\(https:\/\/images\.sbito\.it/.test(line)) {
+      if (currentBlock.length > 50) blocks.push(currentBlock);
+      currentBlock = line;
+    } else {
+      currentBlock += '\n' + line;
+    }
+  }
+  if (currentBlock.length > 50) blocks.push(currentBlock);
+
+  for (const block of blocks) {
+    const titleMatch = block.match(/^###\s*(.+)/m);
+    if (!titleMatch) continue;
+    const title = titleMatch[1].trim().replace(/\s+/g, ' ').replace(/\.\.\.$/, '').trim();
+
+    if (!modelRegex.test(title)) continue;
+
+    const imgMatch = block.match(/!\[.*?\]\((https:\/\/images\.sbito\.it[^\s)]+)\)/);
+    const imageUrl = imgMatch ? imgMatch[1] : null;
+
+    const urlMatch = block.match(/\[.*?\]\((https:\/\/www\.subito\.it\/auto\/[^\s)]+)\)/);
+    const sourceUrl = urlMatch ? urlMatch[1] : null;
+
+    const priceMatch = block.match(/([\d.]+)\s*€/);
+    if (!priceMatch) continue;
+    const price = parseInt(priceMatch[1].replace(/\./g, ''));
+    if (!price || price < 1000) continue;
+
+    const locMatch = block.match(/\n([A-ZÀ-Ú][a-zà-ú]+(?:\s[A-ZÀ-Ú]?[a-zà-ú]+)*)\s*\(([A-Z]{2})\)/);
+    const location = locMatch ? `${locMatch[1]}, ${locMatch[2]}` : null;
+
+    const specsLine = block.match(/(?:Nuovo|Usato)?\d{2}\/\d{4}\d+\s*Km.*/);
+
+    let year = 0;
+    let km = 0;
+    let isNew = false;
+
+    if (specsLine) {
+      const specs = specsLine[0];
+      isNew = /^Nuovo/i.test(specs);
+      const dateMatch = specs.match(/(\d{2})\/(\d{4})/);
+      if (dateMatch) year = parseInt(dateMatch[2]);
+      const kmMatch = specs.match(/\d{2}\/\d{4}(\d+)\s*Km/i);
+      if (kmMatch) km = parseInt(kmMatch[1]);
+    } else {
+      const dateMatch = block.match(/(\d{2})\/(\d{4})/);
+      if (dateMatch) year = parseInt(dateMatch[2]);
+      const kmFallback = block.match(/\b(\d{1,3}(?:\.\d{3})*)\s*[Kk][Mm]\b/);
+      if (kmFallback) km = parseInt(kmFallback[1].replace(/\./g, ''));
+      isNew = /\bNuovo\b/i.test(block) || /\bKm\s*0\b/i.test(block);
+    }
+
+    const fuel = detectFuel(block);
+    const transmission = detectTransmission(block);
+    const bodyType = detectBodyType(title);
+
+    if (listings.some(l => l.title === title && l.price === price)) continue;
+
+    listings.push({
+      title, brand, model, trim: trim || null,
+      year: year || new Date().getFullYear(), price, km,
+      fuel, transmission, power: null, color: null,
+      doors: bodyType === 'Coupé' || bodyType === 'Cabrio' ? 2 : 4,
+      body_type: bodyType, source: 'subito', source_url: sourceUrl,
+      image_url: imageUrl, location, is_new: isNew,
+    });
+  }
+
+  console.log(`Subito parser: ${blocks.length} blocks, ${listings.length} matched "${model}"`);
+  return listings;
+}
+
+// ==========================================
+// AUTOSCOUT24 PARSER
+// FIX: split regex now uses dynamic brand instead of hardcoded "BMW"
+// NEW: extracts source_url from listing links
+// ==========================================
+function parseAutoScoutListings(markdown: string, brand: string, model: string, trim: string | null): ParsedListing[] {
+  const listings: ParsedListing[] = [];
+
+  // FIX: was hardcoded to BMW, now uses the actual brand parameter
+  const brandEscaped = brand.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+  const brandPattern = new RegExp(`\\n(?=\\*\\*${brandEscaped}\\s)`, 'i');
+  const blocks = markdown.split(brandPattern);
+
+  for (const block of blocks) {
+    if (block.length < 30) continue;
+
+    const titleMatch = block.match(/^\*\*(.+?)\*\*/);
+    if (!titleMatch) continue;
+    const title = titleMatch[1].trim();
+
+    if (title.length < 5 || title.length > 120) continue;
+    if (!title.toLowerCase().includes(brand.toLowerCase())) continue;
+
+    const priceMatch = block.match(/€\s*([\d.]+)/);
+    if (!priceMatch) continue;
+    let priceStr = priceMatch[1];
+    const priceParts = priceStr.split('.');
+    if (priceParts.length > 1) {
+      const lastPart = priceParts[priceParts.length - 1];
+      if (lastPart.length > 3) {
+        priceParts[priceParts.length - 1] = lastPart.substring(0, 3);
+        priceStr = priceParts.join('.');
+      }
+    }
+    const price = parseInt(priceStr.replace(/\./g, ''));
+    if (!price || price < 1000) continue;
+
+    // Image
+    const imgMatch = block.match(/!\[\]\((https:\/\/prod\.pictures\.autoscout24\.net\/listing-images\/[^\s)]+)\)/);
+    const imageUrl = imgMatch ? imgMatch[1] : null;
+
+    // NEW: extract listing source_url from markdown link
+    const urlMatch = block.match(/\[(?:\*\*)?[^\]]+(?:\*\*)?\]\((https:\/\/www\.autoscout24\.it\/annunci\/[^\s)]+)\)/);
+    const sourceUrl = urlMatch ? urlMatch[1] : null;
+
+    let year = 0;
+    const dateMatch = block.match(/\n(\d{2})\/(\d{4})\n/);
+    if (dateMatch) year = parseInt(dateMatch[2]);
+    if (!year) { const yf = block.match(/\b(20[0-2]\d)\b/); if (yf) year = parseInt(yf[1]); }
+
+    let km = 0;
+    const kmMatch = block.match(/\n([\d.]+)\s*km\n/i);
+    if (kmMatch) km = parseInt(kmMatch[1].replace(/\./g, ''));
+
+    let power: string | null = null;
+    const pwrMatch = block.match(/(\d+)\s*kW\s*\((\d+)\s*CV\)/);
+    if (pwrMatch) power = `${pwrMatch[2]} CV`;
+
+    let location: string | null = null;
+    const locMatch = block.match(/IT-\d+\s+(.+?)(?:\s*$|\n)/m);
+    if (locMatch) {
+      let loc = locMatch[1].trim();
+      loc = loc.replace(/\s*-\s*[A-Z],[A-Z]$/, '').trim();
+      const provMatch = loc.match(/(.+?)\s*-\s*([A-Za-z]+(?:\s[A-Za-z]+)?)\s*$/);
+      location = provMatch ? `${provMatch[1].trim()} - ${provMatch[2].trim()}` : loc;
+    }
+
+    const fuel = detectFuel(block);
+    const transmission = detectTransmission(block);
+    const bodyType = detectBodyType(title);
+
+    // P3: extract trim from title
+    const extractedTrim = trim || extractTrimFromTitle(title, brand, model);
+
+    if (listings.some(l => l.title === title && l.price === price)) continue;
+
+    listings.push({
+      title, brand, model, trim: extractedTrim,
+      year: year || new Date().getFullYear(), price, km,
+      fuel, transmission, power, color: null,
+      doors: bodyType === 'Coupé' || bodyType === 'Cabrio' ? 2 : null,
+      body_type: bodyType, source: 'autoscout24', source_url: sourceUrl,
+      image_url: imageUrl, location, is_new: km < 100,
+    });
+  }
+
+  console.log(`AutoScout parser: ${listings.length} listings found`);
+  return listings;
+}
+
+// ==========================================
+// AUTOMOBILE.IT PARSER
+// ==========================================
+function parseAutomobileListings(markdown: string, brand: string, model: string, trim: string | null): ParsedListing[] {
+  const listings: ParsedListing[] = [];
+  const modelRegex = new RegExp(model.replace(/\s+/g, '\\s*'), 'i');
+  const sections = markdown.split(/(?=\[!\[)/);
+
+  for (const section of sections) {
+    if (!modelRegex.test(section)) continue;
+
+    const imgMatch = section.match(/!\[.*?\]\((https:\/\/[^\s)]+\.(?:jpg|jpeg|png|webp)[^\s)]*)\)/);
+    const imageUrl = imgMatch ? imgMatch[1] : null;
+
+    const priceMatch = section.match(/€\s*([\d.]+)/);
+    if (!priceMatch) continue;
+    const price = parseInt(priceMatch[1].replace(/\./g, ''));
+    if (!price || price < 1000) continue;
+
+    let year = 0;
+    const yearMatch = section.match(/(?:Gennaio|Febbraio|Marzo|Aprile|Maggio|Giugno|Luglio|Agosto|Settembre|Ottobre|Novembre|Dicembre)\s+(\d{4})/i);
+    if (yearMatch) year = parseInt(yearMatch[1]);
+    if (!year) { const ym = section.match(/\b(20[0-2]\d)\b/); if (ym) year = parseInt(ym[1]); }
+
+    let km = 0;
+    const kmMatch = section.match(/\b(\d{1,3}(?:\.\d{3})*)\s*km\b/i);
+    if (kmMatch) km = parseInt(kmMatch[1].replace(/\./g, ''));
+
+    const fuel = detectFuel(section);
+    const transmission = detectTransmission(section);
+
+    const titleLine = section.match(/(?:\*\*|###?\s*)([^\n*]+)/i);
+    const title = titleLine ? titleLine[1].trim() : `${brand} ${model}`;
+    const bodyType = detectBodyType(title);
+
+    if (listings.some(l => l.price === price && l.km === km)) continue;
+
+    listings.push({
+      title, brand, model, trim: trim || null,
+      year: year || new Date().getFullYear(), price, km,
+      fuel, transmission, power: null, color: null, doors: null,
+      body_type: bodyType, source: 'automobile', source_url: null,
+      image_url: imageUrl, location: null, is_new: false,
+    });
+  }
+  return listings;
+}
+
+// ==========================================
+// BRUMBRUM PARSER
+// URL: https://www.brumbrum.it/usato/?q=brand+model
+// Defensive parser - structure verified via Firecrawl markdown output
+// ==========================================
+function parseBrumBrumListings(markdown: string, brand: string, model: string, trim: string | null): ParsedListing[] {
+  const listings: ParsedListing[] = [];
+  const modelRegex = new RegExp(model.replace(/\s+/g, '\\s*'), 'i');
+  const lines = markdown.split('\n');
+  const seenUrls = new Set<string>();
+
+  const sections: { title: string; url: string; context: string }[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // BrumBrum listing links: [Title](https://www.brumbrum.it/auto/...)
+    const linkMatch = line.match(/\[([^\]]+)\]\((https:\/\/www\.brumbrum\.it\/auto\/[^\s)]+)\)/);
+    if (!linkMatch) continue;
+
+    const title = linkMatch[1].trim();
+    const url = linkMatch[2];
+    if (seenUrls.has(url)) continue;
+
+    // Context window: 2 lines before + 10 lines after for specs
+    const contextLines = lines.slice(Math.max(0, i - 2), Math.min(lines.length, i + 12));
+    const context = contextLines.join('\n');
+
+    if (!modelRegex.test(title) && !modelRegex.test(context)) continue;
+
+    seenUrls.add(url);
+    sections.push({ title, url, context });
+  }
+
+  for (const { title, url, context } of sections) {
+    const priceMatch = context.match(/€\s*([\d.]+)/) || context.match(/([\d.]+)\s*€/);
+    if (!priceMatch) continue;
+    const price = parseInt(priceMatch[1].replace(/\./g, ''));
+    if (!price || price < 1000) continue;
+
+    let year = 0;
+    const yearMatch = context.match(/\b(20\d{2})\b/);
+    if (yearMatch) year = parseInt(yearMatch[1]);
+
+    let km = 0;
+    const kmMatch = context.match(/\b([\d.]+)\s*(?:km|chilometri)\b/i);
+    if (kmMatch) km = parseInt(kmMatch[1].replace(/\./g, ''));
+
+    const imgMatch = context.match(/!\[[^\]]*\]\((https:\/\/[^\s)]*brumbrum[^\s)]*)\)/i);
+    const imageUrl = imgMatch ? imgMatch[1] : null;
+
+    const fuel = detectFuel(context);
+    const transmission = detectTransmission(context);
+    const bodyType = detectBodyType(title);
+
+    listings.push({
+      title, brand, model, trim: trim || null,
+      year: year || new Date().getFullYear(), price, km,
+      fuel, transmission, power: null, color: null, doors: null,
+      body_type: bodyType, source: 'brumbrum', source_url: url,
+      image_url: imageUrl, location: null, is_new: km < 100,
+    });
+  }
+
+  console.log(`BrumBrum parser: ${listings.length} listings found`);
+  return listings;
+}
+
+// ==========================================
+// SCRAPE HELPER
+// ==========================================
+async function scrapeUrl(apiKey: string, url: string): Promise<string> {
+  console.log('Scraping:', url);
+  try {
+    const res = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url,
+        formats: ['markdown'],
+        waitFor: 5000,
+        onlyMainContent: false,
+        location: { country: 'IT', languages: ['it'] },
+      }),
+    });
+    if (!res.ok) { console.error('Scrape failed:', res.status, url); return ''; }
+    const data = await res.json();
+    return data?.data?.markdown || data?.markdown || '';
+  } catch (err) {
+    console.error('Scrape error:', url, err);
+    return '';
+  }
+}
+
+// ==========================================
+// MODEL NAME MAPPING FOR AUTOSCOUT24
+// EXPANDED: 5 → 25+ brands
+// ==========================================
+function getAutoScoutModelSlug(brand: string, model: string): string | null {
+  const slugMap: Record<string, Record<string, string>> = {
+    'bmw': {
+      'serie 1': 'serie-1-(tutto)', 'serie 2': 'serie-2-(tutto)',
+      'serie 3': 'serie-3-(tutto)', 'serie 4': 'serie-4-(tutto)',
+      'serie 5': 'serie-5-(tutto)', 'serie 6': 'serie-6-(tutto)',
+      'serie 7': 'serie-7-(tutto)', 'serie 8': 'serie-8-(tutto)',
+      'x1': 'x1', 'x2': 'x2', 'x3': 'x3', 'x4': 'x4',
+      'x5': 'x5', 'x6': 'x6', 'x7': 'x7', 'z4': 'z4', 'ix': 'ix',
+    },
+    'audi': {
+      'a1': 'a1', 'a3': 'a3', 'a4': 'a4', 'a5': 'a5', 'a6': 'a6',
+      'a7': 'a7', 'a8': 'a8', 'q2': 'q2', 'q3': 'q3', 'q5': 'q5',
+      'q7': 'q7', 'q8': 'q8', 'tt': 'tt', 'e-tron': 'e-tron',
+    },
+    'mercedes-benz': {
+      'classe a': 'classe-a', 'classe b': 'classe-b', 'classe c': 'classe-c',
+      'classe e': 'classe-e', 'classe s': 'classe-s', 'cla': 'cla',
+      'cls': 'cls', 'gla': 'gla', 'glb': 'glb', 'glc': 'glc', 'gle': 'gle',
+      'eqa': 'eqa',
+    },
+    'volkswagen': {
+      'golf': 'golf', 'polo': 'polo', 'tiguan': 'tiguan',
+      't-roc': 't-roc', 't-cross': 't-cross', 'passat': 'passat',
+      'id.3': 'id.3', 'id.4': 'id.4',
+    },
+    'fiat': {
+      '500': '500', 'panda': 'panda', 'tipo': 'tipo', '500x': '500x', '600': '600',
+    },
+    'toyota': {
+      'yaris': 'yaris', 'yaris cross': 'yaris-cross', 'corolla': 'corolla',
+      'c-hr': 'c-hr', 'rav4': 'rav4', 'aygo x': 'aygo-x', 'camry': 'camry',
+    },
+    'ford': {
+      'fiesta': 'fiesta', 'focus': 'focus', 'puma': 'puma',
+      'kuga': 'kuga', 'mustang mach-e': 'mustang-mach-e', 'explorer': 'explorer',
+    },
+    'renault': {
+      'clio': 'clio', 'captur': 'captur', 'megane': 'megane',
+      'mégane': 'megane', 'arkana': 'arkana', 'austral': 'austral', 'zoe': 'zoe',
+    },
+    'peugeot': {
+      '208': '208', '308': '308', '2008': '2008', '3008': '3008',
+      '5008': '5008', 'e-208': 'e-208', 'e-2008': 'e-2008',
+    },
+    'hyundai': {
+      'i10': 'i10', 'i20': 'i20', 'i30': 'i30',
+      'tucson': 'tucson', 'kona': 'kona', 'ioniq 5': 'ioniq-5', 'ioniq 6': 'ioniq-6',
+    },
+    'kia': {
+      'picanto': 'picanto', 'rio': 'rio', 'ceed': 'ceed',
+      'sportage': 'sportage', 'niro': 'niro', 'ev6': 'ev6', 'sorento': 'sorento',
+    },
+    'opel': {
+      'corsa': 'corsa', 'astra': 'astra', 'mokka': 'mokka',
+      'crossland': 'crossland', 'grandland': 'grandland',
+    },
+    'alfa romeo': {
+      'giulia': 'giulia', 'stelvio': 'stelvio', 'tonale': 'tonale', 'junior': 'junior',
+    },
+    'volvo': {
+      'xc40': 'xc40', 'xc60': 'xc60', 'xc90': 'xc90', 'c40': 'c40', 'ex30': 'ex30',
+    },
+    'citroën': {
+      'c3': 'c3', 'c4': 'c4', 'c5 aircross': 'c5-aircross', 'berlingo': 'berlingo',
+    },
+    'dacia': {
+      'sandero': 'sandero', 'duster': 'duster', 'jogger': 'jogger', 'spring': 'spring',
+    },
+    'mazda': {
+      'mazda2': 'mazda2', 'mazda3': 'mazda3', 'mazda6': 'mazda6',
+      'cx-30': 'cx-30', 'cx-5': 'cx-5', 'mx-5': 'mx-5',
+    },
+    'nissan': {
+      'micra': 'micra', 'juke': 'juke', 'qashqai': 'qashqai',
+      'x-trail': 'x-trail', 'leaf': 'leaf', 'ariya': 'ariya',
+    },
+    'seat': {
+      'ibiza': 'ibiza', 'leon': 'leon', 'arona': 'arona',
+      'ateca': 'ateca', 'tarraco': 'tarraco',
+    },
+    'skoda': {
+      'fabia': 'fabia', 'octavia': 'octavia', 'kamiq': 'kamiq',
+      'karoq': 'karoq', 'kodiaq': 'kodiaq', 'enyaq': 'enyaq-iv',
+    },
+    'mini': {
+      'cooper': 'cooper', 'countryman': 'countryman', 'clubman': 'clubman', 'paceman': 'paceman',
+    },
+    'porsche': {
+      'cayenne': 'cayenne', 'macan': 'macan', 'taycan': 'taycan',
+      '911': '911', 'panamera': 'panamera', '718': '718-boxster',
+    },
+    'tesla': {
+      'model 3': 'model-3', 'model y': 'model-y',
+      'model s': 'model-s', 'model x': 'model-x',
+    },
+    'jeep': {
+      'renegade': 'renegade', 'compass': 'compass',
+      'avenger': 'avenger', 'wrangler': 'wrangler', 'grand cherokee': 'grand-cherokee',
+    },
+    'land rover': {
+      'evoque': 'range-rover-evoque', 'velar': 'range-rover-velar',
+      'sport': 'range-rover-sport', 'defender': 'defender', 'discovery': 'discovery',
+    },
+    'honda': {
+      'civic': 'civic', 'cr-v': 'cr-v', 'hr-v': 'hr-v', 'jazz': 'jazz', 'e': 'e',
+    },
+    'suzuki': {
+      'swift': 'swift', 'vitara': 'vitara', 'jimny': 'jimny', 's-cross': 's-cross',
+    },
+  };
+
+  const brandKey = brand.toLowerCase();
+  const modelKey = model.toLowerCase();
+  return slugMap[brandKey]?.[modelKey] || null;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const { filters } = await req.json();
+    const apiKey = Deno.env.get('FIRECRAWL_API_KEY');
+    if (!apiKey) {
+      return new Response(JSON.stringify({ success: false, error: 'Firecrawl not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const brand = filters?.brand || '';
+    const model = filters?.model || '';
+    const trim = filters?.trim || null;
+
+    // P3: extract additional filter params to narrow scraping URLs
+    const yearMin = filters?.yearMin ? parseInt(filters.yearMin) : null;
+    const priceMax = filters?.priceMax ? parseInt(filters.priceMax) : null;
+    const fuelFilter = filters?.fuel || null;
+
+    if (!brand) {
+      return new Response(JSON.stringify({ success: false, error: 'Brand is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    const allListings: ParsedListing[] = [];
+    const query = encodeURIComponent(`${brand.toLowerCase()} ${model.toLowerCase()}`);
+
+    const scrapeJobs: { url: string; parser: (md: string) => ParsedListing[] }[] = [];
+
+    // --- Subito.it ---
+    for (let page = 1; page <= 4; page++) {
+      const url = page === 1
+        ? `https://www.subito.it/annunci-italia/vendita/auto/?q=${query}`
+        : `https://www.subito.it/annunci-italia/vendita/auto/?q=${query}&o=${page}`;
+      scrapeJobs.push({ url, parser: (md) => parseSubitoListings(md, brand, model, trim) });
+    }
+
+    // --- AutoScout24 ---
+    // P3: build filter params for AutoScout24 URL
+    const fuelCodeMap: Record<string, string> = {
+      'Benzina': 'B', 'Diesel': 'D', 'Elettrica': 'E',
+      'Ibrida': 'H', 'GPL': 'L', 'Metano': 'M',
+    };
+    const asParams = new URLSearchParams();
+    if (yearMin) asParams.set('fregfrom', String(yearMin));
+    if (priceMax) asParams.set('priceto', String(priceMax));
+    if (fuelFilter && fuelCodeMap[fuelFilter]) asParams.set('fuelc', fuelCodeMap[fuelFilter]);
+    const asParamStr = asParams.toString();
+
+    const asSlug = getAutoScoutModelSlug(brand, model);
+    const brandSlug = brand.toLowerCase().replace(/\s+/g, '-');
+
+    // Use model-specific slug if available, otherwise fall back to brand + query param
+    const asBaseUrl = asSlug
+      ? `https://www.autoscout24.it/lst/${brandSlug}/${asSlug}`
+      : `https://www.autoscout24.it/lst/${brandSlug}?q=${encodeURIComponent(model)}`;
+
+    for (let page = 1; page <= 3; page++) {
+      let url: string;
+      if (asSlug) {
+        // slug-based URL: /lst/brand/model?filterParams&page=N
+        const pageParam = page > 1 ? `page=${page}` : '';
+        const combined = [asParamStr, pageParam].filter(Boolean).join('&');
+        url = combined ? `${asBaseUrl}?${combined}` : asBaseUrl;
+      } else {
+        // query-based URL: /lst/brand?q=model&filterParams&page=N
+        const pageParam = page > 1 ? `page=${page}` : '';
+        const combined = [asParamStr, pageParam].filter(Boolean).join('&');
+        url = combined ? `${asBaseUrl}&${combined}` : asBaseUrl;
+      }
+      scrapeJobs.push({ url, parser: (md) => parseAutoScoutListings(md, brand, model, trim) });
+    }
+
+    // --- Automobile.it ---
+    for (let page = 1; page <= 2; page++) {
+      const pageParam = page > 1 ? `&p=${page}` : '';
+      const url = `https://www.automobile.it/annunci?q=${query}${pageParam}`;
+      scrapeJobs.push({ url, parser: (md) => parseAutomobileListings(md, brand, model, trim) });
+    }
+
+    // --- BrumBrum ---
+    for (let page = 1; page <= 2; page++) {
+      const pageParam = page > 1 ? `&p=${page}` : '';
+      const url = `https://www.brumbrum.it/usato/?q=${query}${pageParam}`;
+      scrapeJobs.push({ url, parser: (md) => parseBrumBrumListings(md, brand, model, trim) });
+    }
+
+    console.log(`Starting ${scrapeJobs.length} scrape jobs in parallel...`);
+
+    const results = await Promise.allSettled(
+      scrapeJobs.map(async (job) => {
+        const md = await scrapeUrl(apiKey, job.url);
+        if (!md) return [];
+        const parsed = job.parser(md);
+        console.log(`Parsed ${parsed.length} from ${job.url}`);
+        return parsed;
+      })
+    );
+
+    for (const result of results) {
+      if (result.status === 'fulfilled') allListings.push(...result.value);
+    }
+
+    // Deduplication: prefer source_url as unique key; fall back to title+price for null-URL parsers
+    const seenUrls = new Set<string>();
+    const seenTitlePrice = new Set<string>();
+    const unique = allListings.filter(l => {
+      if (l.source_url) {
+        if (seenUrls.has(l.source_url)) return false;
+        seenUrls.add(l.source_url);
+        return true;
+      }
+      const key = `${l.title.toLowerCase().substring(0, 40)}|${l.price}`;
+      if (seenTitlePrice.has(key)) return false;
+      seenTitlePrice.add(key);
+      return true;
+    });
+
+    // Calculate price ratings
+    if (unique.length >= 3) {
+      const prices = unique.map(l => l.price).sort((a, b) => a - b);
+      const median = prices[Math.floor(prices.length / 2)];
+      const avg = prices.reduce((s, p) => s + p, 0) / prices.length;
+      const threshold = Math.min(median, avg);
+
+      for (const listing of unique) {
+        const ratio = listing.price / threshold;
+        if (ratio <= 0.82) {
+          (listing as any).price_rating = 'best';
+          (listing as any).is_best_deal = true;
+        } else if (ratio <= 0.95) {
+          (listing as any).price_rating = 'good';
+          (listing as any).is_best_deal = false;
+        } else {
+          (listing as any).price_rating = 'normal';
+          (listing as any).is_best_deal = false;
+        }
+      }
+    }
+
+    console.log(`Total unique: ${unique.length} listings from ${allListings.length} raw`);
+
+    if (unique.length > 0) {
+      const sample = unique[0];
+      console.log(`Sample: "${sample.title}" price=${sample.price} km=${sample.km} year=${sample.year} url=${sample.source_url}`);
+    }
+
+    // Save to DB — UPSERT strategy
+    // Listings WITH source_url: upsert (preserves row on re-scrape, updates price/km/scraped_at)
+    // Listings WITHOUT source_url: delete-per-source then insert (no unique key to upsert on)
+    if (unique.length > 0) {
+      const withRatings = unique.map(l => ({
+        ...l,
+        price_rating: (l as any).price_rating || 'normal',
+        is_best_deal: (l as any).is_best_deal || false,
+        scraped_at: new Date().toISOString(),
+      }));
+
+      const upsertable = withRatings.filter(l => l.source_url != null);
+      const insertOnly = withRatings.filter(l => l.source_url == null);
+
+      // UPSERT listings that have a source_url (Subito, AutoScout24, BrumBrum)
+      for (let i = 0; i < upsertable.length; i += 50) {
+        const batch = upsertable.slice(i, i + 50);
+        const { error } = await supabase
+          .from('car_listings')
+          .upsert(batch, { onConflict: 'source_url', ignoreDuplicates: false });
+        if (error) console.error('DB upsert error:', JSON.stringify(error));
+      }
+
+      // For listings without source_url (Automobile.it): delete-per-source then insert
+      const sourcesWithoutUrl = [...new Set(insertOnly.map(l => l.source))];
+      for (const src of sourcesWithoutUrl) {
+        await supabase
+          .from('car_listings')
+          .delete()
+          .eq('brand', brand)
+          .eq('model', model)
+          .eq('source', src);
+      }
+      for (let i = 0; i < insertOnly.length; i += 50) {
+        const batch = insertOnly.slice(i, i + 50);
+        const { error } = await supabase.from('car_listings').insert(batch);
+        if (error) console.error('DB insert error:', JSON.stringify(error));
+      }
+
+      console.log(`Saved: ${upsertable.length} upserted, ${insertOnly.length} inserted`);
+    }
+
+    return new Response(
+      JSON.stringify({ success: true, count: unique.length }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Error:', error);
+    return new Response(
+      JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});

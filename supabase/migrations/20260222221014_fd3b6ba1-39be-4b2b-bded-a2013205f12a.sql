@@ -1,0 +1,1 @@
+ALTER TABLE public.car_listings ADD COLUMN IF NOT EXISTS image_urls TEXT[] DEFAULT '{}';

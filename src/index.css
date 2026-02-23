@@ -1,0 +1,267 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 45 20% 95%;
+    --foreground: 220 25% 8%;
+
+    --card: 45 15% 98%;
+    --card-foreground: 220 25% 8%;
+
+    --popover: 45 15% 98%;
+    --popover-foreground: 220 25% 8%;
+
+    --primary: 220 25% 8%;
+    --primary-foreground: 45 20% 95%;
+
+    --secondary: 45 10% 88%;
+    --secondary-foreground: 220 25% 8%;
+
+    --muted: 45 10% 90%;
+    --muted-foreground: 220 10% 42%;
+
+    --accent: 4 84% 57%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 4 84% 57%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 75%;
+    --input: 220 15% 75%;
+    --ring: 220 25% 8%;
+
+    --radius: 0px;
+
+    --deal-best: 4 84% 57%;
+    --deal-good: 160 60% 40%;
+    --deal-normal: 220 10% 42%;
+
+    --source-autoscout: 217 85% 50%;
+    --source-subito: 25 90% 52%;
+    --source-automobile: 270 55% 50%;
+    --source-brumbrum: 160 60% 40%;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 0 0% 10%;
+    --sidebar-primary: 0 0% 5%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 0 0% 95%;
+    --sidebar-accent-foreground: 0 0% 10%;
+    --sidebar-border: 0 0% 78%;
+    --sidebar-ring: 0 0% 5%;
+  }
+
+  .dark {
+    --background: 222 20% 7%;
+    --foreground: 45 15% 90%;
+
+    --card: 222 18% 11%;
+    --card-foreground: 45 15% 90%;
+
+    --popover: 222 18% 11%;
+    --popover-foreground: 45 15% 90%;
+
+    --primary: 45 15% 90%;
+    --primary-foreground: 222 20% 7%;
+
+    --secondary: 222 15% 16%;
+    --secondary-foreground: 45 15% 90%;
+
+    --muted: 222 15% 14%;
+    --muted-foreground: 220 10% 55%;
+
+    --accent: 4 84% 57%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 4 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 222 15% 22%;
+    --input: 222 15% 22%;
+    --ring: 45 15% 90%;
+
+    --sidebar-background: 0 0% 8%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 0 0% 92%;
+    --sidebar-primary-foreground: 0 0% 6%;
+    --sidebar-accent: 0 0% 14%;
+    --sidebar-accent-foreground: 0 0% 90%;
+    --sidebar-border: 0 0% 22%;
+    --sidebar-ring: 0 0% 92%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', sans-serif;
+    letter-spacing: -0.02em;
+  }
+}
+
+/* Brutalist animations */
+@keyframes glitch-shift {
+  0% { transform: translate(0); }
+  20% { transform: translate(-2px, 1px); }
+  40% { transform: translate(2px, -1px); }
+  60% { transform: translate(-1px, -1px); }
+  80% { transform: translate(1px, 2px); }
+  100% { transform: translate(0); }
+}
+
+@keyframes glitch-text {
+  0% { clip-path: inset(0 0 100% 0); transform: translate(0); }
+  10% { clip-path: inset(20% 0 60% 0); transform: translate(-3px, 0); }
+  20% { clip-path: inset(60% 0 10% 0); transform: translate(3px, 0); }
+  30% { clip-path: inset(40% 0 30% 0); transform: translate(-2px, 0); }
+  40% { clip-path: inset(0 0 100% 0); transform: translate(0); }
+  100% { clip-path: inset(0 0 100% 0); transform: translate(0); }
+}
+
+@keyframes brutal-slide-up {
+  0% { transform: translateY(30px); opacity: 0; }
+  60% { transform: translateY(-3px); opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes brutal-slide-in {
+  0% { transform: translateX(-20px); opacity: 0; }
+  70% { transform: translateX(2px); opacity: 1; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes scan-line {
+  0% { top: -10%; }
+  100% { top: 110%; }
+}
+
+@keyframes brutal-reveal {
+  0% { clip-path: inset(0 100% 0 0); }
+  100% { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px) rotate(-0.5deg); }
+  75% { transform: translateX(3px) rotate(0.5deg); }
+}
+
+.animate-brutal-up {
+  animation: brutal-slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-brutal-in {
+  animation: brutal-slide-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-brutal-reveal {
+  animation: brutal-reveal 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Glitch hover effect for cards */
+.brutal-hover {
+  position: relative;
+  transition: transform 0.15s ease;
+}
+
+.brutal-hover:hover {
+  animation: shake 0.3s ease;
+}
+
+.brutal-hover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.brutal-hover:hover::after {
+  opacity: 1;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    hsl(var(--foreground) / 0.03) 2px,
+    hsl(var(--foreground) / 0.03) 4px
+  );
+}
+
+/* Glitch text on hover */
+.glitch-hover {
+  position: relative;
+}
+
+.glitch-hover:hover {
+  animation: glitch-shift 0.3s ease;
+}
+
+.glitch-hover::before {
+  content: attr(data-text);
+  position: absolute;
+  left: 2px;
+  top: 0;
+  color: hsl(var(--accent));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
+}
+
+.glitch-hover:hover::before {
+  animation: glitch-text 0.4s ease;
+  opacity: 0.7;
+}
+
+/* Scan line effect on images */
+.scan-hover {
+  position: relative;
+  overflow: hidden;
+}
+
+.scan-hover::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: hsl(var(--accent) / 0.5);
+  z-index: 10;
+  top: -10%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.scan-hover:hover::before {
+  opacity: 1;
+  animation: scan-line 0.8s linear infinite;
+}
+
+/* Stagger children animation */
+.stagger-children > * {
+  opacity: 0;
+  animation: brutal-slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 60ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 120ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 180ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 240ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 300ms; }
+.stagger-children > *:nth-child(7) { animation-delay: 360ms; }
+.stagger-children > *:nth-child(8) { animation-delay: 420ms; }
+.stagger-children > *:nth-child(n+9) { animation-delay: 480ms; }

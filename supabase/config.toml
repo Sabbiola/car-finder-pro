@@ -1,0 +1,10 @@
+project_id = "kytgyegftbsilqxvidxn"
+
+[functions.scrape-listings]
+verify_jwt = false
+
+[functions.firecrawl-scrape]
+verify_jwt = false
+
+[functions.scrape-detail]
+verify_jwt = false
