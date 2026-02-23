@@ -51,7 +51,8 @@ export async function fetchListings(filters: SearchFiltersState): Promise<CarLis
   if (filters.trim) query = query.ilike('trim', `%${filters.trim}%`);
   if (filters.fuel) query = query.eq('fuel', filters.fuel);
   if (filters.transmission) query = query.eq('transmission', filters.transmission);
-  if (filters.isNew !== undefined) query = query.eq('is_new', filters.isNew);
+  if (filters.isNew !== null && filters.isNew !== undefined) query = query.eq('is_new', filters.isNew);
+  if (filters.location) query = query.ilike('location', `%${filters.location}%`);
   if (filters.priceMin) query = query.gte('price', Number(filters.priceMin));
   if (filters.priceMax) query = query.lte('price', Number(filters.priceMax));
   if (filters.kmMin) query = query.gte('km', Number(filters.kmMin));

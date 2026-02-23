@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { Search, SlidersHorizontal, ChevronDown, ChevronUp, Bookmark } from 'lucide-react';
+import { Search, SlidersHorizontal, ChevronDown, ChevronUp, Bookmark, RotateCcw } from 'lucide-react';
 import { useSavedSearches } from '@/hooks/useSavedSearches';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { carBrands, fuelTypes, transmissionTypes, sourceLabels, carColors, doorOptions, bodyTypes, brandModels, modelTrims } from '@/lib/mock-data';
 import { useNavigate } from 'react-router-dom';
@@ -24,19 +23,20 @@ export interface SearchFiltersState {
   kmMax: string;
   fuel: string;
   transmission: string;
-  isNew: boolean;
+  isNew: boolean | null;
   sources: string[];
   color: string;
   doors: string;
   bodyType: string;
+  location: string;
 }
 
 const defaultFilters: SearchFiltersState = {
   brand: '', model: '', trim: '', yearMin: '', yearMax: '',
   priceMin: '', priceMax: '', kmMin: '', kmMax: '',
-  fuel: '', transmission: '', isNew: false,
+  fuel: '', transmission: '', isNew: null,
   sources: ['autoscout24', 'subito', 'automobile', 'brumbrum'],
-  color: '', doors: '', bodyType: '',
+  color: '', doors: '', bodyType: '', location: '',
 };
 
 interface Props {
@@ -63,6 +63,16 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
     }));
   };
 
+  const handleReset = () => {
+    setFilters(f => ({
+      ...defaultFilters,
+      brand: f.brand,
+      model: f.model,
+      trim: f.trim,
+      sources: f.sources,
+    }));
+  };
+
   const handleSave = () => {
     const name = window.prompt('Nome per questa ricerca:', filters.brand && filters.model ? `${filters.brand} ${filters.model}` : filters.brand || 'Ricerca');
     if (name?.trim()) save(name.trim(), filters);
@@ -75,11 +85,21 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
       const params = new URLSearchParams();
       Object.entries(filters).forEach(([k, v]) => {
         if (Array.isArray(v)) params.set(k, v.join(','));
-        else if (v !== '' && v !== false) params.set(k, String(v));
+        else if (v !== '' && v !== false && v !== null) params.set(k, String(v));
       });
+      if (filters.isNew === false) params.set('isNew', 'false');
       navigate(`/risultati?${params.toString()}`);
     }
   };
+
+  const hasAdvancedFilters = !!(
+    filters.yearMin || filters.yearMax ||
+    filters.priceMin || filters.priceMax ||
+    filters.kmMin || filters.kmMax ||
+    filters.fuel || filters.transmission ||
+    filters.color || filters.doors || filters.bodyType ||
+    filters.location || filters.isNew !== null
+  );
 
   return (
     <div className="w-full space-y-4">
@@ -147,11 +167,29 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
         )}
       </div>
 
-      {/* Toggle new/used */}
-      <div className="flex items-center gap-3">
-        <Label className="text-sm text-muted-foreground">Usato</Label>
-        <Switch checked={filters.isNew} onCheckedChange={v => update('isNew', v)} />
-        <Label className="text-sm text-muted-foreground">Nuovo</Label>
+      {/* Condition toggle + advanced toggle */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* Three-state isNew toggle */}
+        <div className="flex rounded-lg border border-border/60 overflow-hidden text-xs font-medium">
+          {([
+            { value: null, label: 'Tutti' },
+            { value: false, label: 'Usato' },
+            { value: true, label: 'Nuovo' },
+          ] as { value: boolean | null; label: string }[]).map(({ value, label }) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => update('isNew', value)}
+              className={`px-3 py-2 transition-colors ${
+                filters.isNew === value
+                  ? 'bg-foreground text-background'
+                  : 'hover:bg-muted text-muted-foreground'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         {compact && (
           <Button
@@ -162,6 +200,9 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
           >
             <SlidersHorizontal className="h-4 w-4" />
             Filtri avanzati
+            {hasAdvancedFilters && (
+              <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-violet-500" />
+            )}
             {showAdvanced ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </Button>
         )}
@@ -215,6 +256,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                     <SelectValue placeholder="Tutte" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="">Tutte</SelectItem>
                     {fuelTypes.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -226,12 +268,11 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                     <SelectValue placeholder="Tutti" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="">Tutti</SelectItem>
                     {transmissionTypes.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* New filters: color, doors, body type */}
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Colore</Label>
                 <Select value={filters.color} onValueChange={v => update('color', v)}>
@@ -239,6 +280,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                     <SelectValue placeholder="Tutti" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="">Tutti</SelectItem>
                     {carColors.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -250,6 +292,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                     <SelectValue placeholder="Tutte" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="">Tutte</SelectItem>
                     {doorOptions.map(d => <SelectItem key={d} value={String(d)}>{d} porte</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -261,9 +304,15 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                     <SelectValue placeholder="Tutte" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="">Tutte</SelectItem>
                     {bodyTypes.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Città / Regione</Label>
+                <Input placeholder="Es. Milano, Lombardia" value={filters.location}
+                  onChange={e => update('location', e.target.value)} className="bg-background" />
               </div>
 
               {/* Sources */}
@@ -282,8 +331,18 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                 </div>
               </div>
 
-              {/* Apply button */}
-              <div className="col-span-2 sm:col-span-3 lg:col-span-6 flex justify-end pt-1">
+              {/* Bottom actions */}
+              <div className="col-span-2 sm:col-span-3 lg:col-span-6 flex items-center justify-between pt-1">
+                {hasAdvancedFilters ? (
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Reset filtri
+                  </button>
+                ) : <span />}
                 <Button onClick={handleSearch} className="gap-2 font-semibold">
                   <Search className="h-4 w-4" />
                   {compact ? 'Applica filtri' : 'Cerca offerte'}

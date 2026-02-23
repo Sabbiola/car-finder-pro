@@ -31,11 +31,12 @@ function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
     kmMax: params.get('kmMax') || '',
     fuel: params.get('fuel') || '',
     transmission: params.get('transmission') || '',
-    isNew: params.get('isNew') === 'true',
+    isNew: params.get('isNew') === 'true' ? true : params.get('isNew') === 'false' ? false : null,
     sources: params.get('sources') ? params.get('sources')!.split(',') : ['autoscout24', 'subito', 'automobile', 'brumbrum'],
     color: params.get('color') || '',
     doors: params.get('doors') || '',
     bodyType: params.get('bodyType') || '',
+    location: params.get('location') || '',
   };
 }
 
