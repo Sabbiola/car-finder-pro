@@ -170,7 +170,7 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
   const parts = markdown.split(/(?=!\[[^\]]*\]\(https:\/\/prod\.pictures\.autoscout24\.net\/listing-images\/)/);
 
   for (const block of parts) {
-    const imgMatch = block.match(/^!\[[^\]]*\]\((https:\/\/prod\.pictures\.autoscout24\.net\/listing-images\/([a-f0-9\-]{36})[^\s)]*)\)/);
+    const imgMatch = block.match(/!\[[^\]]*\]\((https:\/\/prod\.pictures\.autoscout24\.net\/listing-images\/([a-f0-9\-]{36})[^\s)]*)\)/);
     if (!imgMatch) continue;
 
     const rawImageUrl = imgMatch[1];
@@ -529,7 +529,7 @@ function parseBrumBrumListings(markdown: string, brand: string, model: string, t
 // ==========================================
 // SCRAPE HELPER
 // ==========================================
-async function scrapeUrl(apiKey: string, url: string, waitFor = 6000): Promise<string> {
+async function scrapeUrl(apiKey: string, url: string, waitFor = 6000, extra: Record<string, unknown> = {}): Promise<string> {
   console.log('Scraping:', url);
   try {
     const res = await fetch('https://api.firecrawl.dev/v1/scrape', {
@@ -541,11 +541,14 @@ async function scrapeUrl(apiKey: string, url: string, waitFor = 6000): Promise<s
         waitFor,
         onlyMainContent: false,
         location: { country: 'IT', languages: ['it'] },
+        ...extra,
       }),
     });
     if (!res.ok) { console.error('Scrape failed:', res.status, url); return ''; }
     const data = await res.json();
-    return data?.data?.markdown || data?.markdown || '';
+    const md = data?.data?.markdown || data?.markdown || '';
+    console.log(`  → md ${md.length} chars from ${url.split('?')[0]}`);
+    return md;
   } catch (err) {
     console.error('Scrape error:', url, err);
     return '';
@@ -712,7 +715,7 @@ Deno.serve(async (req) => {
     const allListings: ParsedListing[] = [];
     const query = encodeURIComponent(`${brand.toLowerCase()} ${model.toLowerCase()}`);
 
-    const scrapeJobs: { url: string; parser: (md: string) => ParsedListing[]; waitFor?: number }[] = [];
+    const scrapeJobs: { url: string; parser: (md: string) => ParsedListing[]; waitFor?: number; extra?: Record<string, unknown> }[] = [];
 
     // --- Subito.it ---
     if (sources.includes('subito')) {
@@ -764,7 +767,7 @@ Deno.serve(async (req) => {
           const combined = [asParamStr, pageParam].filter(Boolean).join('&');
           url = combined ? `${asBaseUrl}&${combined}` : asBaseUrl;
         }
-        scrapeJobs.push({ url, parser: (md) => parseAutoScoutListings(md, brand, model, trim), waitFor: 12000 });
+        scrapeJobs.push({ url, parser: (md) => parseAutoScoutListings(md, brand, model, trim), waitFor: 12000, extra: { mobile: true } });
       }
     }
 
@@ -792,7 +795,7 @@ Deno.serve(async (req) => {
     const results = await Promise.allSettled(
       scrapeJobs.map(async (job, i) => {
         if (i >= 5) await new Promise(r => setTimeout(r, (i - 4) * 800));
-        const md = await scrapeUrl(apiKey, job.url, job.waitFor);
+        const md = await scrapeUrl(apiKey, job.url, job.waitFor, job.extra);
         if (!md) return [];
         const parsed = job.parser(md);
         console.log(`Parsed ${parsed.length} from ${job.url}`);
