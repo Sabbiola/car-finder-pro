@@ -190,6 +190,10 @@ const CarDetail = () => {
                 alt={`${listing.title} - foto ${imgIndex + 1}`}
                 className="w-full h-full object-cover transition-opacity duration-200"
                 loading="lazy"
+                referrerPolicy="no-referrer"
+                onError={e => {
+                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=800&q=80';
+                }}
               />
               {/* Nav arrows */}
               {galleryImages.length > 1 && (
@@ -290,7 +294,7 @@ const CarDetail = () => {
                     : 'opacity-60 hover:opacity-100 border border-border'
                 }`}
               >
-                <img src={url} alt={`Thumb ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                <img src={url} alt={`Thumb ${i + 1}`} className="w-full h-full object-cover" loading="lazy" referrerPolicy="no-referrer" />
               </button>
             ))}
           </div>

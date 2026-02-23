@@ -34,6 +34,7 @@ const CarCard = ({ listing, showCompare }: Props) => {
           alt={listing.title}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           loading="lazy"
+          referrerPolicy="no-referrer"
           onError={e => {
             (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=80';
           }}
