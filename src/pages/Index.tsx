@@ -1,6 +1,18 @@
-import SearchFilters from '@/components/SearchFilters';
+import SearchFilters, { type SearchFiltersState } from '@/components/SearchFilters';
 import Header from '@/components/Header';
 import RecentlyViewedSection from '@/components/RecentlyViewedSection';
+import { useSavedSearches } from '@/hooks/useSavedSearches';
+import { useNavigate } from 'react-router-dom';
+import { Bookmark, X } from 'lucide-react';
+
+function buildParams(filters: SearchFiltersState): string {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([k, v]) => {
+    if (Array.isArray(v)) params.set(k, v.join(','));
+    else if (v !== '' && v !== false) params.set(k, String(v));
+  });
+  return params.toString();
+}
 
 const features = [
   { title: 'Ricerca istantanea', desc: 'Confronta annunci da tutti i portali in un click', gradient: 'from-violet-500 to-indigo-500' },
@@ -10,6 +22,9 @@ const features = [
 ];
 
 const Index = () => {
+  const navigate = useNavigate();
+  const { searches, remove } = useSavedSearches();
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -63,6 +78,36 @@ const Index = () => {
           </div>
         </div>
       </section>
+
+      {searches.length > 0 && (
+        <section className="border-t border-border/60">
+          <div className="container py-10">
+            <div className="flex items-center gap-2 mb-4">
+              <Bookmark className="h-4 w-4 text-violet-500" />
+              <h2 className="text-sm font-bold uppercase tracking-[0.1em]">Ricerche salvate</h2>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {searches.map(s => (
+                <div key={s.id} className="flex items-center gap-1 bg-muted rounded-xl px-3 py-2">
+                  <button
+                    onClick={() => navigate(`/risultati?${buildParams(s.filters)}`)}
+                    className="text-sm font-medium hover:text-violet-600 transition-colors"
+                  >
+                    {s.name}
+                  </button>
+                  <button
+                    onClick={() => remove(s.id)}
+                    className="ml-1 text-muted-foreground hover:text-destructive transition-colors"
+                    aria-label="Rimuovi"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <RecentlyViewedSection />
 

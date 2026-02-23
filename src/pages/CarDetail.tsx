@@ -1,6 +1,6 @@
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { ArrowLeft, ExternalLink, Loader2, ChevronLeft, ChevronRight, Award, FileText, MapPin } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Loader2, ChevronLeft, ChevronRight, Award, FileText, MapPin, Share2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Header from '@/components/Header';
@@ -43,6 +43,13 @@ const CarDetail = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = async () => {
+    await navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const galleryImages = useMemo(() => {
     if (!car) return [];
@@ -263,6 +270,11 @@ const CarDetail = () => {
                     {listing.title}
                   </h1>
                   <FavoriteButton id={listing.id} className="flex-shrink-0 mt-1" />
+                  <Button variant="outline" size="icon" onClick={handleShare}
+                    className="rounded-xl h-9 w-9 flex-shrink-0 mt-1"
+                    aria-label="Condividi">
+                    {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Share2 className="h-4 w-4" />}
+                  </Button>
                 </div>
                 {listing.location && (
                   <p className="text-sm text-muted-foreground flex items-center gap-1.5">

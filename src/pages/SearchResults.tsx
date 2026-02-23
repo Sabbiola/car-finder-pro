@@ -27,6 +27,7 @@ function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
     yearMax: params.get('yearMax') || '',
     priceMin: params.get('priceMin') || '',
     priceMax: params.get('priceMax') || '',
+    kmMin: params.get('kmMin') || '',
     kmMax: params.get('kmMax') || '',
     fuel: params.get('fuel') || '',
     transmission: params.get('transmission') || '',

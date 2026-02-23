@@ -54,6 +54,7 @@ export async function fetchListings(filters: SearchFiltersState): Promise<CarLis
   if (filters.isNew !== undefined) query = query.eq('is_new', filters.isNew);
   if (filters.priceMin) query = query.gte('price', Number(filters.priceMin));
   if (filters.priceMax) query = query.lte('price', Number(filters.priceMax));
+  if (filters.kmMin) query = query.gte('km', Number(filters.kmMin));
   if (filters.kmMax) query = query.lte('km', Number(filters.kmMax));
   if (filters.yearMin && Number(filters.yearMin) > 0) query = query.gte('year', Number(filters.yearMin));
   if (filters.yearMax) query = query.lte('year', Number(filters.yearMax));

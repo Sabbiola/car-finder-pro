@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Search, SlidersHorizontal, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, SlidersHorizontal, ChevronDown, ChevronUp, Bookmark } from 'lucide-react';
+import { useSavedSearches } from '@/hooks/useSavedSearches';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +20,7 @@ export interface SearchFiltersState {
   yearMax: string;
   priceMin: string;
   priceMax: string;
+  kmMin: string;
   kmMax: string;
   fuel: string;
   transmission: string;
@@ -31,7 +33,7 @@ export interface SearchFiltersState {
 
 const defaultFilters: SearchFiltersState = {
   brand: '', model: '', trim: '', yearMin: '', yearMax: '',
-  priceMin: '', priceMax: '', kmMax: '',
+  priceMin: '', priceMax: '', kmMin: '', kmMax: '',
   fuel: '', transmission: '', isNew: false,
   sources: ['autoscout24', 'subito', 'automobile', 'brumbrum'],
   color: '', doors: '', bodyType: '',
@@ -47,6 +49,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
   const [filters, setFilters] = useState<SearchFiltersState>(initialFilters ?? defaultFilters);
   const [showAdvanced, setShowAdvanced] = useState(!compact);
   const navigate = useNavigate();
+  const { save } = useSavedSearches();
 
   const update = (key: keyof SearchFiltersState, value: any) =>
     setFilters(f => ({ ...f, [key]: value }));
@@ -58,6 +61,11 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
         ? f.sources.filter(s => s !== src)
         : [...f.sources, src],
     }));
+  };
+
+  const handleSave = () => {
+    const name = window.prompt('Nome per questa ricerca:', filters.brand && filters.model ? `${filters.brand} ${filters.model}` : filters.brand || 'Ricerca');
+    if (name?.trim()) save(name.trim(), filters);
   };
 
   const handleSearch = () => {
@@ -131,6 +139,12 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
           <Search className="h-4 w-4" />
           Cerca offerte
         </Button>
+        {(filters.brand || filters.model) && (
+          <Button variant="outline" onClick={handleSave} size="lg" className="gap-2 shrink-0">
+            <Bookmark className="h-4 w-4" />
+            Salva
+          </Button>
+        )}
       </div>
 
       {/* Toggle new/used */}
@@ -183,6 +197,11 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                 <Label className="text-xs text-muted-foreground">Prezzo max €</Label>
                 <Input type="number" placeholder="50.000" value={filters.priceMax}
                   onChange={e => update('priceMax', e.target.value)} className="bg-background" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Km min</Label>
+                <Input type="number" placeholder="0" value={filters.kmMin}
+                  onChange={e => update('kmMin', e.target.value)} className="bg-background" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Km max</Label>

@@ -158,96 +158,113 @@ function parseSubitoListings(markdown: string, brand: string, model: string, tri
 
 // ==========================================
 // AUTOSCOUT24 PARSER
-// FIX: split regex now uses dynamic brand instead of hardcoded "BMW"
-// NEW: extracts source_url from listing links
+// Image-based block splitting: each listing has exactly one image from
+// prod.pictures.autoscout24.net — far more reliable than brand-bold-title split
 // ==========================================
 function parseAutoScoutListings(markdown: string, brand: string, model: string, trim: string | null): ParsedListing[] {
   const listings: ParsedListing[] = [];
+  const seenUuids = new Set<string>();
+  const brandLow = brand.toLowerCase();
 
-  // FIX: was hardcoded to BMW, now uses the actual brand parameter
-  const brandEscaped = brand.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
-  const brandPattern = new RegExp(`\\n(?=\\*\\*${brandEscaped}\\s)`, 'i');
-  const blocks = markdown.split(brandPattern);
+  // Strategy 1: split on CDN image lines (primary)
+  const parts = markdown.split(/(?=!\[\]\(https:\/\/prod\.pictures\.autoscout24\.net\/listing-images\/)/);
 
-  for (const block of blocks) {
-    if (block.length < 30) continue;
+  for (const block of parts) {
+    const imgMatch = block.match(/^!\[\]\((https:\/\/prod\.pictures\.autoscout24\.net\/listing-images\/([a-f0-9\-]{36})[^\s)]*)\)/);
+    if (!imgMatch) continue;
 
-    const titleMatch = block.match(/^\*\*(.+?)\*\*/);
-    if (!titleMatch) continue;
-    const title = titleMatch[1].trim();
+    const rawImageUrl = imgMatch[1];
+    const imageUuid = imgMatch[2];
+    if (seenUuids.has(imageUuid)) continue;
 
-    if (title.length < 5 || title.length > 120) continue;
-    if (!title.toLowerCase().includes(brand.toLowerCase())) continue;
+    // Must mention the brand somewhere in the block (exclude nav/header noise)
+    if (!block.toLowerCase().includes(brandLow.slice(0, 3))) continue;
 
-    const priceMatch = block.match(/€\s*([\d.]+)/);
+    // Image — upgrade to 800x600
+    const imageUrl = rawImageUrl.replace(/\/\d+x\d+(\.\w+)$/, '/800x600$1');
+
+    // Price — try multiple formats
+    const priceMatch = block.match(/€\s*([\d.]+)/) || block.match(/([\d.]+)\s*€/);
     if (!priceMatch) continue;
     let priceStr = priceMatch[1];
     const priceParts = priceStr.split('.');
     if (priceParts.length > 1) {
-      const lastPart = priceParts[priceParts.length - 1];
-      if (lastPart.length > 3) {
-        priceParts[priceParts.length - 1] = lastPart.substring(0, 3);
+      const last = priceParts[priceParts.length - 1];
+      if (last.length > 3) {
+        priceParts[priceParts.length - 1] = last.substring(0, 3);
         priceStr = priceParts.join('.');
       }
     }
     const price = parseInt(priceStr.replace(/\./g, ''));
-    if (!price || price < 1000) continue;
+    if (!price || price < 1000 || price > 900000) continue;
 
-    // Image — upgrade to 800x600 (scraper returns 250x188 thumbnails)
-    const imgMatch = block.match(/!\[\]\((https:\/\/prod\.pictures\.autoscout24\.net\/listing-images\/[^\s)]+)\)/);
-    const imageUrl = imgMatch
-      ? imgMatch[1].replace(/\/\d+x\d+(\.\w+)$/, '/800x600$1')
-      : null;
+    seenUuids.add(imageUuid);
 
-    // Extract listing source_url — multiple strategies
-    let sourceUrl: string | null = null;
-    // 1. Markdown link [text](https://www.autoscout24.it/annunci/...)
-    const urlMatch1 = block.match(/\[(?:\*\*)?[^\]]+(?:\*\*)?\]\((https:\/\/www\.autoscout24\.it\/annunci\/[^\s)]+)\)/);
-    if (urlMatch1) sourceUrl = urlMatch1[1];
-    // 2. Plain URL anywhere in block
-    if (!sourceUrl) {
-      const urlMatch2 = block.match(/(https:\/\/www\.autoscout24\.it\/annunci\/[^\s)>"]+)/);
-      if (urlMatch2) sourceUrl = urlMatch2[1];
+    // Title — multiple strategies, decreasing reliability
+    let title = '';
+    // 1. Link text containing brand: [BMW 320d...](autoscout24.it/annunci/...)
+    const linkTitleMatch = block.match(/\[([^\]]{5,100}?)\]\(https:\/\/www\.autoscout24\.it\/annunci\//);
+    if (linkTitleMatch && linkTitleMatch[1].toLowerCase().includes(brandLow.slice(0, 3))) {
+      title = linkTitleMatch[1].replace(/\*\*/g, '').trim();
     }
-    // 3. Construct from image UUID + title slug (AutoScout24 URL = /annunci/{slug}-{uuid})
-    if (!sourceUrl && imageUrl) {
-      const idMatch = imageUrl.match(/listing-images\/([a-f0-9-]{36})/);
-      if (idMatch) {
-        const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-        sourceUrl = `https://www.autoscout24.it/annunci/${slug}-${idMatch[1]}`;
+    // 2. Bold text containing brand: **BMW 320d...**
+    if (!title) {
+      const boldMatch = block.match(/\*\*([^*]{5,100})\*\*/);
+      if (boldMatch && boldMatch[1].toLowerCase().includes(brandLow.slice(0, 3))) {
+        title = boldMatch[1].trim();
       }
     }
+    // 3. Any non-empty line containing brand (strip markdown)
+    if (!title) {
+      for (const line of block.split('\n')) {
+        const clean = line.replace(/[*#\[\]]/g, '').replace(/\([^)]+\)/g, '').trim();
+        if (clean.toLowerCase().includes(brandLow.slice(0, 3)) && clean.length >= 5 && clean.length <= 120) {
+          title = clean;
+          break;
+        }
+      }
+    }
+    if (!title) title = `${brand} ${model}`;
 
+    // Source URL
+    let sourceUrl: string | null = null;
+    const urlMatch = block.match(/(https:\/\/www\.autoscout24\.it\/annunci\/[^\s)>"]+)/);
+    if (urlMatch) {
+      sourceUrl = urlMatch[1].replace(/[)>"]$/, '');
+    } else {
+      const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      sourceUrl = `https://www.autoscout24.it/annunci/${slug}-${imageUuid}`;
+    }
+
+    // Year
     let year = 0;
-    const dateMatch = block.match(/\n(\d{2})\/(\d{4})\n/);
+    const dateMatch = block.match(/\b(\d{1,2})\/(\d{4})\b/);
     if (dateMatch) year = parseInt(dateMatch[2]);
     if (!year) { const yf = block.match(/\b(20[0-2]\d)\b/); if (yf) year = parseInt(yf[1]); }
 
+    // KM — look for numeric followed by km
     let km = 0;
-    const kmMatch = block.match(/\n([\d.]+)\s*km\n/i);
+    const kmMatch = block.match(/([\d.]+)\s*km\b/i);
     if (kmMatch) km = parseInt(kmMatch[1].replace(/\./g, ''));
 
+    // Power
     let power: string | null = null;
     const pwrMatch = block.match(/(\d+)\s*kW\s*\((\d+)\s*CV\)/);
     if (pwrMatch) power = `${pwrMatch[2]} CV`;
 
+    // Location
     let location: string | null = null;
     const locMatch = block.match(/IT-\d+\s+(.+?)(?:\s*$|\n)/m);
     if (locMatch) {
       let loc = locMatch[1].trim();
       loc = loc.replace(/\s*-\s*[A-Z],[A-Z]$/, '').trim();
-      const provMatch = loc.match(/(.+?)\s*-\s*([A-Za-z]+(?:\s[A-Za-z]+)?)\s*$/);
-      location = provMatch ? `${provMatch[1].trim()} - ${provMatch[2].trim()}` : loc;
+      location = loc;
     }
 
     const fuel = detectFuel(block);
     const transmission = detectTransmission(block);
     const bodyType = detectBodyType(title);
-
-    // P3: extract trim from title
     const extractedTrim = trim || extractTrimFromTitle(title, brand, model);
-
-    if (listings.some(l => l.title === title && l.price === price)) continue;
 
     listings.push({
       title, brand, model, trim: extractedTrim,
@@ -257,6 +274,51 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
       body_type: bodyType, source: 'autoscout24', source_url: sourceUrl,
       image_url: imageUrl, location, is_new: km < 100,
     });
+  }
+
+  // Strategy 2 fallback: if no images found, try brand-bold-title split (old approach)
+  if (listings.length === 0) {
+    console.log('AutoScout: no images found, trying brand-title fallback');
+    const brandEscaped = brand.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+    const brandPattern = new RegExp(`\\n(?=\\*\\*${brandEscaped}[\\s\\-])`, 'i');
+    const fallbackBlocks = markdown.split(brandPattern);
+    for (const block of fallbackBlocks) {
+      if (block.length < 30) continue;
+      const titleMatch = block.match(/^\*\*(.+?)\*\*/);
+      if (!titleMatch) continue;
+      const title = titleMatch[1].trim();
+      if (!title.toLowerCase().includes(brandLow.slice(0, 3))) continue;
+      const priceMatch = block.match(/€\s*([\d.]+)/);
+      if (!priceMatch) continue;
+      const price = parseInt(priceMatch[1].replace(/\./g, ''));
+      if (!price || price < 1000) continue;
+      const imgM = block.match(/!\[\]\((https:\/\/prod\.pictures\.autoscout24\.net\/listing-images\/([a-f0-9\-]{36})[^\s)]*)\)/);
+      const imageUrl = imgM ? imgM[1].replace(/\/\d+x\d+(\.\w+)$/, '/800x600$1') : null;
+      const imageUuid = imgM ? imgM[2] : null;
+      if (imageUuid && seenUuids.has(imageUuid)) continue;
+      if (imageUuid) seenUuids.add(imageUuid);
+      let sourceUrl: string | null = null;
+      const urlM = block.match(/(https:\/\/www\.autoscout24\.it\/annunci\/[^\s)>"]+)/);
+      if (urlM) sourceUrl = urlM[1];
+      else if (imageUuid) {
+        const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        sourceUrl = `https://www.autoscout24.it/annunci/${slug}-${imageUuid}`;
+      }
+      let year = 0;
+      const dM = block.match(/\b(\d{1,2})\/(\d{4})\b/);
+      if (dM) year = parseInt(dM[2]);
+      let km = 0;
+      const kM = block.match(/([\d.]+)\s*km\b/i);
+      if (kM) km = parseInt(kM[1].replace(/\./g, ''));
+      const bodyType = detectBodyType(title);
+      listings.push({
+        title, brand, model, trim: trim || extractTrimFromTitle(title, brand, model),
+        year: year || new Date().getFullYear(), price, km,
+        fuel: detectFuel(block), transmission: detectTransmission(block), power: null, color: null,
+        doors: null, body_type: bodyType, source: 'autoscout24', source_url: sourceUrl,
+        image_url: imageUrl, location: null, is_new: km < 100,
+      });
+    }
   }
 
   console.log(`AutoScout parser: ${listings.length} listings found`);
@@ -381,7 +443,7 @@ function parseBrumBrumListings(markdown: string, brand: string, model: string, t
 // ==========================================
 // SCRAPE HELPER
 // ==========================================
-async function scrapeUrl(apiKey: string, url: string): Promise<string> {
+async function scrapeUrl(apiKey: string, url: string, waitFor = 6000): Promise<string> {
   console.log('Scraping:', url);
   try {
     const res = await fetch('https://api.firecrawl.dev/v1/scrape', {
@@ -390,7 +452,7 @@ async function scrapeUrl(apiKey: string, url: string): Promise<string> {
       body: JSON.stringify({
         url,
         formats: ['markdown'],
-        waitFor: 5000,
+        waitFor,
         onlyMainContent: false,
         location: { country: 'IT', languages: ['it'] },
       }),
@@ -411,10 +473,10 @@ async function scrapeUrl(apiKey: string, url: string): Promise<string> {
 function getAutoScoutModelSlug(brand: string, model: string): string | null {
   const slugMap: Record<string, Record<string, string>> = {
     'bmw': {
-      'serie 1': 'serie-1-(tutto)', 'serie 2': 'serie-2-(tutto)',
-      'serie 3': 'serie-3-(tutto)', 'serie 4': 'serie-4-(tutto)',
-      'serie 5': 'serie-5-(tutto)', 'serie 6': 'serie-6-(tutto)',
-      'serie 7': 'serie-7-(tutto)', 'serie 8': 'serie-8-(tutto)',
+      'serie 1': 'serie-1', 'serie 2': 'serie-2',
+      'serie 3': 'serie-3', 'serie 4': 'serie-4',
+      'serie 5': 'serie-5', 'serie 6': 'serie-6',
+      'serie 7': 'serie-7', 'serie 8': 'serie-8',
       'x1': 'x1', 'x2': 'x2', 'x3': 'x3', 'x4': 'x4',
       'x5': 'x5', 'x6': 'x6', 'x7': 'x7', 'z4': 'z4', 'ix': 'ix',
     },
@@ -559,7 +621,7 @@ Deno.serve(async (req) => {
     const allListings: ParsedListing[] = [];
     const query = encodeURIComponent(`${brand.toLowerCase()} ${model.toLowerCase()}`);
 
-    const scrapeJobs: { url: string; parser: (md: string) => ParsedListing[] }[] = [];
+    const scrapeJobs: { url: string; parser: (md: string) => ParsedListing[]; waitFor?: number }[] = [];
 
     // --- Subito.it ---
     for (let page = 1; page <= 4; page++) {
@@ -602,7 +664,7 @@ Deno.serve(async (req) => {
         const combined = [asParamStr, pageParam].filter(Boolean).join('&');
         url = combined ? `${asBaseUrl}&${combined}` : asBaseUrl;
       }
-      scrapeJobs.push({ url, parser: (md) => parseAutoScoutListings(md, brand, model, trim) });
+      scrapeJobs.push({ url, parser: (md) => parseAutoScoutListings(md, brand, model, trim), waitFor: 9000 });
     }
 
     // --- Automobile.it ---
@@ -625,7 +687,7 @@ Deno.serve(async (req) => {
     const results = await Promise.allSettled(
       scrapeJobs.map(async (job, i) => {
         if (i >= 5) await new Promise(r => setTimeout(r, (i - 4) * 800));
-        const md = await scrapeUrl(apiKey, job.url);
+        const md = await scrapeUrl(apiKey, job.url, job.waitFor);
         if (!md) return [];
         const parsed = job.parser(md);
         console.log(`Parsed ${parsed.length} from ${job.url}`);

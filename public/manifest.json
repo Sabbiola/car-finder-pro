@@ -1,0 +1,17 @@
+{
+  "name": "AutoDeal Finder",
+  "short_name": "AutoDeal",
+  "description": "Trova la tua prossima auto usata al miglior prezzo",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
