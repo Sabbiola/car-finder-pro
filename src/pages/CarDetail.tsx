@@ -41,6 +41,7 @@ const CarDetail = () => {
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
+  const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
 
   const galleryImages = useMemo(() => {
     if (!car) return [];
@@ -96,11 +97,24 @@ const CarDetail = () => {
         setSimilar((similarRes.data as CarListing[]) || []);
         setAllPrices((pricesRes.data as CarListing[]) || []);
 
-        if (!carData.detail_scraped && carData.source_url && carData.source_url !== '#') {
+        // Determine source URL — fallback: construct from AutoScout24 image UUID
+        let scrapeUrl = carData.source_url && carData.source_url !== '#' ? carData.source_url : null;
+        if (!scrapeUrl && carData.source === 'autoscout24' && carData.image_url) {
+          const idMatch = carData.image_url.match(/listing-images\/([a-f0-9-]{36})/);
+          if (idMatch) {
+            const slug = carData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+            scrapeUrl = `https://www.autoscout24.it/annunci/${slug}-${idMatch[1]}`;
+            // Persist so future visits don't need to reconstruct
+            supabase.from('car_listings').update({ source_url: scrapeUrl }).eq('id', carData.id);
+          }
+        }
+        if (scrapeUrl) setResolvedUrl(scrapeUrl);
+
+        if (!carData.detail_scraped && scrapeUrl) {
           setDetailLoading(true);
           try {
             const { data: scrapeResult } = await supabase.functions.invoke('scrape-detail', {
-              body: { listingId: carData.id, sourceUrl: carData.source_url },
+              body: { listingId: carData.id, sourceUrl: scrapeUrl },
             });
             if (scrapeResult?.success && !scrapeResult?.cached) {
               const { data: updated } = await supabase.from('car_listings').select('*').eq('id', id!).single();
@@ -282,8 +296,11 @@ const CarDetail = () => {
 
               <Button
                 className="w-full gap-2 font-semibold rounded-xl h-12 bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 border-0 text-white shadow-md hover:shadow-violet-200 transition-all disabled:opacity-40"
-                onClick={() => listing.url !== '#' && window.open(listing.url, '_blank')}
-                disabled={listing.url === '#'}
+                onClick={() => {
+                  const url = listing.url !== '#' ? listing.url : resolvedUrl;
+                  if (url) window.open(url, '_blank');
+                }}
+                disabled={listing.url === '#' && !resolvedUrl}
               >
                 <ExternalLink className="h-4 w-4" /> Vai all'annuncio originale
               </Button>
