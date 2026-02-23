@@ -32,6 +32,10 @@ function normalizeUrl(url: string | null | undefined): string | null {
   if (u.includes('images.sbito.it') && u.includes('rule=')) {
     u = u.replace(/rule=[^&]+/, 'rule=fullscreen-1x-auto');
   }
+  // AutoScout24: upgrade thumbnail (250x188) to 800x600
+  if (u.includes('autoscout24.net/listing-images/')) {
+    u = u.replace(/\/\d+x\d+(\.\w+)$/, '/800x600$1');
+  }
   return u;
 }
 

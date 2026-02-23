@@ -193,9 +193,11 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
     const price = parseInt(priceStr.replace(/\./g, ''));
     if (!price || price < 1000) continue;
 
-    // Image
+    // Image — upgrade to 800x600 (scraper returns 250x188 thumbnails)
     const imgMatch = block.match(/!\[\]\((https:\/\/prod\.pictures\.autoscout24\.net\/listing-images\/[^\s)]+)\)/);
-    const imageUrl = imgMatch ? imgMatch[1] : null;
+    const imageUrl = imgMatch
+      ? imgMatch[1].replace(/\/\d+x\d+(\.\w+)$/, '/800x600$1')
+      : null;
 
     // Extract listing source_url — multiple strategies
     let sourceUrl: string | null = null;

@@ -224,9 +224,10 @@ function cleanImageUrl(url: string, sourceUrl: string): string {
     const rule = url.includes('images.sbito.it') ? 'fullscreen-1x-auto' : 'gallery-2x';
     return url.replace(/rule=[^&]+/, `rule=${rule}`);
   }
-  // For autoscout24, get full size
-  if (sourceUrl.includes('autoscout24') && url.includes('/images/')) {
-    return url.replace(/\/\d+x\d+\//, '/');
+  // For autoscout24, upgrade to 800x600
+  // CDN: prod.pictures.autoscout24.net/listing-images/{uuid}.jpg/250x188.webp
+  if (url.includes('autoscout24.net/listing-images/')) {
+    return url.replace(/\/\d+x\d+(\.\w+)$/, '/800x600$1');
   }
   return url;
 }

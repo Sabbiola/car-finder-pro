@@ -52,6 +52,10 @@ const CarDetail = () => {
       if (url.includes('images.sbito.it') && url.includes('rule=')) {
         url = url.replace(/rule=[^&]+/, 'rule=fullscreen-1x-auto');
       }
+      // AutoScout24: upgrade thumbnail (250x188) to 800x600
+      if (url.includes('autoscout24.net/listing-images/')) {
+        url = url.replace(/\/\d+x\d+(\.\w+)$/, '/800x600$1');
+      }
       return url;
     };
     const main = normalize(car.image_url || '') || 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=80';
