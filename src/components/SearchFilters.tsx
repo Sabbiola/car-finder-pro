@@ -281,6 +281,16 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                   ))}
                 </div>
               </div>
+
+              {/* Apply button — visible only in compact mode */}
+              {compact && (
+                <div className="col-span-2 sm:col-span-3 lg:col-span-6 flex justify-end pt-1">
+                  <Button onClick={handleSearch} className="gap-2 font-semibold">
+                    <Search className="h-4 w-4" />
+                    Applica filtri
+                  </Button>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
