@@ -25,6 +25,11 @@ export type CardListing = {
 
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=80';
 
+function normalizeUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return url.startsWith('//') ? 'https:' + url : url;
+}
+
 export function toCardListing(l: CarListing): CardListing {
   return {
     id: l.id,
@@ -38,7 +43,7 @@ export function toCardListing(l: CarListing): CardListing {
     transmission: l.transmission || '',
     power: l.power || '',
     source: l.source as CardListing['source'],
-    imageUrl: l.image_url || FALLBACK_IMAGE,
+    imageUrl: normalizeUrl(l.image_url) || FALLBACK_IMAGE,
     location: l.location || '',
     isNew: l.is_new,
     url: l.source_url || '#',

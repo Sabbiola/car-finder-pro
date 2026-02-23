@@ -42,8 +42,9 @@ const CarDetail = () => {
 
   const galleryImages = useMemo(() => {
     if (!car) return [];
-    const main = car.image_url || 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=80';
-    const extras = car.image_urls?.filter(u => u && u !== main) || [];
+    const normalize = (u: string) => u.startsWith('//') ? 'https:' + u : u;
+    const main = normalize(car.image_url || '') || 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=80';
+    const extras = (car.image_urls ?? []).map(normalize).filter(u => u && u !== main);
     return [main, ...extras];
   }, [car]);
 
