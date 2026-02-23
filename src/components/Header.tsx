@@ -39,34 +39,35 @@ const Header = () => {
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b-2 border-foreground bg-background animate-brutal-in">
-      <div className="container flex items-center justify-between h-14">
-        <button onClick={() => navigate('/')} className="flex items-center gap-2 group glitch-hover" data-text="AutoDeal Finder">
-          <span className="text-sm font-bold uppercase tracking-[0.2em]">
-            AutoDeal
-          </span>
-          <span className="text-xs text-accent uppercase tracking-[0.15em] font-bold">
-            Finder
-          </span>
+    <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-lg animate-brutal-in">
+      <div className="container flex items-center justify-between h-16">
+
+        <button onClick={() => navigate('/')} className="flex items-center gap-2.5 group">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-sm group-hover:shadow-violet-300/50 group-hover:scale-105 transition-all duration-200">
+            <span className="text-white text-sm font-bold">A</span>
+          </div>
+          <span className="text-base font-bold text-foreground">AutoDeal</span>
+          <span className="text-base font-bold bg-gradient-to-r from-violet-600 to-indigo-500 bg-clip-text text-transparent">Finder</span>
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => navigate('/preferiti')}
-            className="relative flex items-center justify-center h-8 w-8 border border-border hover:border-foreground transition-colors"
+            className="relative flex items-center justify-center h-9 w-9 rounded-xl hover:bg-muted transition-colors"
             aria-label="Preferiti"
           >
-            <Heart className="h-3.5 w-3.5" />
+            <Heart className="h-4 w-4" />
             {count > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 bg-accent text-accent-foreground text-[8px] font-bold min-w-[16px] h-[16px] flex items-center justify-center px-0.5">
+              <span className="absolute -top-1 -right-1 bg-gradient-to-r from-violet-500 to-indigo-500 text-white text-[8px] font-bold min-w-[16px] h-[16px] flex items-center justify-center px-0.5 rounded-full">
                 {count}
               </span>
             )}
           </button>
-          <Button variant="ghost" size="icon" onClick={toggleTheme} className="rounded-none border border-border h-8 w-8">
-            {dark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+          <Button variant="ghost" size="icon" onClick={toggleTheme} className="rounded-xl h-9 w-9 hover:bg-muted">
+            {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
         </div>
+
       </div>
     </header>
   );

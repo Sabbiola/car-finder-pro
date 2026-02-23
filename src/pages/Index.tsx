@@ -3,10 +3,10 @@ import Header from '@/components/Header';
 import RecentlyViewedSection from '@/components/RecentlyViewedSection';
 
 const features = [
-  { title: 'Ricerca istantanea', desc: 'Confronta annunci da tutti i portali in un click' },
-  { title: 'Migliori offerte', desc: 'Algoritmo che individua i prezzi più competitivi' },
-  { title: 'Andamento prezzi', desc: 'Grafici per capire se è il momento giusto' },
-  { title: 'Fonti verificate', desc: 'AutoScout24, Subito.it, Automobile.it' },
+  { title: 'Ricerca istantanea', desc: 'Confronta annunci da tutti i portali in un click', gradient: 'from-violet-500 to-indigo-500' },
+  { title: 'Migliori offerte',   desc: 'Algoritmo che individua i prezzi più competitivi', gradient: 'from-pink-500 to-rose-500' },
+  { title: 'Andamento prezzi',   desc: 'Grafici per capire se è il momento giusto',        gradient: 'from-amber-500 to-orange-500' },
+  { title: 'Fonti verificate',   desc: 'AutoScout24, Subito.it, Automobile.it',            gradient: 'from-teal-500 to-green-500' },
 ];
 
 const Index = () => {
@@ -14,16 +14,29 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <Header />
 
-      <section className="container py-20 md:py-32 space-y-12">
-        <div className="space-y-4 max-w-3xl animate-brutal-up">
-          <h1 className="text-5xl md:text-7xl font-bold tracking-tighter leading-[0.95] glitch-hover" data-text="Trova l'auto al prezzo migliore.">
+      {/* Hero */}
+      <section className="relative container py-20 md:py-32 space-y-10 overflow-hidden">
+        {/* Gradient blobs */}
+        <div className="pointer-events-none absolute -top-20 -left-20 w-[500px] h-[500px] bg-violet-300/25 rounded-full blur-3xl -z-10 dark:bg-violet-800/20" />
+        <div className="pointer-events-none absolute bottom-0 right-0 w-96 h-96 bg-pink-300/25 rounded-full blur-3xl -z-10 dark:bg-pink-800/20" />
+        <div className="pointer-events-none absolute top-1/2 left-1/2 w-64 h-64 bg-indigo-200/20 rounded-full blur-3xl -z-10 dark:bg-indigo-800/15" />
+
+        <div className="space-y-6 max-w-3xl animate-brutal-up">
+          <div className="inline-flex items-center gap-2 bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 text-xs font-semibold px-3 py-1.5 rounded-full">
+            <span className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-pulse" />
+            Aggregatore real-time
+          </div>
+
+          <h1 className="text-5xl md:text-7xl font-extrabold leading-[0.95] tracking-tight">
             Trova l'auto
+            <br />al prezzo
             <br />
-            al prezzo
-            <br />
-            <span className="text-accent">migliore.</span>
+            <span className="bg-gradient-to-r from-violet-600 via-purple-500 to-pink-500 bg-clip-text text-transparent">
+              migliore.
+            </span>
           </h1>
-          <p className="text-sm text-muted-foreground max-w-md uppercase tracking-[0.1em] leading-relaxed animate-brutal-in" style={{ animationDelay: '200ms' }}>
+
+          <p className="text-base text-muted-foreground max-w-md leading-relaxed animate-brutal-in" style={{ animationDelay: '200ms' }}>
             Aggregatore real-time di annunci auto da tutti i portali italiani.
             Confronta, analizza, risparmia.
           </p>
@@ -34,14 +47,17 @@ const Index = () => {
         </div>
       </section>
 
-      <section className="border-t-2 border-foreground">
+      {/* Feature cards */}
+      <section className="border-t border-border/60">
         <div className="container py-16">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-0 stagger-children">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 stagger-children">
             {features.map((f, i) => (
-              <div key={f.title} className={`p-6 brutal-hover ${i < 3 ? 'border-r-0 sm:border-r-2 border-b-2 sm:border-b-0 border-foreground' : ''} ${i === 1 ? 'lg:border-r-2' : ''}`}>
-                <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">0{i + 1}</span>
-                <h3 className="text-sm font-bold uppercase tracking-wide mt-2">{f.title}</h3>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{f.desc}</p>
+              <div key={f.title} className="p-6 rounded-2xl border border-border/60 bg-card hover:shadow-md transition-shadow">
+                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${f.gradient} flex items-center justify-center mb-4 shadow-sm`}>
+                  <span className="text-white text-sm font-bold">0{i + 1}</span>
+                </div>
+                <h3 className="text-sm font-bold mb-1">{f.title}</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">{f.desc}</p>
               </div>
             ))}
           </div>
@@ -50,8 +66,8 @@ const Index = () => {
 
       <RecentlyViewedSection />
 
-      <footer className="border-t-2 border-foreground py-6">
-        <div className="container text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+      <footer className="border-t border-border/60 py-6">
+        <div className="container text-xs text-muted-foreground">
           © 2026 AutoDeal Finder
         </div>
       </footer>
