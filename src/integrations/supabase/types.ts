@@ -14,6 +14,132 @@ export type Database = {
   }
   public: {
     Tables: {
+      user_favorites: {
+        Row: {
+          id: string
+          user_id: string
+          listing_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          listing_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          listing_id?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      user_saved_searches: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          filters: Record<string, unknown>
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          filters: Record<string, unknown>
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          filters?: Record<string, unknown>
+          created_at?: string
+        }
+        Relationships: []
+      }
+      price_alerts: {
+        Row: {
+          id: string
+          user_id: string | null
+          client_id: string | null
+          listing_id: string
+          target_price: number
+          is_active: boolean
+          notified_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          client_id?: string | null
+          listing_id: string
+          target_price: number
+          is_active?: boolean
+          notified_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          client_id?: string | null
+          listing_id?: string
+          target_price?: number
+          is_active?: boolean
+          notified_at?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      price_history: {
+        Row: {
+          id: string
+          listing_id: string
+          price: number
+          recorded_at: string
+        }
+        Insert: {
+          id?: string
+          listing_id: string
+          price: number
+          recorded_at?: string
+        }
+        Update: {
+          id?: string
+          listing_id?: string
+          price?: number
+          recorded_at?: string
+        }
+        Relationships: []
+      }
+      api_rate_limits: {
+        Row: {
+          id: string
+          client_key: string
+          action: string
+          request_count: number
+          window_start: string
+          last_request: string
+        }
+        Insert: {
+          id?: string
+          client_key: string
+          action: string
+          request_count?: number
+          window_start?: string
+          last_request?: string
+        }
+        Update: {
+          id?: string
+          client_key?: string
+          action?: string
+          request_count?: number
+          window_start?: string
+          last_request?: string
+        }
+        Relationships: []
+      }
       car_listings: {
         Row: {
           body_type: string | null

@@ -1,4 +1,4 @@
-import { Moon, Sun, Heart, User, LogOut, Sparkles } from 'lucide-react';
+import { Moon, Sun, Heart, User, LogOut, Sparkles, CircleUser } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -84,9 +84,16 @@ const Header = () => {
 
             {user ? (
               <div className="flex items-center gap-1.5">
-                <span className="hidden sm:block text-xs text-muted-foreground max-w-[120px] truncate">
-                  {user.email}
-                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate('/profilo')}
+                  className="rounded-xl h-9 px-3 gap-1.5 hover:bg-muted text-xs"
+                  title={user.email || 'Profilo'}
+                >
+                  <CircleUser className="h-4 w-4" />
+                  <span className="hidden sm:inline">Profilo</span>
+                </Button>
                 <Button
                   variant="ghost" size="icon"
                   onClick={signOut}

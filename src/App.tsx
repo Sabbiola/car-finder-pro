@@ -9,6 +9,7 @@ import CarDetail from "./pages/CarDetail";
 import Preferiti from "./pages/Preferiti";
 import Confronta from "./pages/Confronta";
 import NotFound from "./pages/NotFound";
+import Profile from "./pages/Profile";
 import { CompareProvider } from "./hooks/useCompare";
 import { AuthProvider } from "./contexts/AuthContext";
 import CompareBar from "./components/CompareBar";
@@ -29,6 +30,7 @@ const App = () => (
               <Route path="/auto/:id" element={<CarDetail />} />
               <Route path="/preferiti" element={<Preferiti />} />
               <Route path="/confronta" element={<Confronta />} />
+              <Route path="/profilo" element={<Profile />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             <CompareBar />

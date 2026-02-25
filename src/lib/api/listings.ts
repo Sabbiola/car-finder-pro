@@ -62,13 +62,19 @@ export async function fetchListings(filters: SearchFiltersState): Promise<CarLis
   if (filters.color) query = query.eq('color', filters.color);
   if (filters.doors) query = query.eq('doors', Number(filters.doors));
   if (filters.bodyType) query = query.eq('body_type', filters.bodyType);
-  if (filters.sources?.length) query = query.in('source', filters.sources);
+  // Source filter: sellerType takes precedence; if both are set, intersect them
+  const sellerTypeSources =
+    filters.sellerType === 'dealer' ? ['brumbrum', 'automobile'] :
+    filters.sellerType === 'private' ? ['subito'] :
+    null;
 
-  // Seller type filter: brumbrum = dealer, subito = mostly private
-  if (filters.sellerType === 'dealer') {
-    query = query.in('source', ['brumbrum', 'automobile']);
-  } else if (filters.sellerType === 'private') {
-    query = query.in('source', ['subito']);
+  if (sellerTypeSources) {
+    const intersection = filters.sources?.length
+      ? filters.sources.filter(s => sellerTypeSources.includes(s))
+      : [];
+    query = query.in('source', intersection.length ? intersection : sellerTypeSources);
+  } else if (filters.sources?.length) {
+    query = query.in('source', filters.sources);
   }
 
   const { data, error } = await query.order('price', { ascending: true });
