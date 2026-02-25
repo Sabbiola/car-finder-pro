@@ -29,12 +29,29 @@ interface ParsedListing {
 }
 
 function detectFuel(text: string): string | null {
-  if (/diesel/i.test(text)) return 'Diesel';
-  if (/benzina/i.test(text)) return 'Benzina';
-  if (/elettrica/i.test(text)) return 'Elettrica';
-  if (/ibrida|hybrid|mhev|phev/i.test(text)) return 'Ibrida';
-  if (/gpl/i.test(text)) return 'GPL';
-  if (/metano/i.test(text)) return 'Metano';
+  // Explicit keywords (highest priority)
+  if (/\bdiesel\b/i.test(text)) return 'Diesel';
+  if (/\bbenzina\b/i.test(text)) return 'Benzina';
+  if (/\belet?tric[ao]?\b|\bfull[- ]?electric\b/i.test(text)) return 'Elettrica';
+  if (/\bibrida?\b|\bhybrid\b|\bmhev\b|\bphev\b|\bfull[- ]?hybrid\b/i.test(text)) return 'Ibrida';
+  if (/\bgpl\b/i.test(text)) return 'GPL';
+  if (/\bmetano\b|\bcng\b/i.test(text)) return 'Metano';
+  // Engine codes → Diesel
+  if (/\b(tdi|cdi|crdi|hdi|dci|jtd|jtdm|mjet|cdti|bluehdi|bluedci|d4d|d-4d|dcat)\b/i.test(text)) return 'Diesel';
+  // Engine codes → Benzina
+  if (/\b(tfsi|tsi|gti|vti|sce|tce|puretech|t-?jet|gdi|mair|t-gdi|mpi)\b/i.test(text)) return 'Benzina';
+  // Named EV models → Elettrica
+  if (/\be-tron\b|\bid\.\d|\b(ioniq|niro)\s*ev\b|\bzoe\b|\bleaf\b|\be-208\b|\be-2008\b|\beariya\b/i.test(text)) return 'Elettrica';
+  // BMW electric (iX, i3, i4, i5, i7, i8)
+  if (/\b(ix\d?|i[34578])\b/i.test(text)) return 'Elettrica';
+  // Mercedes EQ → Elettrica
+  if (/\beq[abcse]\b/i.test(text)) return 'Elettrica';
+  // BMW/Mercedes/Volvo d suffix: 320d, 220d, 40d → Diesel
+  if (/\b\d{2,3}d\b/i.test(text)) return 'Diesel';
+  // BMW/Mercedes/Volvo e suffix PHEV: 330e, 530e, 40e → Ibrida
+  if (/\b\d{2,3}e\b/i.test(text) || /\bt[68]e\b/i.test(text)) return 'Ibrida';
+  // Toyota/Lexus hybrid
+  if (/\b(hsd|synergy\s*drive)\b/i.test(text)) return 'Ibrida';
   return null;
 }
 
@@ -67,14 +84,28 @@ function detectEmissionClass(text: string): string | null {
   return m ? `Euro ${m[1]}` : null;
 }
 
+// Stima la classe emissioni dall'anno di immatricolazione (fallback quando non esplicitato)
+function estimateEmissionClass(year: number): string | null {
+  if (!year || year < 1993) return null;
+  if (year >= 2021) return 'Euro 6d';
+  if (year >= 2019) return 'Euro 6d-temp';
+  if (year >= 2015) return 'Euro 6';
+  if (year >= 2011) return 'Euro 5';
+  if (year >= 2005) return 'Euro 4';
+  if (year >= 2001) return 'Euro 3';
+  if (year >= 1997) return 'Euro 2';
+  return 'Euro 1';
+}
+
 function detectBodyType(text: string): string | null {
   const t = text.toLowerCase();
-  if (t.includes('gran coupé') || t.includes('gran coupe')) return 'Gran Coupé';
+  if (t.includes('gran coupé') || t.includes('gran coupe') || t.includes('gran turismo')) return 'Gran Coupé';
   if (t.includes('coupé') || t.includes('coupe')) return 'Coupé';
-  if (t.includes('cabrio') || t.includes('convertible') || t.includes('cabriolet')) return 'Cabrio';
-  if (t.includes('touring') || t.includes('wagon') || t.includes('station')) return 'Station Wagon';
-  if (t.includes('berlina') || t.includes('sedan')) return 'Berlina';
-  if (t.includes('suv') || t.includes('crossover')) return 'SUV';
+  if (t.includes('cabrio') || t.includes('convertible') || t.includes('cabriolet') || t.includes('spider') || t.includes('roadster')) return 'Cabrio';
+  if (t.includes('touring') || t.includes('station wagon') || t.includes('station') || t.includes(' avant') || t.includes(' break') || t.includes('estate') || t.includes('sportback') || /\bsw\b/.test(t)) return 'Station Wagon';
+  if (t.includes('berlina') || t.includes('sedan') || t.includes('hatchback') || t.includes('saloon')) return 'Berlina';
+  if (t.includes('suv') || t.includes('crossover') || t.includes('fuoristrada') || t.includes('4x4')) return 'SUV';
+  if (t.includes('monovolume') || t.includes('minivan') || /\b(van|mpv)\b/.test(t)) return 'Monovolume';
   return null;
 }
 
@@ -949,6 +980,13 @@ Deno.serve(async (req) => {
     // Step 2: Cross-source dedup — keeps ONE card per physical car but stores
     // all platform names in extra_data.all_sources for the multi-badge UI
     const unique = deduplicateCrossSource(sameSourceUnique);
+
+    // Step 3: Post-processing — fill missing fields via inference
+    for (const l of unique) {
+      if (!l.fuel) l.fuel = detectFuel(l.title);
+      if (!l.body_type) l.body_type = detectBodyType(l.title);
+      if (!l.emission_class && l.year) l.emission_class = estimateEmissionClass(l.year);
+    }
 
     // Calculate price ratings
     if (unique.length >= 3) {

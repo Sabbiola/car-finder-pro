@@ -21,6 +21,55 @@ function htmlToMarkdown(html: string): string {
   catch { return processed.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '); }
 }
 
+// ─── Gemini enrichment (fills fields still null after regex) ────────
+async function enrichWithGemini(apiKey: string, markdown: string, existing: {
+  emission_class: string | null; color: string | null; transmission: string | null;
+  power: string | null; doors: number | null; seats: number | null;
+}): Promise<{ fuel?: string|null; emission_class?: string|null; color?: string|null; transmission?: string|null; power?: string|null; doors?: number|null; seats?: number|null; }> {
+  const needed: string[] = ['fuel']; // fuel is never extracted by parseDetails
+  if (!existing.emission_class) needed.push('emission_class');
+  if (!existing.color) needed.push('color');
+  if (!existing.transmission) needed.push('transmission');
+  if (!existing.power) needed.push('power');
+  if (!existing.doors) needed.push('doors');
+  if (!existing.seats) needed.push('seats');
+
+  const fieldDefs: Record<string, string> = {
+    fuel: '"Benzina", "Diesel", "Ibrida", "Elettrica", "GPL", "Metano" o null',
+    emission_class: '"Euro 6d", "Euro 6", "Euro 5", ecc. o null',
+    color: 'colore esterno in italiano (es. "Bianco", "Nero") o null',
+    transmission: '"Automatico", "Manuale" o null',
+    power: 'potenza come "150 CV" o null',
+    doors: 'intero (2, 3, 4, 5) o null',
+    seats: 'intero (2, 4, 5, 7) o null',
+  };
+  const fieldList = needed.map(f => `- ${f}: ${fieldDefs[f]}`).join('\n');
+  const prompt = `Sei un esperto di auto. Dal testo di questo annuncio estrai SOLO i seguenti campi come JSON:\n${fieldList}\nRispondi SOLO con JSON valido, null per i campi non trovati.\n\nTesto:\n${markdown.slice(0, 3000)}`;
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json', temperature: 0, maxOutputTokens: 200 },
+        }),
+      }
+    );
+    if (!res.ok) { console.warn('Gemini error:', res.status); return {}; }
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    const parsed = JSON.parse(text);
+    console.log('Gemini enrichment result:', JSON.stringify(parsed));
+    return parsed;
+  } catch (err) {
+    console.warn('Gemini enrichment failed:', err);
+    return {};
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -95,17 +144,28 @@ Deno.serve(async (req) => {
     console.log('Parsed details:', JSON.stringify(details));
     console.log('Found images:', imageUrls.length);
 
+    // Gemini enrichment for fields still null after regex
+    const geminiKey = Deno.env.get('GEMINI_API_KEY');
+    const enriched = geminiKey ? await enrichWithGemini(geminiKey, markdown, details) : {};
+
     // Update the listing
     const updateData: Record<string, unknown> = { detail_scraped: true };
     if (details.description) updateData.description = details.description;
-    if (details.emission_class) updateData.emission_class = details.emission_class;
+    const emissionClass = details.emission_class || enriched.emission_class;
+    if (emissionClass) updateData.emission_class = emissionClass;
     if (details.version) updateData.version = details.version;
-    if (details.seats) updateData.seats = details.seats;
+    const seats = details.seats || enriched.seats;
+    if (seats) updateData.seats = seats;
     if (details.condition) updateData.condition = details.condition;
-    if (details.doors) updateData.doors = details.doors;
-    if (details.color) updateData.color = details.color;
-    if (details.transmission) updateData.transmission = details.transmission;
-    if (details.power) updateData.power = details.power;
+    const doors = details.doors || enriched.doors;
+    if (doors) updateData.doors = doors;
+    const color = details.color || enriched.color;
+    if (color) updateData.color = color;
+    const transmission = details.transmission || enriched.transmission;
+    if (transmission) updateData.transmission = transmission;
+    const power = details.power || enriched.power;
+    if (power) updateData.power = power;
+    if (enriched.fuel) updateData.fuel = enriched.fuel;
     if (imageUrls.length > 0) updateData.image_urls = imageUrls;
 
     // Extra structured data (JSONB)
