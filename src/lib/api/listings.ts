@@ -47,7 +47,7 @@ export async function fetchListings(filters: SearchFiltersState): Promise<CarLis
   let query = supabase.from('car_listings').select('*');
 
   if (filters.brand) query = query.eq('brand', filters.brand);
-  if (filters.model) query = query.ilike('model', filters.model);
+  if (filters.model) query = query.ilike('model', `%${filters.model}%`);
   if (filters.trim) query = query.ilike('trim', `%${filters.trim}%`);
   if (filters.fuel) query = query.eq('fuel', filters.fuel);
   if (filters.transmission) query = query.eq('transmission', filters.transmission);

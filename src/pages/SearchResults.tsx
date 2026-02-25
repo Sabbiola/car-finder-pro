@@ -9,6 +9,7 @@ import { useSearchParams } from 'react-router-dom';
 import { scrapeListings, fetchListings, type CarListing } from '@/lib/api/listings';
 import { toCardListing } from '@/lib/toCardListing';
 import { useToast } from '@/hooks/use-toast';
+import { sourceLabels, sourceColors } from '@/lib/mock-data';
 
 type SortOption = 'price-asc' | 'price-desc' | 'km-asc' | 'year-desc' | 'value-asc' | 'best-deal';
 
@@ -172,9 +173,28 @@ const SearchResults = () => {
                 Ricerca in corso...
               </span>
             ) : (
-              <p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">
-                <span className="font-bold text-foreground">{results.length}</span> risultati
-              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">
+                  <span className="font-bold text-foreground">{results.length}</span> risultati
+                </p>
+                {scraped && results.length > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {(['autoscout24', 'subito', 'automobile', 'brumbrum'] as const).map(src => {
+                      const count = listings.filter(l => l.source === src).length;
+                      return (
+                        <span
+                          key={src}
+                          className={`text-[9px] font-semibold px-2 py-0.5 rounded-full text-white ${count > 0 ? sourceColors[src] : 'bg-muted text-muted-foreground'}`}
+                          style={count === 0 ? { opacity: 0.4 } : undefined}
+                          title={`${sourceLabels[src]}: ${count} annunci`}
+                        >
+                          {sourceLabels[src].replace('AutoScout24', 'AS24').replace('Automobile.it', 'Auto.it').replace('Subito.it', 'Subito').replace('Brumbrum', 'BB')}: {count}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             )}
             {loading && scraped && results.length > 0 && (
               <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.1em] text-muted-foreground">

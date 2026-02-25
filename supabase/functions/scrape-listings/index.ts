@@ -865,7 +865,7 @@ Deno.serve(async (req) => {
       : `https://www.autoscout24.it/lst/${brandSlug}?q=${encodeURIComponent(model)}`;
 
     if (sources.includes('autoscout24')) {
-      for (let page = 1; page <= 3; page++) {
+      for (let page = 1; page <= 2; page++) {
         let url: string;
         if (asSlug) {
           const pageParam = page > 1 ? `page=${page}` : '';
@@ -876,7 +876,9 @@ Deno.serve(async (req) => {
           const combined = [asParamStr, pageParam].filter(Boolean).join('&');
           url = combined ? `${asBaseUrl}&${combined}` : asBaseUrl;
         }
-        scrapeJobs.push({ url, parser: (md) => parseAutoScoutListings(md, brand, model, trim), waitFor: 12000, extra: { mobile: true } });
+        // Desktop mode: AS24 desktop markdown contains prod.pictures.autoscout24.net CDN URLs
+        // that Strategy 1 needs. Mobile mode returns a different structure the parser can't read.
+        scrapeJobs.push({ url, parser: (md) => parseAutoScoutListings(md, brand, model, trim), waitFor: 10000 });
       }
     }
 
