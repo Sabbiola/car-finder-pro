@@ -92,7 +92,7 @@ function parseWithRegex(query: string): Filters {
   }
 
   // LOCATION: "zona Milano", "a Roma", "vicino a Torino"
-  const locM = q.match(/(?:zona|a\s|in\s|vicino\s*a|nei\s*pressi\s*di)\s*([a-zàèéìòù][a-zàèéìòù\s]{1,20}?)(?:\s*,|\s+con|\s+diesel|\s+benzina|\s+suv|\s*$)/);
+  const locM = q.match(/(?:zona\s+|vicino\s+a\s+|nei\s+pressi\s+di\s+|\ba\s+|\bin\s+)([a-zàèéìòù][a-zàèéìòù\s]{1,20}?)(?:\s*,|\s+con|\s+diesel|\s+benzina|\s+suv|\s*$)/);
   if (locM) {
     const loc = locM[1].trim();
     const stopWords = [
