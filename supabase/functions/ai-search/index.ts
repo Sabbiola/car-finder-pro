@@ -3,7 +3,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// AI-powered natural language search
+// AI-powered natural language search via Gemini
 // Converts user query like "SUV diesel sotto 20k, meno di 100k km" into structured filters
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -19,17 +19,17 @@ Deno.serve(async (req) => {
       );
     }
 
-    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
-    if (!anthropicKey) {
+    const geminiKey = Deno.env.get('GEMINI_API_KEY');
+    if (!geminiKey) {
       return new Response(
-        JSON.stringify({ success: false, error: 'AI non configurata (manca ANTHROPIC_API_KEY)' }),
+        JSON.stringify({ success: false, error: 'AI non configurata (manca GEMINI_API_KEY)' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const systemPrompt = `Sei un assistente per la ricerca di auto usate in Italia.
+    const prompt = `Sei un assistente per la ricerca di auto usate in Italia.
 L'utente descrive in linguaggio naturale l'auto che cerca.
-Devi estrarre i filtri di ricerca e restituirli in formato JSON.
+Estrai i filtri di ricerca e restituiscili SOLO come JSON valido, nessun testo aggiuntivo.
 
 Campi disponibili (tutti opzionali):
 - brand: string (es. "BMW", "Fiat", "Volkswagen")
@@ -41,43 +41,46 @@ Campi disponibili (tutti opzionali):
 - kmMax: number (es. 100000)
 - fuel: "Benzina"|"Diesel"|"Elettrica"|"Ibrida"|"GPL"|"Metano"
 - transmission: "Manuale"|"Automatico"
-- bodyType: "Berlina"|"SUV"|"Station Wagon"|"Coupé"|"Monovolume"|"Cabrio"|"Citycar"|"Crossover"
+- bodyType: "Berlina"|"SUV"|"Station Wagon"|"Coupé"|"Monovolume"|"Cabrio"
 - location: string (es. "Milano")
 
-Rispondi SOLO con JSON valido, nessun testo aggiuntivo. Esempio:
-{"brand":"BMW","model":"Serie 3","priceMax":25000,"fuel":"Diesel","yearMin":2019}`;
+Esempio output: {"brand":"BMW","model":"Serie 3","priceMax":25000,"fuel":"Diesel","yearMin":2019}
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-        'x-api-key': anthropicKey,
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 256,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: query }],
-      }),
-    });
+Query utente: ${query}`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0,
+            maxOutputTokens: 256,
+          },
+        }),
+      }
+    );
 
     if (!response.ok) {
       const err = await response.text();
-      throw new Error(`Anthropic API error: ${response.status} ${err}`);
+      throw new Error(`Gemini API error: ${response.status} ${err.slice(0, 200)}`);
     }
 
     const data = await response.json();
-    const text = data.content?.[0]?.text || '{}';
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
 
     let filters: Record<string, unknown> = {};
     try {
-      // Extract JSON even if there's extra text
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) filters = JSON.parse(jsonMatch[0]);
     } catch {
       filters = {};
     }
+
+    console.log('AI search filters:', JSON.stringify(filters));
 
     return new Response(
       JSON.stringify({ success: true, filters }),
