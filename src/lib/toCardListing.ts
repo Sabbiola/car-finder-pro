@@ -12,6 +12,7 @@ export type CardListing = {
   transmission: string;
   power: string;
   source: 'autoscout24' | 'subito' | 'automobile' | 'brumbrum';
+  allSources: string[];
   imageUrl: string;
   location: string;
   isNew: boolean;
@@ -52,6 +53,7 @@ export function toCardListing(l: CarListing): CardListing {
     transmission: l.transmission || '',
     power: l.power || '',
     source: l.source as CardListing['source'],
+    allSources: (l.extra_data?.all_sources as string[] | undefined) || [l.source],
     imageUrl: normalizeUrl(l.image_url) || FALLBACK_IMAGE,
     location: l.location || '',
     isNew: l.is_new,

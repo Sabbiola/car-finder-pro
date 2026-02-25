@@ -10,6 +10,7 @@ export interface CarListing {
   transmission: string;
   power: string;
   source: 'autoscout24' | 'subito' | 'automobile' | 'brumbrum';
+  allSources?: string[];
   imageUrl: string;
   location: string;
   isNew: boolean;

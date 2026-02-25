@@ -25,6 +25,7 @@ interface ParsedListing {
   location: string | null;
   is_new: boolean;
   emission_class: string | null;
+  extra_data?: Record<string, unknown> | null;
 }
 
 function detectFuel(text: string): string | null {
@@ -711,6 +712,37 @@ function getAutoScoutModelSlug(brand: string, model: string): string | null {
 }
 
 
+// Cross-source deduplication: same car listed on multiple portals.
+// When found, keeps ONE listing but stores all source names in extra_data.all_sources
+// so the UI can display multiple platform badges on a single card.
+function deduplicateCrossSource(listings: ParsedListing[]): ParsedListing[] {
+  const result: ParsedListing[] = [];
+  for (const candidate of listings) {
+    const existingIdx = result.findIndex(existing => {
+      if (existing.brand !== candidate.brand || existing.model !== candidate.model) return false;
+      if (existing.year !== candidate.year) return false;
+      const priceDiff = Math.abs(existing.price - candidate.price) / Math.max(existing.price, 1);
+      if (priceDiff > 0.03) return false;
+      if (existing.km > 0 && candidate.km > 0) {
+        const kmDiff = Math.abs(existing.km - candidate.km) / Math.max(existing.km, 1);
+        if (kmDiff > 0.05) return false;
+      }
+      return true;
+    });
+    if (existingIdx === -1) {
+      result.push({ ...candidate, extra_data: { all_sources: [candidate.source] } });
+    } else {
+      const existing = result[existingIdx];
+      const allSources = (existing.extra_data?.all_sources as string[]) || [existing.source];
+      if (!allSources.includes(candidate.source)) {
+        result[existingIdx] = { ...existing, extra_data: { ...existing.extra_data, all_sources: [...allSources, candidate.source] } };
+      }
+    }
+  }
+  console.log(`Cross-source dedup: ${listings.length} → ${result.length}`);
+  return result;
+}
+
 // Rate limiting: max 10 scrape requests per client per hour
 async function checkRateLimit(supabase: ReturnType<typeof createClient>, clientKey: string): Promise<boolean> {
   const MAX_REQUESTS = 10;
@@ -890,12 +922,10 @@ Deno.serve(async (req) => {
       if (result.status === 'fulfilled') allListings.push(...result.value);
     }
 
-    // Deduplication: source_url (same listing re-scraped) or title+price+source (exact same ad from same source)
-    // Cross-source dedup was removed: different platforms legitimately list different cars
-    // with similar specs (same year/price/km) so removing them caused entire platforms to disappear.
+    // Step 1: Same-source deduplication (same listing scraped twice from same source)
     const seenUrls = new Set<string>();
     const seenTitlePrice = new Set<string>();
-    const unique = allListings.filter(l => {
+    const sameSourceUnique = allListings.filter(l => {
       if (l.source_url) {
         if (seenUrls.has(l.source_url)) return false;
         seenUrls.add(l.source_url);
@@ -906,6 +936,10 @@ Deno.serve(async (req) => {
       seenTitlePrice.add(key);
       return true;
     });
+
+    // Step 2: Cross-source dedup — keeps ONE card per physical car but stores
+    // all platform names in extra_data.all_sources for the multi-badge UI
+    const unique = deduplicateCrossSource(sameSourceUnique);
 
     // Calculate price ratings
     if (unique.length >= 3) {

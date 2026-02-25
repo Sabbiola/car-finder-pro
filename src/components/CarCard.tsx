@@ -34,9 +34,16 @@ const CarCard = ({ listing, showCompare }: Props) => {
             (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=80';
           }}
         />
-        {/* Source badge */}
-        <div className={`absolute top-2 left-2 ${sourceColors[listing.source]} text-white text-[10px] font-semibold px-2.5 py-0.5 rounded-full shadow-sm`}>
-          {sourceLabels[listing.source]}
+        {/* Source badge(s) */}
+        <div className="absolute top-2 left-2 flex flex-wrap gap-1 max-w-[70%]">
+          {(listing.allSources || [listing.source]).map(src => (
+            <span
+              key={src}
+              className={`${sourceColors[src] || 'bg-gray-500'} text-white text-[10px] font-semibold px-2.5 py-0.5 rounded-full shadow-sm`}
+            >
+              {sourceLabels[src] || src}
+            </span>
+          ))}
         </div>
         <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
           {isBest && (
