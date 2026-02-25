@@ -236,8 +236,8 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
     const imageUuid = imgMatch[2];
     if (seenUuids.has(imageUuid)) continue;
 
-    // Must mention the brand somewhere in the block (exclude nav/header noise)
-    if (!block.toLowerCase().includes(brandPrefix)) continue;
+    // Must mention the brand somewhere in the block (skip check for brand-less searches)
+    if (brand && !block.toLowerCase().includes(brandPrefix)) continue;
 
     // Image — upgrade to 800x600
     const imageUrl = rawImageUrl.replace(/\/\d+x\d+(\.\w+)$/, '/800x600$1');
@@ -263,13 +263,13 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
     let title = '';
     // 1. Link text containing brand: [BMW 320d...](autoscout24.it/annunci/...)
     const linkTitleMatch = block.match(/\[([^\]]{5,100}?)\]\(https:\/\/www\.autoscout24\.it\/annunci\//);
-    if (linkTitleMatch && linkTitleMatch[1].toLowerCase().includes(brandPrefix)) {
+    if (linkTitleMatch && (!brand || linkTitleMatch[1].toLowerCase().includes(brandPrefix))) {
       title = linkTitleMatch[1].replace(/\*\*/g, '').trim();
     }
     // 2. Bold text containing brand: **BMW 320d...**
     if (!title) {
       const boldMatch = block.match(/\*\*([^*]{5,100})\*\*/);
-      if (boldMatch && boldMatch[1].toLowerCase().includes(brandPrefix)) {
+      if (boldMatch && (!brand || boldMatch[1].toLowerCase().includes(brandPrefix))) {
         title = boldMatch[1].trim();
       }
     }
@@ -277,13 +277,14 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
     if (!title) {
       for (const line of block.split('\n')) {
         const clean = line.replace(/[*#\[\]]/g, '').replace(/\([^)]+\)/g, '').trim();
-        if (clean.toLowerCase().includes(brandPrefix) && clean.length >= 5 && clean.length <= 120) {
+        if ((!brand || clean.toLowerCase().includes(brandPrefix)) && clean.length >= 5 && clean.length <= 120) {
           title = clean;
           break;
         }
       }
     }
-    if (!title) title = `${brand} ${model}`;
+    if (!title && brand) title = `${brand} ${model}`;
+    if (!title) continue; // brand-less: skip if no title found
 
     // Source URL
     let sourceUrl: string | null = null;
@@ -323,10 +324,14 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
     const fuel = detectFuel(block);
     const transmission = detectTransmission(block);
     const bodyType = detectBodyType(title);
-    const extractedTrim = trim || extractTrimFromTitle(title, brand, model);
+    // Auto-detect brand/model from title when searching without a brand
+    const detectedBM = (!brand && title) ? extractBrandModel(title) : null;
+    const finalBrand = brand || detectedBM?.brand || '';
+    const finalModel = model || detectedBM?.model || '';
+    const extractedTrim = trim || extractTrimFromTitle(title, finalBrand, finalModel);
 
     listings.push({
-      title, brand, model, trim: extractedTrim,
+      title, brand: finalBrand, model: finalModel, trim: extractedTrim,
       year: year || new Date().getFullYear(), price, km,
       fuel, transmission, power, color: detectColor(block),
       doors: bodyType === 'Coupé' || bodyType === 'Cabrio' ? 2 : null,
@@ -629,6 +634,27 @@ async function scrapeUrl(apiKey: string, url: string, waitFor = 5000, premiumPro
   }
 }
 
+// ─── Brand extraction from title (for brand-less searches) ───────────
+const KNOWN_BRANDS_LOWER = [
+  'alfa romeo', 'land rover', 'mercedes-benz', 'volkswagen', 'bmw', 'audi', 'fiat',
+  'toyota', 'ford', 'renault', 'peugeot', 'opel', 'volvo', 'tesla', 'kia', 'hyundai',
+  'seat', 'skoda', 'jeep', 'honda', 'mazda', 'nissan', 'suzuki', 'porsche', 'mini',
+  'dacia', 'citroen', 'jaguar',
+];
+function extractBrandModel(title: string): { brand: string; model: string } {
+  const t = title.toLowerCase();
+  for (const b of KNOWN_BRANDS_LOWER) {
+    if (t.startsWith(b + ' ') || t.startsWith(b + '-')) {
+      const brand = b.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      const rest = title.slice(b.length).trim();
+      const model = rest.split(' ')[0] || '';
+      return { brand, model };
+    }
+  }
+  const parts = title.trim().split(' ');
+  return { brand: parts[0] || '', model: parts[1] || '' };
+}
+
 // ==========================================
 // MODEL NAME MAPPING FOR AUTOSCOUT24
 // EXPANDED: 5 → 25+ brands
@@ -855,15 +881,32 @@ Deno.serve(async (req) => {
     const transmissionFilter = filters?.transmission || null;
     const sources: string[] = filters?.sources?.length ? filters.sources : ['autoscout24', 'subito', 'automobile', 'brumbrum'];
 
-    if (!brand) {
-      return new Response(JSON.stringify({ success: false, error: 'Brand is required' }),
+    const bodyTypeFilter = filters?.bodyType || null;
+    const bodyCodeMap: Record<string, string> = {
+      'SUV': '3', 'Berlina': '1', 'Station Wagon': '4', 'Coupé': '2', 'Cabrio': '5', 'Monovolume': '6',
+    };
+
+    // Require at least one meaningful filter
+    if (!brand && !bodyTypeFilter && !fuelFilter && !priceMax && !kmMax && !yearMin) {
+      return new Response(JSON.stringify({ success: false, error: 'Specifica una marca o almeno un filtro' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const allListings: ParsedListing[] = [];
-    const query = encodeURIComponent(`${brand.toLowerCase()} ${model.toLowerCase()}`);
+    const query = encodeURIComponent(`${brand.toLowerCase()} ${model.toLowerCase()}`.trim());
 
     const scrapeJobs: { url: string; parser: (md: string) => ParsedListing[]; waitFor?: number; premiumProxy?: boolean }[] = [];
+
+    // ── Brand-less mode: only AS24 with filter URL ──────────────────────
+    if (!brand) {
+      if (sources.includes('autoscout24')) {
+        for (let page = 1; page <= 2; page++) {
+          const pageParam = page > 1 ? `&page=${page}` : '';
+          const url = `https://www.autoscout24.it/lst/?${asParamStr}${pageParam}`;
+          scrapeJobs.push({ url, parser: (md) => parseAutoScoutListings(md, '', '', null), waitFor: 8000 });
+        }
+      }
+    } else {
 
     // --- Subito.it ---
     if (sources.includes('subito')) {
@@ -890,6 +933,7 @@ Deno.serve(async (req) => {
     if (kmMax) asParams.set('kmto', String(kmMax));
     if (fuelFilter && fuelCodeMap[fuelFilter]) asParams.set('fuelc', fuelCodeMap[fuelFilter]);
     if (transmissionFilter && gearCodeMap[transmissionFilter]) asParams.set('gear', gearCodeMap[transmissionFilter]);
+    if (bodyTypeFilter && bodyCodeMap[bodyTypeFilter]) asParams.set('body', bodyCodeMap[bodyTypeFilter]);
     const asParamStr = asParams.toString();
 
     const asSlug = getAutoScoutModelSlug(brand, model);
@@ -937,6 +981,8 @@ Deno.serve(async (req) => {
         scrapeJobs.push({ url, parser: (md) => parseBrumBrumListings(md, brand, model, trim), premiumProxy: true });
       }
     }
+
+    } // end else (brand-based scraping)
 
     console.log(`Starting ${scrapeJobs.length} scrape jobs in batches...`);
 
