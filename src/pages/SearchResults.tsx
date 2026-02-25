@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { ArrowUpDown, Loader2 } from 'lucide-react';
+import { ArrowUpDown, Loader2, LayoutGrid, Map } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Header from '@/components/Header';
 import SearchFilters, { SearchFiltersState } from '@/components/SearchFilters';
 import CarCard from '@/components/CarCard';
+import ListingsMap from '@/components/ListingsMap';
 import { useSearchParams } from 'react-router-dom';
 import { scrapeListings, fetchListings, type CarListing } from '@/lib/api/listings';
 import { toCardListing } from '@/lib/toCardListing';
@@ -55,6 +56,7 @@ const SearchResults = () => {
   const [loading, setLoading] = useState(false);
   const [scraped, setScraped] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
   const sentinelRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -187,6 +189,25 @@ const SearchResults = () => {
             )}
           </div>
 
+          <div className="flex items-center gap-2">
+            {/* View toggle */}
+            <div className="flex items-center border-2 border-foreground">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-foreground text-background' : 'hover:bg-muted'}`}
+                aria-label="Vista griglia"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setViewMode('map')}
+                className={`p-1.5 transition-colors ${viewMode === 'map' ? 'bg-foreground text-background' : 'hover:bg-muted'}`}
+                aria-label="Vista mappa"
+              >
+                <Map className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
           <Select value={sort} onValueChange={v => {
             const s = v as SortOption;
             setSort(s);
@@ -202,25 +223,34 @@ const SearchResults = () => {
               ))}
             </SelectContent>
           </Select>
+          </div>
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 stagger-children">
-          {visibleResults.map((listing, i) => (
-            <CarCard key={listing.id} listing={toCardListing(listing)} index={i} showCompare />
-          ))}
-        </div>
-
-        {/* Infinite scroll sentinel */}
-        <div ref={sentinelRef} className="h-4" />
-        {hasMore && (
-          <div className="flex justify-center py-4">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        {viewMode === 'map' ? (
+          <ListingsMap listings={results} />
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 stagger-children">
+            {visibleResults.map((listing, i) => (
+              <CarCard key={listing.id} listing={toCardListing(listing)} index={i} showCompare />
+            ))}
           </div>
         )}
-        {!loading && scraped && results.length > 0 && !hasMore && (
-          <p className="text-center text-xs text-muted-foreground uppercase tracking-[0.1em] py-4">
-            Tutti i {results.length} risultati caricati
-          </p>
+
+        {/* Infinite scroll sentinel — grid mode only */}
+        {viewMode === 'grid' && (
+          <>
+            <div ref={sentinelRef} className="h-4" />
+            {hasMore && (
+              <div className="flex justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            )}
+            {!loading && scraped && results.length > 0 && !hasMore && (
+              <p className="text-center text-xs text-muted-foreground uppercase tracking-[0.1em] py-4">
+                Tutti i {results.length} risultati caricati
+              </p>
+            )}
+          </>
         )}
 
         {!loading && scraped && results.length === 0 && (
