@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Share2, Check } from 'lucide-react';
+import { ArrowLeft, Loader2, Share2, Check, ExternalLink } from 'lucide-react';
 import Header from '@/components/Header';
 import { fetchListingsByIds } from '@/lib/api/fetchByIds';
 import type { CarListing } from '@/lib/api/listings';
@@ -27,6 +27,7 @@ const rows: RowDef[] = [
   { label: 'Colore', get: c => c.color || '—' },
   { label: 'Porte', get: c => c.doors ?? '—' },
   { label: 'Rating prezzo', get: c => priceRatingConfig[c.price_rating || 'normal']?.label || '—' },
+  { label: 'Posizione', get: c => c.location || '—' },
 ];
 
 function findBestIndex(values: (number | null)[], mode: 'min' | 'max'): number | null {
@@ -67,24 +68,24 @@ const Confronta = () => {
 
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-1.5 text-xs uppercase tracking-[0.15em] text-muted-foreground hover:text-accent transition-colors animate-brutal-in"
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors animate-brutal-in"
         >
-          <ArrowLeft className="h-3 w-3" /> Indietro
+          <ArrowLeft className="h-4 w-4" /> Indietro
         </button>
 
         <div className="flex items-center justify-between animate-brutal-up">
           <div className="flex items-baseline gap-3">
-            <h1 className="text-xl font-bold uppercase tracking-wide">Confronto auto</h1>
-            <span className="text-muted-foreground text-sm uppercase tracking-[0.1em]">
+            <h1 className="text-xl font-bold">Confronto auto</h1>
+            <span className="text-muted-foreground text-sm">
               ({cars.length} selezionate)
             </span>
           </div>
           {ids.length >= 2 && (
             <button
               onClick={handleShareComparison}
-              className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.15em] text-muted-foreground hover:text-accent transition-colors border border-border px-3 py-1.5"
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors border border-border rounded-lg px-3 py-1.5 hover:bg-muted"
             >
-              {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Share2 className="h-3 w-3" />}
+              {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Share2 className="h-3.5 w-3.5" />}
               {copied ? 'Copiato!' : 'Copia link'}
             </button>
           )}
@@ -97,27 +98,38 @@ const Confronta = () => {
         )}
 
         {!loading && cars.length > 0 && (
-          <div className="overflow-x-auto animate-brutal-up" style={{ animationDelay: '100ms' }}>
-            <table className="w-full border-collapse border-2 border-foreground">
+          <div className="overflow-x-auto rounded-2xl border border-border shadow-sm animate-brutal-up" style={{ animationDelay: '100ms' }}>
+            <table className="w-full border-collapse">
               <thead>
-                <tr>
-                  <th className="border-2 border-foreground p-3 bg-muted text-left text-[9px] uppercase tracking-[0.2em] w-28">
-                    SPEC
+                <tr className="border-b border-border bg-muted/40">
+                  <th className="p-4 text-left text-xs font-medium text-muted-foreground w-32">
+                    Spec
                   </th>
                   {cars.map(car => (
-                    <th key={car.id} className="border-2 border-foreground p-3 text-left min-w-[200px] align-top">
+                    <th key={car.id} className="p-4 text-left min-w-[220px] align-top border-l border-border">
                       <img
                         src={car.image_url || FALLBACK_IMAGE}
                         alt={car.title}
-                        className="w-full h-28 object-cover border-2 border-border mb-2"
+                        className="w-full h-28 object-cover rounded-xl mb-3"
                         onError={e => { (e.target as HTMLImageElement).src = FALLBACK_IMAGE; }}
                       />
-                      <div className="text-[10px] font-bold uppercase tracking-[0.1em] leading-tight">
+                      <div className="text-sm font-semibold leading-tight">
                         {car.title}
                       </div>
-                      <div className="text-[9px] text-muted-foreground uppercase tracking-[0.1em] mt-0.5">
+                      <div className="text-xs text-muted-foreground mt-0.5 capitalize">
                         {car.source}
                       </div>
+                      {car.source_url && car.source_url !== '#' && (
+                        <a
+                          href={car.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          className="mt-1.5 inline-flex items-center gap-1 text-xs text-violet-600 hover:underline"
+                        >
+                          Vai all&apos;annuncio <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
                     </th>
                   ))}
                 </tr>
@@ -129,8 +141,8 @@ const Confronta = () => {
                     : null;
 
                   return (
-                    <tr key={row.label} className={ri % 2 === 0 ? 'bg-card' : 'bg-background'}>
-                      <td className="border-2 border-foreground p-3 text-[9px] uppercase tracking-[0.2em] font-bold text-muted-foreground">
+                    <tr key={row.label} className={`border-b border-border last:border-b-0 transition-colors ${ri % 2 !== 0 ? 'bg-muted/20' : ''}`}>
+                      <td className="p-4 text-xs font-semibold text-muted-foreground whitespace-nowrap">
                         {row.label}
                       </td>
                       {cars.map((car, ci) => {
@@ -138,12 +150,12 @@ const Confronta = () => {
                         return (
                           <td
                             key={car.id}
-                            className={`border-2 border-foreground p-3 text-sm font-bold ${isBest ? 'bg-accent/10 text-accent' : ''}`}
+                            className={`p-4 text-sm font-medium border-l border-border ${isBest ? 'text-violet-600 dark:text-violet-400' : ''}`}
                           >
                             {String(row.get(car))}
                             {isBest && (
-                              <span className="ml-1.5 text-[8px] uppercase tracking-[0.1em] bg-accent text-accent-foreground px-1 py-0.5">
-                                TOP
+                              <span className="ml-2 text-[10px] bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 px-2 py-0.5 rounded-full font-semibold">
+                                Top
                               </span>
                             )}
                           </td>
@@ -159,8 +171,8 @@ const Confronta = () => {
 
         {!loading && !cars.length && (
           <div className="text-center py-24 text-muted-foreground space-y-2">
-            <p className="text-sm font-bold uppercase tracking-wide">Nessuna auto da confrontare</p>
-            <p className="text-xs uppercase tracking-[0.1em]">
+            <p className="text-sm font-semibold">Nessuna auto da confrontare</p>
+            <p className="text-xs text-muted-foreground">
               Seleziona 2-3 auto dalla pagina risultati e clicca "Confronta"
             </p>
           </div>

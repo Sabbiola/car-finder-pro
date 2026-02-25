@@ -1,4 +1,4 @@
-import { ExternalLink, Award } from 'lucide-react';
+import { ExternalLink, Award, MapPin } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { CarListing, sourceLabels, sourceColors } from '@/lib/mock-data';
 import { useNavigate } from 'react-router-dom';
@@ -81,6 +81,13 @@ const CarCard = ({ listing, showCompare }: Props) => {
             </span>
           )}
         </div>
+
+        {listing.location && (
+          <p className="text-[10px] text-muted-foreground flex items-center gap-1 -mt-1">
+            <MapPin className="h-3 w-3 flex-shrink-0" />
+            <span className="truncate">{listing.location}</span>
+          </p>
+        )}
 
         {/* Bottom row */}
         <div className="flex items-center justify-between pt-2 border-t border-border/50 gap-2">

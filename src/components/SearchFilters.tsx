@@ -110,7 +110,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
     filters.fuel || filters.transmission ||
     filters.color || filters.doors || filters.bodyType ||
     filters.location || filters.isNew !== null ||
-    filters.sellerType !== 'all'
+    filters.sellerType !== 'all' || filters.emissionClass
   );
 
   return (

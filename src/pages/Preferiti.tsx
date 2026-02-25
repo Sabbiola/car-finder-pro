@@ -28,10 +28,10 @@ const Preferiti = () => {
       <Header />
       <div className="container py-6 space-y-6">
 
-        <div className="flex items-center gap-3 border-b-2 border-foreground pb-4 animate-brutal-in">
+        <div className="flex items-center gap-3 border-b border-border pb-4 animate-brutal-in">
           <Heart className="h-5 w-5" />
-          <h1 className="text-xl font-bold uppercase tracking-wide">Preferiti</h1>
-          <span className="text-xs text-muted-foreground uppercase tracking-[0.1em]">
+          <h1 className="text-xl font-bold">Preferiti</h1>
+          <span className="text-xs text-muted-foreground">
             ({favorites.length})
           </span>
         </div>
@@ -45,15 +45,15 @@ const Preferiti = () => {
         {!loading && !favorites.length && (
           <div className="text-center py-24 space-y-3">
             <Heart className="h-8 w-8 mx-auto text-muted-foreground" />
-            <p className="text-sm font-bold uppercase tracking-wide">Nessun preferito salvato</p>
-            <p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">
+            <p className="text-sm font-semibold">Nessun preferito salvato</p>
+            <p className="text-xs text-muted-foreground">
               Clicca il cuore su qualsiasi annuncio per salvarlo qui
             </p>
           </div>
         )}
 
         {error && (
-          <p className="text-xs uppercase tracking-[0.1em] text-destructive text-center py-8">
+          <p className="text-xs text-destructive text-center py-8">
             Errore nel caricamento dei preferiti
           </p>
         )}

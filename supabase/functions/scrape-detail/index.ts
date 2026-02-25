@@ -4,6 +4,22 @@ const corsHeaders = {
 };
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+// @ts-ignore esm.sh CJS→ESM shim
+import TurndownService from 'https://esm.sh/turndown@7.1.2';
+
+const _td = new TurndownService({ headingStyle: 'atx', bulletListMarker: '-' });
+function htmlToMarkdown(html: string): string {
+  // Resolve lazy-loaded images: swap data-src → src so Turndown picks up real CDN URLs
+  const processed = html.replace(
+    /<img([^>]*?)\bdata-src=["']([^"']+)["']([^>]*?)>/gi,
+    (_m, before, dataSrc, after) => {
+      const attrs = (before + after).replace(/\bsrc=["'][^"']*["']/gi, '');
+      return `<img${attrs} src="${dataSrc}">`;
+    }
+  );
+  try { return _td.turndown(processed); }
+  catch { return processed.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '); }
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -20,10 +36,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    const apiKey = Deno.env.get('FIRECRAWL_API_KEY');
+    const apiKey = Deno.env.get('SCRAPINGBEE_API_KEY');
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Firecrawl not configured' }),
+        JSON.stringify({ success: false, error: 'ScrapingBee not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -48,34 +64,31 @@ Deno.serve(async (req) => {
 
     console.log('Scraping detail from:', sourceUrl);
 
-    // Use onlyMainContent: false + html format to get all gallery images
-    const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        url: sourceUrl,
-        formats: ['markdown', 'html'],
-        onlyMainContent: false,
-        waitFor: 3000,
-      }),
+    // ScrapingBee: render_js=true for full JS rendering, block_resources=false so
+    // gallery images actually load (CSS needed for IntersectionObserver lazy loading)
+    const params = new URLSearchParams({
+      api_key: apiKey,
+      url: sourceUrl,
+      render_js: 'true',
+      block_resources: 'false',
+      wait: '4000',
+      country_code: 'it',
     });
 
-    const data = await response.json();
+    const response = await fetch(`https://app.scrapingbee.com/api/v1/?${params}`);
 
-    if (!response.ok || !data.success) {
-      console.error('Firecrawl error:', data);
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      console.error('ScrapingBee error:', response.status, errText.slice(0, 200));
       return new Response(
         JSON.stringify({ success: false, error: 'Scraping failed' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const markdown = data.data?.markdown || '';
-    const html = data.data?.html || '';
-    console.log('Got markdown:', markdown.length, 'html:', html.length);
+    const html = await response.text();
+    const markdown = htmlToMarkdown(html);
+    console.log('Got html:', html.length, 'md:', markdown.length);
 
     const details = parseDetails(markdown, sourceUrl);
     const imageUrls = extractImages(html, markdown, sourceUrl);

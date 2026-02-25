@@ -107,8 +107,23 @@ export default function Profile() {
     setAlerts(prev => prev.filter(a => a.id !== id));
   };
 
+  function buildSearchParams(filters: SearchFiltersState): string {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([k, v]) => {
+      if (k === 'isNew') {
+        if (v === true) params.set('isNew', 'true');
+        else if (v === false) params.set('isNew', 'false');
+      } else if (Array.isArray(v)) {
+        if ((v as string[]).length) params.set(k, (v as string[]).join(','));
+      } else if (v !== '' && v !== null && v !== undefined) {
+        params.set(k, String(v));
+      }
+    });
+    return params.toString();
+  }
+
   const runSearch = (filters: SearchFiltersState) => {
-    navigate('/risultati', { state: { filters } });
+    navigate(`/risultati?${buildSearchParams(filters)}`);
   };
 
   return (
@@ -117,9 +132,9 @@ export default function Profile() {
       <div className="container py-8 max-w-4xl">
 
         {/* Page title */}
-        <div className="flex items-center gap-3 border-b-2 border-foreground pb-4 mb-8 animate-brutal-in">
+        <div className="flex items-center gap-3 border-b border-border pb-4 mb-8 animate-brutal-in">
           <User className="h-5 w-5" />
-          <h1 className="text-xl font-bold uppercase tracking-wide">Il mio profilo</h1>
+          <h1 className="text-xl font-bold">Il mio profilo</h1>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>

@@ -110,7 +110,7 @@ function parseSubitoListings(markdown: string, brand: string, model: string, tri
   let currentBlock = '';
 
   for (const line of lines) {
-    if (/^!\[.*\]\(https:\/\/images\.sbito\.it/.test(line)) {
+    if (/^!\[.*\]\(https:\/\/(?:images|static)\.sbito\.it/.test(line)) {
       if (currentBlock.length > 50) blocks.push(currentBlock);
       currentBlock = line;
     } else {
@@ -126,7 +126,7 @@ function parseSubitoListings(markdown: string, brand: string, model: string, tri
 
     if (!modelRegex.test(title)) continue;
 
-    const imgMatch = block.match(/!\[.*?\]\((https:\/\/images\.sbito\.it[^\s)]+)\)/);
+    const imgMatch = block.match(/!\[.*?\]\((https:\/\/(?:images|static)\.sbito\.it[^\s)]+)\)/);
     const imageUrl = imgMatch ? imgMatch[1] : null;
 
     const urlMatch = block.match(/\[.*?\]\((https:\/\/www\.subito\.it\/auto\/[^\s)]+)\)/);
@@ -562,26 +562,34 @@ function parseBrumBrumListings(markdown: string, brand: string, model: string, t
 }
 
 // ==========================================
-// SCRAPE HELPER
+// SCRAPE HELPER — ScrapingBee
+// return_page_markdown=true: ScrapingBee converts the rendered DOM to Markdown natively
+//   (strips nav/footer/scripts, preserves listing content + images)
+// block_resources=false: allows CSS to load → correct layout → IntersectionObserver
+//   fires for lazy-loaded images (e.g. Subito.it data-src → src swap works correctly)
+// premium_proxy: use residential IPs for sites with Cloudflare/anti-bot (Automobile.it, BrumBrum)
 // ==========================================
-async function scrapeUrl(apiKey: string, url: string, waitFor = 6000, extra: Record<string, unknown> = {}): Promise<string> {
-  console.log('Scraping:', url);
+async function scrapeUrl(apiKey: string, url: string, waitFor = 5000, premiumProxy = false): Promise<string> {
+  console.log('Scraping:', url, premiumProxy ? '[premium]' : '');
   try {
-    const res = await fetch('https://api.firecrawl.dev/v1/scrape', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url,
-        formats: ['markdown'],
-        waitFor,
-        onlyMainContent: false,
-        location: { country: 'IT', languages: ['it'] },
-        ...extra,
-      }),
+    const params = new URLSearchParams({
+      api_key: apiKey,
+      url,
+      render_js: 'true',
+      return_page_markdown: 'true',
+      block_resources: 'false',
+      wait: String(waitFor),
+      country_code: 'it',
     });
-    if (!res.ok) { console.error('Scrape failed:', res.status, url); return ''; }
-    const data = await res.json();
-    const md = data?.data?.markdown || data?.markdown || '';
+    if (premiumProxy) params.set('premium_proxy', 'true');
+
+    const res = await fetch(`https://app.scrapingbee.com/api/v1/?${params}`);
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.error('ScrapingBee error:', res.status, errText.slice(0, 300), url);
+      return '';
+    }
+    const md = await res.text();
     console.log(`  → md ${md.length} chars from ${url.split('?')[0]}`);
     return md;
   } catch (err) {
@@ -780,9 +788,9 @@ Deno.serve(async (req) => {
 
   try {
     const { filters } = await req.json();
-    const apiKey = Deno.env.get('FIRECRAWL_API_KEY');
+    const apiKey = Deno.env.get('SCRAPINGBEE_API_KEY');
     if (!apiKey) {
-      return new Response(JSON.stringify({ success: false, error: 'Firecrawl not configured' }),
+      return new Response(JSON.stringify({ success: false, error: 'ScrapingBee not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
@@ -824,7 +832,7 @@ Deno.serve(async (req) => {
     const allListings: ParsedListing[] = [];
     const query = encodeURIComponent(`${brand.toLowerCase()} ${model.toLowerCase()}`);
 
-    const scrapeJobs: { url: string; parser: (md: string) => ParsedListing[]; waitFor?: number; extra?: Record<string, unknown> }[] = [];
+    const scrapeJobs: { url: string; parser: (md: string) => ParsedListing[]; waitFor?: number; premiumProxy?: boolean }[] = [];
 
     // --- Subito.it ---
     if (sources.includes('subito')) {
@@ -876,33 +884,32 @@ Deno.serve(async (req) => {
           const combined = [asParamStr, pageParam].filter(Boolean).join('&');
           url = combined ? `${asBaseUrl}&${combined}` : asBaseUrl;
         }
-        // Desktop mode: AS24 desktop markdown contains prod.pictures.autoscout24.net CDN URLs
-        // that Strategy 1 needs. Mobile mode returns a different structure the parser can't read.
-        scrapeJobs.push({ url, parser: (md) => parseAutoScoutListings(md, brand, model, trim), waitFor: 10000 });
+        // AS24 is a complex SPA — needs extra wait time for JS to finish rendering listings
+        scrapeJobs.push({ url, parser: (md) => parseAutoScoutListings(md, brand, model, trim), waitFor: 8000 });
       }
     }
 
-    // --- Automobile.it ---
+    // --- Automobile.it (premium_proxy for Cloudflare bypass) ---
     if (sources.includes('automobile')) {
       for (let page = 1; page <= 2; page++) {
         const pageParam = page > 1 ? `&p=${page}` : '';
         const url = `https://www.automobile.it/annunci?q=${query}${pageParam}`;
-        scrapeJobs.push({ url, parser: (md) => parseAutomobileListings(md, brand, model, trim) });
+        scrapeJobs.push({ url, parser: (md) => parseAutomobileListings(md, brand, model, trim), premiumProxy: true });
       }
     }
 
-    // --- BrumBrum ---
+    // --- BrumBrum (premium_proxy for Cloudflare bypass) ---
     if (sources.includes('brumbrum')) {
       for (let page = 1; page <= 2; page++) {
         const pageParam = page > 1 ? `&p=${page}` : '';
         const url = `https://www.brumbrum.it/usato/?q=${query}${pageParam}`;
-        scrapeJobs.push({ url, parser: (md) => parseBrumBrumListings(md, brand, model, trim) });
+        scrapeJobs.push({ url, parser: (md) => parseBrumBrumListings(md, brand, model, trim), premiumProxy: true });
       }
     }
 
     console.log(`Starting ${scrapeJobs.length} scrape jobs in batches...`);
 
-    // Stagger requests to avoid Firecrawl rate limiting (max ~5 concurrent)
+    // Stagger requests to avoid ScrapingBee rate limiting (max ~5 concurrent)
     // Each job has a per-job timeout of 30s to prevent a single stalled request from blocking everything
     const JOB_TIMEOUT_MS = 30_000;
     const results = await Promise.allSettled(
@@ -911,7 +918,7 @@ Deno.serve(async (req) => {
         const jobTimeout = new Promise<string>((_, reject) =>
           setTimeout(() => reject(new Error(`Job timeout: ${job.url}`)), JOB_TIMEOUT_MS)
         );
-        const md = await Promise.race([scrapeUrl(apiKey, job.url, job.waitFor, job.extra), jobTimeout])
+        const md = await Promise.race([scrapeUrl(apiKey, job.url, job.waitFor, job.premiumProxy), jobTimeout])
           .catch(err => { console.warn('Job failed/timeout:', err.message); return ''; });
         if (!md) return [];
         const parsed = job.parser(md);

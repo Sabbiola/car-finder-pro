@@ -24,13 +24,13 @@ const CompareBar = () => {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 80, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-          className="fixed bottom-0 left-0 right-0 z-50 border-t-2 border-foreground bg-background"
+          className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/60 bg-background/95 backdrop-blur-xl shadow-[0_-4px_32px_rgba(0,0,0,0.10)] dark:shadow-[0_-4px_32px_rgba(0,0,0,0.4)]"
         >
           <div className="container flex items-center justify-between h-16 gap-4">
             {/* Mini preview auto */}
             <div className="flex items-center gap-2 overflow-x-auto flex-1 min-w-0">
               {previews.map(car => (
-                <div key={car.id} className="flex items-center gap-1.5 border-2 border-border px-2 py-1 flex-shrink-0">
+                <div key={car.id} className="flex items-center gap-1.5 border border-border/60 rounded-xl px-2 py-1.5 flex-shrink-0 bg-muted/40">
                   {car.image_url && (
                     <img
                       src={car.image_url}
@@ -40,7 +40,7 @@ const CompareBar = () => {
                     />
                   )}
                   <div>
-                    <div className="text-[8px] uppercase tracking-[0.1em] font-bold leading-none max-w-[80px] truncate">
+                    <div className="text-[10px] font-semibold leading-none max-w-[80px] truncate">
                       {car.brand} {car.model}
                     </div>
                     <div className="text-[9px] font-bold">
@@ -62,17 +62,17 @@ const CompareBar = () => {
             <div className="flex items-center gap-3 flex-shrink-0">
               <button
                 onClick={clearCompare}
-                className="text-[9px] uppercase tracking-[0.1em] text-muted-foreground hover:text-foreground transition-colors"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 Azzera
               </button>
               <button
                 disabled={compareIds.length < 2}
                 onClick={() => navigate(`/confronta?ids=${compareIds.join(',')}`)}
-                className="flex items-center gap-1.5 bg-foreground text-background border-2 border-foreground text-[10px] font-bold uppercase tracking-[0.1em] px-4 h-9 hover:bg-accent hover:border-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 text-white text-xs font-semibold px-4 h-9 transition-all shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <GitCompare className="h-3.5 w-3.5" />
-                CONFRONTA {compareIds.length} AUTO
+                Confronta {compareIds.length} auto
               </button>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { ArrowUpDown, Loader2, LayoutGrid, Map } from 'lucide-react';
+import { ArrowUpDown, Loader2, LayoutGrid, Map, Link2, Check } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Header from '@/components/Header';
 import SearchFilters, { SearchFiltersState } from '@/components/SearchFilters';
@@ -58,6 +58,7 @@ const SearchResults = () => {
   const [scraped, setScraped] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
+  const [copied, setCopied] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -142,6 +143,24 @@ const SearchResults = () => {
   const visibleResults = useMemo(() => results.slice(0, visibleCount), [results, visibleCount]);
   const hasMore = visibleCount < results.length;
 
+  const stats = useMemo(() => {
+    if (!results.length) return null;
+    const prices = results.map(r => r.price);
+    const kms = results.map(r => r.km).filter(k => k > 0);
+    const fuelCounts = results.reduce((acc, r) => {
+      if (r.fuel) acc[r.fuel] = (acc[r.fuel] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    const topFuel = Object.entries(fuelCounts).sort((a, b) => b[1] - a[1])[0];
+    return {
+      minPrice: Math.min(...prices),
+      avgPrice: Math.round(prices.reduce((s, p) => s + p, 0) / prices.length),
+      maxPrice: Math.max(...prices),
+      avgKm: kms.length ? Math.round(kms.reduce((s, k) => s + k, 0) / kms.length) : null,
+      topFuel: topFuel ? `${topFuel[0]} ${Math.round(topFuel[1] / results.length * 100)}%` : null,
+    };
+  }, [results]);
+
   // Infinite scroll sentinel
   useEffect(() => {
     const el = sentinelRef.current;
@@ -165,17 +184,17 @@ const SearchResults = () => {
           <SearchFilters compact onSearch={handleSearch} initialFilters={filters} />
         </div>
 
-        <div className="flex items-center justify-between border-b-2 border-foreground pb-3 animate-brutal-up" style={{ animationDelay: '100ms' }}>
+        <div className="flex items-center justify-between border-b border-border pb-3 animate-brutal-up" style={{ animationDelay: '100ms' }}>
           <div className="flex items-center gap-3">
             {loading && !scraped ? (
-              <span className="flex items-center gap-2 text-xs uppercase tracking-[0.1em] text-muted-foreground">
+              <span className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Ricerca in corso...
               </span>
             ) : (
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">
-                  <span className="font-bold text-foreground">{results.length}</span> risultati
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">{results.length}</span> risultati
                 </p>
                 {scraped && results.length > 0 && (
                   <div className="flex items-center gap-1 flex-wrap">
@@ -197,54 +216,87 @@ const SearchResults = () => {
               </div>
             )}
             {loading && scraped && results.length > 0 && (
-              <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Aggiornamento...
               </span>
             )}
             {!loading && scraped && (
-              <button onClick={() => doSearch(true)} className="text-[10px] uppercase tracking-[0.1em] text-accent hover:underline">
+              <button onClick={() => doSearch(true)} className="text-xs text-muted-foreground hover:text-accent hover:underline transition-colors">
                 ↻ Aggiorna
               </button>
             )}
           </div>
 
           <div className="flex items-center gap-2">
-            {/* View toggle */}
-            <div className="flex items-center border-2 border-foreground">
+            {/* View toggle — segmented control */}
+            <div className="flex items-center gap-0.5 bg-muted p-0.5 rounded-lg">
               <button
                 onClick={() => setViewMode('grid')}
-                className={`p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-foreground text-background' : 'hover:bg-muted'}`}
+                className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                 aria-label="Vista griglia"
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
               </button>
               <button
                 onClick={() => setViewMode('map')}
-                className={`p-1.5 transition-colors ${viewMode === 'map' ? 'bg-foreground text-background' : 'hover:bg-muted'}`}
+                className={`p-1.5 rounded-md transition-all ${viewMode === 'map' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                 aria-label="Vista mappa"
               >
                 <Map className="h-3.5 w-3.5" />
               </button>
             </div>
 
+            {/* Copy link */}
+            <button
+              onClick={async () => {
+                await navigator.clipboard.writeText(window.location.href);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              title="Copia link ricerca"
+              aria-label="Copia link"
+            >
+              {copied
+                ? <Check className="h-3.5 w-3.5 text-emerald-500" />
+                : <Link2 className="h-3.5 w-3.5" />
+              }
+            </button>
+
           <Select value={sort} onValueChange={v => {
             const s = v as SortOption;
             setSort(s);
             setSearchParams(prev => { prev.set('sort', s); return prev; }, { replace: true });
           }}>
-            <SelectTrigger className="w-40 bg-card text-xs uppercase tracking-[0.05em] rounded-none border-2">
+            <SelectTrigger className="w-40 bg-card text-xs rounded-lg border">
               <ArrowUpDown className="h-3 w-3 mr-1 text-muted-foreground" />
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="rounded-none border-2">
+            <SelectContent className="rounded-xl border shadow-lg">
               {Object.entries(sortLabels).map(([k, v]) => (
-                <SelectItem key={k} value={k} className="text-xs uppercase">{v}</SelectItem>
+                <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           </div>
         </div>
+
+        {stats && scraped && (
+          <div className="flex flex-wrap gap-2 animate-brutal-in">
+            {[
+              { label: 'Min', value: `€${stats.minPrice.toLocaleString('it-IT')}` },
+              { label: 'Media', value: `€${stats.avgPrice.toLocaleString('it-IT')}` },
+              { label: 'Max', value: `€${stats.maxPrice.toLocaleString('it-IT')}` },
+              ...(stats.avgKm ? [{ label: 'Km medi', value: stats.avgKm.toLocaleString('it-IT') }] : []),
+              ...(stats.topFuel ? [{ label: 'Carburante', value: stats.topFuel }] : []),
+            ].map(({ label, value }) => (
+              <span key={label} className="text-[10px] uppercase tracking-[0.08em] bg-muted px-3 py-1.5 rounded-full">
+                {label} <strong className="text-foreground">{value}</strong>
+              </span>
+            ))}
+          </div>
+        )}
 
         {viewMode === 'map' ? (
           <ListingsMap listings={results} />
