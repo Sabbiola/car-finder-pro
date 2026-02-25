@@ -188,7 +188,7 @@ const ListingsMap = ({ listings }: Props) => {
       {!progress && geoListings.length === 0 && listings.length > 0 && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/80 text-center p-6">
           <div>
-            <p className="text-sm font-bold uppercase tracking-wide">Nessuna posizione disponibile</p>
+            <p className="text-sm font-semibold">Nessuna posizione disponibile</p>
             <p className="text-xs text-muted-foreground mt-1">Gli annunci trovati non hanno una città associata</p>
           </div>
         </div>

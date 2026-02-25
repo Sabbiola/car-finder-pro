@@ -197,7 +197,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
               onClick={() => update('isNew', value)}
               className={`px-3 py-2 transition-colors ${
                 filters.isNew === value
-                  ? 'bg-foreground text-background'
+                  ? 'bg-violet-600 text-white'
                   : 'hover:bg-muted text-muted-foreground'
               }`}
             >
@@ -219,7 +219,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
               onClick={() => update('sellerType', value)}
               className={`px-3 py-2 transition-colors ${
                 filters.sellerType === value
-                  ? 'bg-foreground text-background'
+                  ? 'bg-violet-600 text-white'
                   : 'hover:bg-muted text-muted-foreground'
               }`}
             >
@@ -406,7 +406,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
         <DialogContent className="sm:max-w-xs">
           <DialogHeader>
-            <DialogTitle className="text-sm uppercase tracking-widest">Salva ricerca</DialogTitle>
+            <DialogTitle className="text-sm font-semibold">Salva ricerca</DialogTitle>
           </DialogHeader>
           <Input
             value={searchName}

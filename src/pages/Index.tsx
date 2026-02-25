@@ -91,7 +91,7 @@ const Index = () => {
           <div className="container py-10">
             <div className="flex items-center gap-2 mb-4">
               <Bookmark className="h-4 w-4 text-violet-500" />
-              <h2 className="text-sm font-bold uppercase tracking-[0.1em]">Ricerche salvate</h2>
+              <h2 className="text-sm font-semibold">Ricerche salvate</h2>
             </div>
             <div className="flex flex-wrap gap-2">
               {searches.map(s => (

@@ -22,13 +22,13 @@ const RecentlyViewedSection = () => {
   if (!recentIds.length || (!loading && !listings.length)) return null;
 
   return (
-    <section className="border-t-2 border-foreground">
+    <section className="border-t border-border/60">
       <div className="container py-12 space-y-6">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-lg font-bold uppercase tracking-wide">
+          <h2 className="text-lg font-bold">
             Visti di recente
           </h2>
-          <span className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {listings.length} auto
           </span>
         </div>

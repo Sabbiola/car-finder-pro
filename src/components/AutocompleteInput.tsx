@@ -149,7 +149,7 @@ const AutocompleteInput = ({
                 onMouseDown={e => { e.preventDefault(); select(s); }}
               >
                 <span className={cn(
-                  'text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded',
+                  'text-[10px] font-semibold px-1.5 py-0.5 rounded',
                   s.type === 'brand' ? 'bg-primary/10 text-primary' : 'bg-accent text-accent-foreground'
                 )}>
                   {s.type === 'brand' ? 'Marca' : 'Modello'}

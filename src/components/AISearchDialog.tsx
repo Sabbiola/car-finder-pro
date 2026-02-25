@@ -89,7 +89,7 @@ const AISearchDialog = ({ open, onClose }: Props) => {
           />
 
           <div className="space-y-2">
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Esempi</p>
+            <p className="text-xs text-muted-foreground font-medium">Esempi</p>
             <div className="flex flex-col gap-1.5">
               {EXAMPLES.map(ex => (
                 <button

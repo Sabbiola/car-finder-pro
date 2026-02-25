@@ -291,7 +291,7 @@ const SearchResults = () => {
               ...(stats.avgKm ? [{ label: 'Km medi', value: stats.avgKm.toLocaleString('it-IT') }] : []),
               ...(stats.topFuel ? [{ label: 'Carburante', value: stats.topFuel }] : []),
             ].map(({ label, value }) => (
-              <span key={label} className="text-[10px] uppercase tracking-[0.08em] bg-muted px-3 py-1.5 rounded-full">
+              <span key={label} className="text-xs bg-muted px-3 py-1.5 rounded-full text-muted-foreground">
                 {label} <strong className="text-foreground">{value}</strong>
               </span>
             ))}
@@ -318,7 +318,7 @@ const SearchResults = () => {
               </div>
             )}
             {!loading && scraped && results.length > 0 && !hasMore && (
-              <p className="text-center text-xs text-muted-foreground uppercase tracking-[0.1em] py-4">
+              <p className="text-center text-xs text-muted-foreground py-4">
                 Tutti i {results.length} risultati caricati
               </p>
             )}
@@ -327,9 +327,9 @@ const SearchResults = () => {
 
         {!loading && scraped && results.length === 0 && (
           <div className="text-center py-16 text-muted-foreground space-y-2">
-            <p className="text-sm font-bold uppercase tracking-wide">Nessun risultato</p>
-            <p className="text-xs uppercase tracking-[0.1em]">Modifica i filtri di ricerca o cambia brand/modello</p>
-            <button onClick={() => doSearch(true)} className="text-[10px] uppercase tracking-[0.1em] text-accent hover:underline mt-2 block mx-auto">
+            <p className="text-sm font-semibold text-foreground">Nessun risultato</p>
+            <p className="text-xs">Modifica i filtri di ricerca o cambia brand/modello</p>
+            <button onClick={() => doSearch(true)} className="text-xs text-violet-600 hover:underline mt-2 block mx-auto">
               ↻ Riprova
             </button>
           </div>
