@@ -24,6 +24,7 @@ interface ParsedListing {
   image_url: string | null;
   location: string | null;
   is_new: boolean;
+  emission_class: string | null;
 }
 
 function detectFuel(text: string): string | null {
@@ -40,6 +41,29 @@ function detectTransmission(text: string): string | null {
   if (/automatico|automatic|sequenziale|dsg|dct|tiptronic/i.test(text)) return 'Automatico';
   if (/manuale|manual/i.test(text)) return 'Manuale';
   return null;
+}
+
+function detectColor(text: string): string | null {
+  if (/\bbianco\b/i.test(text)) return 'Bianco';
+  if (/\bnero\b/i.test(text)) return 'Nero';
+  if (/\bgrigi[oa]\b/i.test(text)) return 'Grigio';
+  if (/\bargento\b/i.test(text)) return 'Argento';
+  if (/\bross[oa]\b/i.test(text)) return 'Rosso';
+  if (/\bblu\b|\bbluett[oa]\b/i.test(text)) return 'Blu';
+  if (/\bverde\b/i.test(text)) return 'Verde';
+  if (/\bgiall[oa]\b/i.test(text)) return 'Giallo';
+  if (/\barancion[ei]\b/i.test(text)) return 'Arancione';
+  if (/\bmarron[ei]\b/i.test(text)) return 'Marrone';
+  if (/\bbeige\b/i.test(text)) return 'Beige';
+  if (/\bviol[ao]\b/i.test(text)) return 'Viola';
+  if (/\bor[oa]\b/i.test(text)) return 'Oro';
+  if (/\bazzurr[oa]\b/i.test(text)) return 'Azzurro';
+  return null;
+}
+
+function detectEmissionClass(text: string): string | null {
+  const m = text.match(/\beuro\s*([0-9])\b/i);
+  return m ? `Euro ${m[1]}` : null;
 }
 
 function detectBodyType(text: string): string | null {
@@ -145,10 +169,11 @@ function parseSubitoListings(markdown: string, brand: string, model: string, tri
     listings.push({
       title, brand, model, trim: trim || null,
       year: year || new Date().getFullYear(), price, km,
-      fuel, transmission, power: null, color: null,
+      fuel, transmission, power: null, color: detectColor(block),
       doors: bodyType === 'Coupé' || bodyType === 'Cabrio' ? 2 : 4,
       body_type: bodyType, source: 'subito', source_url: sourceUrl,
       image_url: imageUrl, location, is_new: isNew,
+      emission_class: detectEmissionClass(block),
     });
   }
 
@@ -271,10 +296,11 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
     listings.push({
       title, brand, model, trim: extractedTrim,
       year: year || new Date().getFullYear(), price, km,
-      fuel, transmission, power, color: null,
+      fuel, transmission, power, color: detectColor(block),
       doors: bodyType === 'Coupé' || bodyType === 'Cabrio' ? 2 : null,
       body_type: bodyType, source: 'autoscout24', source_url: sourceUrl,
       image_url: imageUrl, location, is_new: km < 100,
+      emission_class: detectEmissionClass(block),
     });
   }
 
@@ -316,9 +342,10 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
       listings.push({
         title, brand, model, trim: trim || extractTrimFromTitle(title, brand, model),
         year: year || new Date().getFullYear(), price, km,
-        fuel: detectFuel(block), transmission: detectTransmission(block), power: null, color: null,
+        fuel: detectFuel(block), transmission: detectTransmission(block), power: null, color: detectColor(block),
         doors: null, body_type: bodyType, source: 'autoscout24', source_url: sourceUrl,
         image_url: imageUrl, location: null, is_new: km < 100,
+        emission_class: detectEmissionClass(block),
       });
     }
   }
@@ -358,9 +385,10 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
       listings.push({
         title, brand, model, trim: trim || extractTrimFromTitle(title, brand, model),
         year: year || new Date().getFullYear(), price, km,
-        fuel: detectFuel(ctx), transmission: detectTransmission(ctx), power: null, color: null,
+        fuel: detectFuel(ctx), transmission: detectTransmission(ctx), power: null, color: detectColor(ctx),
         doors: null, body_type: detectBodyType(title), source: 'autoscout24', source_url: sourceUrl,
         image_url: imageUrl, location: null, is_new: km < 100,
+        emission_class: detectEmissionClass(ctx),
       });
     }
   }
@@ -415,9 +443,10 @@ function parseAutomobileListings(markdown: string, brand: string, model: string,
     listings.push({
       title, brand, model, trim: trim || null,
       year: year || new Date().getFullYear(), price, km,
-      fuel, transmission, power: null, color: null, doors: null,
+      fuel, transmission, power: null, color: detectColor(section), doors: null,
       body_type: bodyType, source: 'automobile', source_url: sourceUrl,
       image_url: imageUrl, location: null, is_new: km < 100 || /\bNuov[ao]\b/i.test(section),
+      emission_class: detectEmissionClass(section),
     });
   }
 
@@ -450,10 +479,11 @@ function parseAutomobileListings(markdown: string, brand: string, model: string,
       listings.push({
         title, brand, model, trim: trim || null,
         year: year || new Date().getFullYear(), price, km,
-        fuel: detectFuel(ctx), transmission: detectTransmission(ctx), power: null, color: null, doors: null,
+        fuel: detectFuel(ctx), transmission: detectTransmission(ctx), power: null, color: detectColor(ctx), doors: null,
         body_type: detectBodyType(title), source: 'automobile', source_url: url,
         image_url: imgM ? imgM[1] : null, location: null,
         is_new: km < 100 || /\bNuov[ao]\b/i.test(ctx),
+        emission_class: detectEmissionClass(ctx),
       });
     }
     console.log(`Automobile.it URL-anchor fallback: ${listings.length} listings`);
@@ -519,9 +549,10 @@ function parseBrumBrumListings(markdown: string, brand: string, model: string, t
     listings.push({
       title, brand, model, trim: trim || null,
       year: year || new Date().getFullYear(), price, km,
-      fuel, transmission, power: null, color: null, doors: null,
+      fuel, transmission, power: null, color: detectColor(context), doors: null,
       body_type: bodyType, source: 'brumbrum', source_url: url,
       image_url: imageUrl, location: null, is_new: km < 100,
+      emission_class: detectEmissionClass(context),
     });
   }
 

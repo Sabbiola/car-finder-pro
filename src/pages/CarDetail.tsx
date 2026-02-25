@@ -11,7 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { CarListing } from '@/lib/api/listings';
 import { toCardListing } from '@/lib/toCardListing';
 import { useRecentlyViewed } from '@/hooks/useRecentlyViewed';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine, LineChart, Line } from 'recharts';
 import LoanCalculator from '@/components/LoanCalculator';
 import PriceAlertButton from '@/components/PriceAlertButton';
 import { priceRatingConfig as ratingConfig } from '@/lib/rating-config';
@@ -36,6 +36,7 @@ const CarDetail = () => {
   const [car, setCar] = useState<ExtendedListing | null>(null);
   const [similar, setSimilar] = useState<CarListing[]>([]);
   const [allPrices, setAllPrices] = useState<CarListing[]>([]);
+  const [priceHistory, setPriceHistory] = useState<{ price: number; recorded_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
@@ -99,12 +100,14 @@ const CarDetail = () => {
         setCar(carData);
         addRecent(carData.id);
 
-        const [similarRes, pricesRes] = await Promise.all([
+        const [similarRes, pricesRes, historyRes] = await Promise.all([
           supabase.from('car_listings').select('*').eq('brand', data.brand).eq('model', data.model).neq('id', data.id).limit(6),
           supabase.from('car_listings').select('*').eq('brand', data.brand).eq('model', data.model).order('price', { ascending: true }).limit(20),
+          supabase.from('price_history').select('price, recorded_at').eq('listing_id', data.id).order('recorded_at', { ascending: true }).limit(30),
         ]);
         setSimilar((similarRes.data as CarListing[]) || []);
         setAllPrices((pricesRes.data as CarListing[]) || []);
+        setPriceHistory(historyRes.data || []);
 
         // Determine source URL — fallback: construct from AutoScout24 image UUID
         let scrapeUrl = carData.source_url && carData.source_url !== '#' ? carData.source_url : null;
@@ -437,6 +440,40 @@ const CarDetail = () => {
         <div className="animate-brutal-up" style={{ animationDelay: '180ms' }}>
           <LoanCalculator price={car.price} />
         </div>
+
+        {/* Price history chart */}
+        {priceHistory.length >= 2 && (
+          <div className="space-y-4 animate-brutal-up" style={{ animationDelay: '195ms' }}>
+            <div>
+              <h2 className="text-lg font-bold">Storico prezzi</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">Andamento del prezzo nel tempo</p>
+            </div>
+            <div className="rounded-2xl border border-border/60 p-4 bg-card shadow-sm">
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={priceHistory} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+                  <XAxis
+                    dataKey="recorded_at"
+                    tickFormatter={v => new Date(v).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+                    tick={{ fontSize: 10, fontFamily: 'Inter' }}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10, fontFamily: 'Inter' }}
+                    tickFormatter={v => `€${(v / 1000).toFixed(0)}k`}
+                    domain={['auto', 'auto']}
+                    width={52}
+                  />
+                  <Tooltip
+                    formatter={(value: number) => [`€${value.toLocaleString('it-IT')}`, 'Prezzo']}
+                    labelFormatter={v => new Date(v).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })}
+                    contentStyle={{ fontFamily: 'Inter', fontSize: 12, border: '1px solid hsl(var(--border))', borderRadius: 12 }}
+                  />
+                  <Line type="monotone" dataKey="price" stroke="hsl(262 83% 60%)" strokeWidth={2} dot={{ r: 3, fill: 'hsl(262 83% 60%)' }} activeDot={{ r: 5 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
 
         {/* Price comparison chart */}
         {chartData.length > 1 && (

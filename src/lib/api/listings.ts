@@ -62,6 +62,7 @@ export async function fetchListings(filters: SearchFiltersState): Promise<CarLis
   if (filters.color) query = query.eq('color', filters.color);
   if (filters.doors) query = query.eq('doors', Number(filters.doors));
   if (filters.bodyType) query = query.eq('body_type', filters.bodyType);
+  if (filters.emissionClass) query = query.eq('emission_class', filters.emissionClass);
   // Source filter: sellerType takes precedence; if both are set, intersect them
   const sellerTypeSources =
     filters.sellerType === 'dealer' ? ['brumbrum', 'automobile'] :

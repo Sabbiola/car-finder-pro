@@ -31,6 +31,7 @@ export interface SearchFiltersState {
   bodyType: string;
   location: string;
   sellerType: 'all' | 'private' | 'dealer';
+  emissionClass: string;
 }
 
 const defaultFilters: SearchFiltersState = {
@@ -39,7 +40,7 @@ const defaultFilters: SearchFiltersState = {
   fuel: '', transmission: '', isNew: null,
   sources: ['autoscout24', 'subito', 'automobile', 'brumbrum'],
   color: '', doors: '', bodyType: '', location: '',
-  sellerType: 'all',
+  sellerType: 'all', emissionClass: '',
 };
 
 interface Props {
@@ -342,6 +343,18 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                   <SelectContent>
                     <SelectItem value="_all">Tutte</SelectItem>
                     {bodyTypes.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Classe Euro</Label>
+                <Select value={filters.emissionClass || '_all'} onValueChange={v => update('emissionClass', v === '_all' ? '' : v)}>
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Tutte" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_all">Tutte</SelectItem>
+                    {['Euro 4', 'Euro 5', 'Euro 6'].map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

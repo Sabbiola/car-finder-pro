@@ -42,6 +42,7 @@ function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
     bodyType: params.get('bodyType') || '',
     location: params.get('location') || '',
     sellerType: (params.get('sellerType') as 'all' | 'private' | 'dealer') || 'all',
+    emissionClass: params.get('emissionClass') || '',
   };
 }
 
