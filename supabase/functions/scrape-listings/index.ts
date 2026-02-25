@@ -165,6 +165,8 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
   const listings: ParsedListing[] = [];
   const seenUuids = new Set<string>();
   const brandLow = brand.toLowerCase();
+  // Use longer prefix to avoid false positives on short 3-char matches
+  const brandPrefix = brandLow.length <= 5 ? brandLow : brandLow.slice(0, 5);
 
   // Strategy 1: split on CDN image lines — allow any alt text (AS24 now uses non-empty alt)
   const parts = markdown.split(/(?=!\[[^\]]*\]\(https:\/\/prod\.pictures\.autoscout24\.net\/listing-images\/)/);
@@ -178,7 +180,7 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
     if (seenUuids.has(imageUuid)) continue;
 
     // Must mention the brand somewhere in the block (exclude nav/header noise)
-    if (!block.toLowerCase().includes(brandLow.slice(0, 3))) continue;
+    if (!block.toLowerCase().includes(brandPrefix)) continue;
 
     // Image — upgrade to 800x600
     const imageUrl = rawImageUrl.replace(/\/\d+x\d+(\.\w+)$/, '/800x600$1');
@@ -204,13 +206,13 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
     let title = '';
     // 1. Link text containing brand: [BMW 320d...](autoscout24.it/annunci/...)
     const linkTitleMatch = block.match(/\[([^\]]{5,100}?)\]\(https:\/\/www\.autoscout24\.it\/annunci\//);
-    if (linkTitleMatch && linkTitleMatch[1].toLowerCase().includes(brandLow.slice(0, 3))) {
+    if (linkTitleMatch && linkTitleMatch[1].toLowerCase().includes(brandPrefix)) {
       title = linkTitleMatch[1].replace(/\*\*/g, '').trim();
     }
     // 2. Bold text containing brand: **BMW 320d...**
     if (!title) {
       const boldMatch = block.match(/\*\*([^*]{5,100})\*\*/);
-      if (boldMatch && boldMatch[1].toLowerCase().includes(brandLow.slice(0, 3))) {
+      if (boldMatch && boldMatch[1].toLowerCase().includes(brandPrefix)) {
         title = boldMatch[1].trim();
       }
     }
@@ -218,7 +220,7 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
     if (!title) {
       for (const line of block.split('\n')) {
         const clean = line.replace(/[*#\[\]]/g, '').replace(/\([^)]+\)/g, '').trim();
-        if (clean.toLowerCase().includes(brandLow.slice(0, 3)) && clean.length >= 5 && clean.length <= 120) {
+        if (clean.toLowerCase().includes(brandPrefix) && clean.length >= 5 && clean.length <= 120) {
           title = clean;
           break;
         }
@@ -287,7 +289,7 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
       const titleMatch = block.match(/^\*\*(.+?)\*\*/);
       if (!titleMatch) continue;
       const title = titleMatch[1].trim();
-      if (!title.toLowerCase().includes(brandLow.slice(0, 3))) continue;
+      if (!title.toLowerCase().includes(brandPrefix)) continue;
       const priceMatch = block.match(/€\s*([\d.]+)/);
       if (!priceMatch) continue;
       const price = parseInt(priceMatch[1].replace(/\./g, ''));
@@ -331,11 +333,11 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
       const sourceUrl = match[0];
       if (seenUrls.has(sourceUrl)) continue;
       seenUrls.add(sourceUrl);
-      // Context: 300 chars around the URL
-      const start = Math.max(0, match.index! - 200);
-      const end = Math.min(markdown.length, match.index! + 400);
+      // Context: mostly after URL (listing details come after the link in AS24 markdown)
+      const start = Math.max(0, match.index! - 50);
+      const end = Math.min(markdown.length, match.index! + 600);
       const ctx = markdown.slice(start, end);
-      if (!ctx.toLowerCase().includes(brandLow.slice(0, 3))) continue;
+      if (!ctx.toLowerCase().includes(brandPrefix)) continue;
       const priceMatch = ctx.match(/€\s*([\d.]+)/);
       if (!priceMatch) continue;
       const price = parseInt(priceMatch[1].replace(/\./g, ''));
@@ -345,7 +347,7 @@ function parseAutoScoutListings(markdown: string, brand: string, model: string, 
       // Title from link text or bold
       let title = '';
       const linkT = ctx.match(/\[([^\]]{5,100}?)\]\(https:\/\/www\.autoscout24\.it\/annunci\//);
-      if (linkT && linkT[1].toLowerCase().includes(brandLow.slice(0, 3))) title = linkT[1].replace(/\*\*/g, '').trim();
+      if (linkT && linkT[1].toLowerCase().includes(brandPrefix)) title = linkT[1].replace(/\*\*/g, '').trim();
       if (!title) title = `${brand} ${model}`;
       let year = 0;
       const dM = ctx.match(/\b(\d{1,2})\/(\d{4})\b/);
@@ -374,46 +376,8 @@ function parseAutomobileListings(markdown: string, brand: string, model: string,
   const listings: ParsedListing[] = [];
   const modelRegex = new RegExp(model.replace(/\s+/g, '\\s*'), 'i');
 
-  // Try two splitting strategies: linked-image pattern first, then listing URL anchors
-  let sections = markdown.split(/(?=\[!\[)/).filter(s => s.length > 40);
-
-  // Fallback: split on automobile.it/annunci URL anchors
-  if (sections.length <= 2) {
-    const seenUrls = new Set<string>();
-    const urlRegex = /https?:\/\/(?:www\.)?automobile\.it\/annunci\/[^\s)>"]{10,}/g;
-    for (const match of markdown.matchAll(urlRegex)) {
-      const url = match[0].replace(/[)>"]+$/, '');
-      if (seenUrls.has(url)) continue;
-      seenUrls.add(url);
-      const start = Math.max(0, match.index! - 100);
-      const end = Math.min(markdown.length, match.index! + 500);
-      const ctx = markdown.slice(start, end);
-      if (!modelRegex.test(ctx)) continue;
-      const priceMatch = ctx.match(/€\s*([\d.]+)/);
-      if (!priceMatch) continue;
-      const price = parseInt(priceMatch[1].replace(/\./g, ''));
-      if (!price || price < 1000) continue;
-      let year = 0;
-      const yM = ctx.match(/(?:Gennaio|Febbraio|Marzo|Aprile|Maggio|Giugno|Luglio|Agosto|Settembre|Ottobre|Novembre|Dicembre)\s+(\d{4})/i);
-      if (yM) year = parseInt(yM[1]);
-      if (!year) { const yf = ctx.match(/\b(20[0-2]\d)\b/); if (yf) year = parseInt(yf[1]); }
-      let km = 0;
-      const kM = ctx.match(/\b(\d{1,3}(?:\.\d{3})*)\s*km\b/i);
-      if (kM) km = parseInt(kM[1].replace(/\./g, ''));
-      const imgM = ctx.match(/!\[.*?\]\((https?:\/\/[^\s)]+\.(?:jpg|jpeg|png|webp)[^\s)]*)\)/);
-      const titleM = ctx.match(/(?:\*\*|###?\s*)([^\n*]+)/i);
-      const title = titleM ? titleM[1].trim() : `${brand} ${model}`;
-      listings.push({
-        title, brand, model, trim: trim || null,
-        year: year || new Date().getFullYear(), price, km,
-        fuel: detectFuel(ctx), transmission: detectTransmission(ctx), power: null, color: null, doors: null,
-        body_type: detectBodyType(title), source: 'automobile', source_url: url,
-        image_url: imgM ? imgM[1] : null, location: null, is_new: false,
-      });
-    }
-    console.log(`Automobile.it URL-anchor fallback: ${listings.length} listings`);
-    return listings;
-  }
+  // Strategy 1: linked-image section split  [![img](...)](#url)
+  const sections = markdown.split(/(?=\[!\[)/).filter(s => s.length > 40);
 
   for (const section of sections) {
     if (!modelRegex.test(section)) continue;
@@ -453,9 +417,48 @@ function parseAutomobileListings(markdown: string, brand: string, model: string,
       year: year || new Date().getFullYear(), price, km,
       fuel, transmission, power: null, color: null, doors: null,
       body_type: bodyType, source: 'automobile', source_url: sourceUrl,
-      image_url: imageUrl, location: null, is_new: false,
+      image_url: imageUrl, location: null, is_new: km < 100 || /\bNuov[ao]\b/i.test(section),
     });
   }
+
+  // Strategy 2: URL-anchor fallback — runs when primary yields 0 results (incl. sections > 2 but no model match)
+  if (listings.length === 0) {
+    const seenUrls = new Set<string>();
+    const urlRegex = /https?:\/\/(?:www\.)?automobile\.it\/annunci\/[^\s)>"]{10,}/g;
+    for (const match of markdown.matchAll(urlRegex)) {
+      const url = match[0].replace(/[)>"]+$/, '');
+      if (seenUrls.has(url)) continue;
+      seenUrls.add(url);
+      const start = Math.max(0, match.index! - 100);
+      const end = Math.min(markdown.length, match.index! + 500);
+      const ctx = markdown.slice(start, end);
+      if (!modelRegex.test(ctx)) continue;
+      const priceMatch = ctx.match(/€\s*([\d.]+)/);
+      if (!priceMatch) continue;
+      const price = parseInt(priceMatch[1].replace(/\./g, ''));
+      if (!price || price < 1000) continue;
+      let year = 0;
+      const yM = ctx.match(/(?:Gennaio|Febbraio|Marzo|Aprile|Maggio|Giugno|Luglio|Agosto|Settembre|Ottobre|Novembre|Dicembre)\s+(\d{4})/i);
+      if (yM) year = parseInt(yM[1]);
+      if (!year) { const yf = ctx.match(/\b(20[0-2]\d)\b/); if (yf) year = parseInt(yf[1]); }
+      let km = 0;
+      const kM = ctx.match(/\b(\d{1,3}(?:\.\d{3})*)\s*km\b/i);
+      if (kM) km = parseInt(kM[1].replace(/\./g, ''));
+      const imgM = ctx.match(/!\[.*?\]\((https?:\/\/[^\s)]+\.(?:jpg|jpeg|png|webp)[^\s)]*)\)/);
+      const titleM = ctx.match(/(?:\*\*|###?\s*)([^\n*]+)/i);
+      const title = titleM ? titleM[1].trim() : `${brand} ${model}`;
+      listings.push({
+        title, brand, model, trim: trim || null,
+        year: year || new Date().getFullYear(), price, km,
+        fuel: detectFuel(ctx), transmission: detectTransmission(ctx), power: null, color: null, doors: null,
+        body_type: detectBodyType(title), source: 'automobile', source_url: url,
+        image_url: imgM ? imgM[1] : null, location: null,
+        is_new: km < 100 || /\bNuov[ao]\b/i.test(ctx),
+      });
+    }
+    console.log(`Automobile.it URL-anchor fallback: ${listings.length} listings`);
+  }
+
   return listings;
 }
 
@@ -482,8 +485,8 @@ function parseBrumBrumListings(markdown: string, brand: string, model: string, t
     const url = linkMatch[2];
     if (seenUrls.has(url)) continue;
 
-    // Context window: 2 lines before + 10 lines after for specs
-    const contextLines = lines.slice(Math.max(0, i - 2), Math.min(lines.length, i + 12));
+    // Context window: 5 lines before + 25 lines after for specs (price/year/km often far from link)
+    const contextLines = lines.slice(Math.max(0, i - 5), Math.min(lines.length, i + 25));
     const context = contextLines.join('\n');
 
     if (!modelRegex.test(title) && !modelRegex.test(context)) continue;
