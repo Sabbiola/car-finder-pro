@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { carBrands, fuelTypes, transmissionTypes, sourceLabels, carColors, doorOptions, bodyTypes, brandModels, modelTrims } from '@/lib/mock-data';
 import { useNavigate } from 'react-router-dom';
 import AutocompleteInput from './AutocompleteInput';
@@ -50,6 +51,8 @@ interface Props {
 const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => {
   const [filters, setFilters] = useState<SearchFiltersState>(initialFilters ?? defaultFilters);
   const [showAdvanced, setShowAdvanced] = useState(!compact);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [searchName, setSearchName] = useState('');
   const navigate = useNavigate();
   const { save } = useSavedSearches();
 
@@ -75,9 +78,14 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
     }));
   };
 
-  const handleSave = () => {
-    const name = window.prompt('Nome per questa ricerca:', filters.brand && filters.model ? `${filters.brand} ${filters.model}` : filters.brand || 'Ricerca');
-    if (name?.trim()) save(name.trim(), filters);
+  const handleSaveOpen = () => {
+    setSearchName(filters.brand && filters.model ? `${filters.brand} ${filters.model}` : filters.brand || 'Ricerca');
+    setSaveDialogOpen(true);
+  };
+
+  const handleSaveConfirm = () => {
+    if (searchName.trim()) save(searchName.trim(), filters);
+    setSaveDialogOpen(false);
   };
 
   const handleSearch = () => {
@@ -149,21 +157,24 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
           </SelectContent>
         </Select>
 
-        <AutocompleteInput
-          value={filters.model}
-          onChange={v => update('model', v)}
-          selectedBrand={filters.brand}
-          onSelectBrand={v => { update('brand', v); update('model', ''); }}
-          onSelectModel={v => update('model', v)}
-          placeholder="Oppure cerca liberamente..."
-        />
+        {/* AutocompleteInput: only shown when brand is not yet chosen via Select (avoids dual-input confusion) */}
+        {!filters.brand && (
+          <AutocompleteInput
+            value={filters.model}
+            onChange={v => update('model', v)}
+            selectedBrand={filters.brand}
+            onSelectBrand={v => { update('brand', v); update('model', ''); }}
+            onSelectModel={v => update('model', v)}
+            placeholder="Oppure cerca liberam..."
+          />
+        )}
 
         <Button onClick={handleSearch} size="lg" className="gap-2 font-semibold">
           <Search className="h-4 w-4" />
           Cerca offerte
         </Button>
         {(filters.brand || filters.model) && (
-          <Button variant="outline" onClick={handleSave} size="lg" className="gap-2 shrink-0">
+          <Button variant="outline" onClick={handleSaveOpen} size="lg" className="gap-2 shrink-0">
             <Bookmark className="h-4 w-4" />
             Salva
           </Button>
@@ -377,6 +388,27 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Save search dialog */}
+      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+        <DialogContent className="sm:max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="text-sm uppercase tracking-widest">Salva ricerca</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={searchName}
+            onChange={e => setSearchName(e.target.value)}
+            placeholder="Nome ricerca..."
+            className="mt-1"
+            onKeyDown={e => { if (e.key === 'Enter') handleSaveConfirm(); }}
+            autoFocus
+          />
+          <DialogFooter className="flex gap-2 mt-2">
+            <Button variant="outline" size="sm" onClick={() => setSaveDialogOpen(false)}>Annulla</Button>
+            <Button size="sm" onClick={handleSaveConfirm} disabled={!searchName.trim()}>Salva</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

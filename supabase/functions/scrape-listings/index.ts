@@ -747,9 +747,10 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Rate limiting
-    const authHeader = req.headers.get('authorization') || req.headers.get('apikey') || 'anonymous';
-    const clientKey = authHeader.slice(-16);
+    // Rate limiting — use IP for anonymous clients (authHeader.slice(-16) of 'anonymous' would be shared bucket)
+    const authHeader = req.headers.get('authorization') || req.headers.get('apikey') || '';
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const clientKey = authHeader.length > 10 ? authHeader.slice(-16) : ip.slice(0, 45);
     const allowed = await checkRateLimit(supabase, clientKey);
     if (!allowed) {
       return new Response(
@@ -857,10 +858,16 @@ Deno.serve(async (req) => {
     console.log(`Starting ${scrapeJobs.length} scrape jobs in batches...`);
 
     // Stagger requests to avoid Firecrawl rate limiting (max ~5 concurrent)
+    // Each job has a per-job timeout of 30s to prevent a single stalled request from blocking everything
+    const JOB_TIMEOUT_MS = 30_000;
     const results = await Promise.allSettled(
       scrapeJobs.map(async (job, i) => {
         if (i >= 5) await new Promise(r => setTimeout(r, (i - 4) * 800));
-        const md = await scrapeUrl(apiKey, job.url, job.waitFor, job.extra);
+        const jobTimeout = new Promise<string>((_, reject) =>
+          setTimeout(() => reject(new Error(`Job timeout: ${job.url}`)), JOB_TIMEOUT_MS)
+        );
+        const md = await Promise.race([scrapeUrl(apiKey, job.url, job.waitFor, job.extra), jobTimeout])
+          .catch(err => { console.warn('Job failed/timeout:', err.message); return ''; });
         if (!md) return [];
         const parsed = job.parser(md);
         console.log(`Parsed ${parsed.length} from ${job.url}`);

@@ -4,14 +4,9 @@ import { ArrowLeft, Loader2, Share2, Check } from 'lucide-react';
 import Header from '@/components/Header';
 import { fetchListingsByIds } from '@/lib/api/fetchByIds';
 import type { CarListing } from '@/lib/api/listings';
+import { priceRatingConfig } from '@/lib/rating-config';
 
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=80';
-
-const priceRatingConfig: Record<string, { label: string }> = {
-  best: { label: 'AFFARE' },
-  good: { label: 'BUON PREZZO' },
-  normal: { label: 'NELLA MEDIA' },
-};
 
 type RowDef = {
   label: string;

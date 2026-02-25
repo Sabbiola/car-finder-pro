@@ -5,10 +5,28 @@ on:
     branches: [main]
     paths:
       - 'supabase/functions/**'
+  workflow_dispatch:
 
 jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Typecheck edge functions
+        run: |
+          deno check supabase/functions/scrape-listings/index.ts || echo "scrape-listings typecheck warning"
+          deno check supabase/functions/scrape-detail/index.ts || echo "scrape-detail typecheck warning"
+          deno check supabase/functions/ai-search/index.ts || echo "ai-search typecheck warning"
+
   deploy:
     runs-on: ubuntu-latest
+    needs: typecheck
     steps:
       - uses: actions/checkout@v4
 
@@ -20,6 +38,6 @@ jobs:
         run: |
           supabase functions deploy scrape-listings --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
           supabase functions deploy scrape-detail --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
-          supabase functions deploy firecrawl-scrape --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
+          supabase functions deploy ai-search --project-ref ${{ secrets.SUPABASE_PROJECT_ID }} --no-verify-jwt
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

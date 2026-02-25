@@ -4,18 +4,13 @@ import { CarListing, sourceLabels, sourceColors } from '@/lib/mock-data';
 import { useNavigate } from 'react-router-dom';
 import FavoriteButton from '@/components/FavoriteButton';
 import CompareButton from '@/components/CompareButton';
+import { priceRatingConfig } from '@/lib/rating-config';
 
 interface Props {
   listing: CarListing;
   index?: number;
   showCompare?: boolean;
 }
-
-const priceRatingConfig = {
-  best:   { label: 'Affare',      className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' },
-  good:   { label: 'Buon prezzo', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
-  normal: { label: 'Nella media', className: 'bg-muted text-muted-foreground' },
-};
 
 const CarCard = ({ listing, showCompare }: Props) => {
   const navigate = useNavigate();

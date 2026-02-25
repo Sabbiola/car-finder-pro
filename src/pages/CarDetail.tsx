@@ -14,6 +14,7 @@ import { useRecentlyViewed } from '@/hooks/useRecentlyViewed';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
 import LoanCalculator from '@/components/LoanCalculator';
 import PriceAlertButton from '@/components/PriceAlertButton';
+import { priceRatingConfig as ratingConfig } from '@/lib/rating-config';
 
 interface ExtendedListing extends CarListing {
   description?: string | null;
@@ -25,12 +26,6 @@ interface ExtendedListing extends CarListing {
   image_urls?: string[] | null;
   extra_data?: Record<string, unknown> | null;
 }
-
-const ratingConfig: Record<string, { label: string; className: string }> = {
-  best:   { label: 'Affare',      className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' },
-  good:   { label: 'Buon prezzo', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
-  normal: { label: 'Nella media', className: 'bg-muted text-muted-foreground' },
-};
 
 const CarDetail = () => {
   const { id } = useParams();
