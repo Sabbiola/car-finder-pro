@@ -78,7 +78,7 @@ export async function fetchListings(filters: SearchFiltersState): Promise<CarLis
     query = query.in('source', filters.sources);
   }
 
-  const { data, error } = await query.order('price', { ascending: true });
+  const { data, error } = await query.order('price', { ascending: true }).limit(500);
   if (error) throw error;
   return (data as CarListing[]) || [];
 }

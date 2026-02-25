@@ -710,26 +710,6 @@ function getAutoScoutModelSlug(brand: string, model: string): string | null {
   return slugMap[brandKey]?.[modelKey] || null;
 }
 
-// Cross-source deduplication: same car listed on multiple portals
-function deduplicateCrossSource(listings: ParsedListing[]): ParsedListing[] {
-  const result: ParsedListing[] = [];
-  for (const candidate of listings) {
-    const isDuplicate = result.some(existing => {
-      if (existing.brand !== candidate.brand || existing.model !== candidate.model) return false;
-      if (existing.year !== candidate.year) return false;
-      const priceDiff = Math.abs(existing.price - candidate.price) / Math.max(existing.price, 1);
-      if (priceDiff > 0.03) return false;
-      if (existing.km > 0 && candidate.km > 0) {
-        const kmDiff = Math.abs(existing.km - candidate.km) / Math.max(existing.km, 1);
-        if (kmDiff > 0.05) return false;
-      }
-      return true;
-    });
-    if (!isDuplicate) result.push(candidate);
-  }
-  console.log(`Cross-source dedup: ${listings.length} → ${result.length}`);
-  return result;
-}
 
 // Rate limiting: max 10 scrape requests per client per hour
 async function checkRateLimit(supabase: ReturnType<typeof createClient>, clientKey: string): Promise<boolean> {
@@ -910,23 +890,22 @@ Deno.serve(async (req) => {
       if (result.status === 'fulfilled') allListings.push(...result.value);
     }
 
-    // Step 1: Same-source deduplication (source_url or title+price)
+    // Deduplication: source_url (same listing re-scraped) or title+price+source (exact same ad from same source)
+    // Cross-source dedup was removed: different platforms legitimately list different cars
+    // with similar specs (same year/price/km) so removing them caused entire platforms to disappear.
     const seenUrls = new Set<string>();
     const seenTitlePrice = new Set<string>();
-    const sameSourceUnique = allListings.filter(l => {
+    const unique = allListings.filter(l => {
       if (l.source_url) {
         if (seenUrls.has(l.source_url)) return false;
         seenUrls.add(l.source_url);
         return true;
       }
-      const key = `${l.title.toLowerCase().substring(0, 40)}|${l.price}`;
+      const key = `${l.source}|${l.title.toLowerCase().substring(0, 40)}|${l.price}`;
       if (seenTitlePrice.has(key)) return false;
       seenTitlePrice.add(key);
       return true;
     });
-
-    // Step 2: Cross-source deduplication (same car on multiple portals)
-    const unique = deduplicateCrossSource(sameSourceUnique);
 
     // Calculate price ratings
     if (unique.length >= 3) {
