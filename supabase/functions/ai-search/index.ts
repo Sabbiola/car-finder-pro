@@ -95,7 +95,14 @@ function parseWithRegex(query: string): Filters {
   const locM = q.match(/(?:zona|a\s|in\s|vicino\s*a|nei\s*pressi\s*di)\s*([a-zàèéìòù][a-zàèéìòù\s]{1,20}?)(?:\s*,|\s+con|\s+diesel|\s+benzina|\s+suv|\s*$)/);
   if (locM) {
     const loc = locM[1].trim();
-    const stopWords = ['un', 'una', 'con', 'di', 'del', 'dei', 'euro', 'km', 'anni'];
+    const stopWords = [
+      'un', 'una', 'con', 'di', 'del', 'dei', 'euro', 'km', 'anni',
+      // nazionalità (aggettivi, non città)
+      'tedesca', 'tedesco', 'italiana', 'italiano', 'francese', 'giapponese',
+      'americana', 'americano', 'inglese', 'spagnola', 'spagnolo', 'svedese',
+      // altre parole ambigue
+      'automatico', 'automatica', 'manuale', 'diesel', 'benzina', 'elettrica', 'ibrida',
+    ];
     if (!stopWords.includes(loc)) {
       filters.location = loc.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     }
@@ -107,13 +114,19 @@ function parseWithRegex(query: string): Filters {
 // ─── Gemini enhancement (optional, if GEMINI_API_KEY is set) ─────────
 async function enhanceWithGemini(apiKey: string, query: string, base: Filters): Promise<Filters> {
   const prompt = `Sei un assistente per la ricerca di auto usate in Italia.
-Analizza questa query e restituisci i filtri come JSON. Campi disponibili (tutti opzionali):
+Analizza questa query ed estrai i filtri come JSON. REGOLE FONDAMENTALI:
+- Includi SOLO campi esplicitamente menzionati nella query. Non inferire, non aggiungere.
+- location: deve essere il nome di una città o regione italiana REALE (es. "Milano", "Roma"). Non includere aggettivi di nazionalità come "tedesca", "italiana", "francese" — quelli NON sono luoghi.
+- yearMin/yearMax: solo se l'anno è scritto esplicitamente nella query.
+- Non inventare filtri assenti.
+
+Campi disponibili (tutti opzionali):
 brand, model, yearMin, yearMax, priceMin, priceMax, kmMax,
 fuel ("Benzina"|"Diesel"|"Elettrica"|"Ibrida"|"GPL"|"Metano"),
 transmission ("Manuale"|"Automatico"),
 bodyType ("Berlina"|"SUV"|"Station Wagon"|"Coupé"|"Monovolume"|"Cabrio"),
-location (città italiana).
-Rispondi SOLO con JSON valido.
+location (città/regione italiana reale).
+Rispondi SOLO con JSON valido, nessun testo aggiuntivo.
 Query: ${query}`;
 
   try {
