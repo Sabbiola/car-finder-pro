@@ -68,24 +68,7 @@ const CarDetail = () => {
       return url;
     };
     const main = normalize(car.image_url || '') || FALLBACK_IMAGE;
-
-    // For AutoScout24 each listing has a unique UUID in the image path.
-    // Use it to discard images that belong to other listings (e.g. scraped
-    // from "similar cars" thumbnails on the same detail page).
-    const as24UuidMatch = main.match(/listing-images\/([a-f0-9-]{36})/);
-    const listingUuid = as24UuidMatch?.[1] ?? null;
-
-    const extras = (car.image_urls ?? [])
-      .map(normalize)
-      .filter(u => {
-        if (!u || u === main) return false;
-        if (listingUuid && u.includes('autoscout24.net/listing-images/')) {
-          // Only keep images whose UUID matches the main image's listing UUID
-          return u.includes(listingUuid);
-        }
-        return true;
-      });
-
+    const extras = (car.image_urls ?? []).map(normalize).filter(u => u && u !== main);
     return [main, ...extras];
   }, [car]);
 

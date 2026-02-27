@@ -203,43 +203,12 @@ Deno.serve(async (req) => {
 // ─── Image extraction from HTML + markdown ──────────────────────────
 
 function extractImages(html: string, markdown: string, sourceUrl: string): string[] {
-  const urls = new Set<string>();
-
-  // 1. Extract from HTML img src and srcset (most reliable for galleries)
-  const imgSrcRegex = /<img[^>]+src=["']([^"']+)["']/gi;
   let match;
-  while ((match = imgSrcRegex.exec(html)) !== null) {
-    const url = match[1].trim();
-    if (isCarImage(url, sourceUrl)) urls.add(cleanImageUrl(url, sourceUrl));
-  }
 
-  // 2. Extract from srcset attributes
-  const srcsetRegex = /srcset=["']([^"']+)["']/gi;
-  while ((match = srcsetRegex.exec(html)) !== null) {
-    const srcset = match[1];
-    // srcset contains "url1 1x, url2 2x" or "url1 300w, url2 600w"
-    const parts = srcset.split(',');
-    for (const part of parts) {
-      const url = part.trim().split(/\s+/)[0];
-      if (url && isCarImage(url, sourceUrl)) urls.add(cleanImageUrl(url, sourceUrl));
-    }
-  }
-
-  // 3. Extract from data-src (lazy loaded images)
-  const dataSrcRegex = /data-src=["']([^"']+)["']/gi;
-  while ((match = dataSrcRegex.exec(html)) !== null) {
-    const url = match[1].trim();
-    if (isCarImage(url, sourceUrl)) urls.add(cleanImageUrl(url, sourceUrl));
-  }
-
-  // 4. Extract from markdown images as fallback
-  const mdImgRegex = /!\[[^\]]*\]\(([^)]+)\)/g;
-  while ((match = mdImgRegex.exec(markdown)) !== null) {
-    const url = match[1].trim();
-    if (isCarImage(url, sourceUrl)) urls.add(cleanImageUrl(url, sourceUrl));
-  }
-
-  // 5. Look for JSON-LD image arrays in HTML
+  // ── Step 1: Try JSON-LD first ────────────────────────────────────────
+  // JSON-LD structured data only contains images for the current listing,
+  // not for "similar cars" shown on the page — so it's the cleanest source.
+  const jsonLdImages = new Set<string>();
   const jsonLdRegex = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
   while ((match = jsonLdRegex.exec(html)) !== null) {
     try {
@@ -248,25 +217,73 @@ function extractImages(html: string, markdown: string, sourceUrl: string): strin
       if (Array.isArray(images)) {
         for (const img of images) {
           const url = typeof img === 'string' ? img : img?.url || img?.contentUrl;
-          if (url && isCarImage(url, sourceUrl)) urls.add(cleanImageUrl(url, sourceUrl));
+          if (url && isCarImage(url, sourceUrl)) jsonLdImages.add(cleanImageUrl(url, sourceUrl));
         }
       } else if (typeof images === 'string') {
-        if (isCarImage(images, sourceUrl)) urls.add(cleanImageUrl(images, sourceUrl));
+        if (isCarImage(images, sourceUrl)) jsonLdImages.add(cleanImageUrl(images, sourceUrl));
       }
     } catch { /* ignore invalid JSON-LD */ }
   }
 
-  // Deduplicate by base URL (ignoring size/quality params)
+  // If JSON-LD gave us at least 2 images, trust it exclusively.
+  // This prevents picking up thumbnails of "similar listings" from the HTML.
+  if (jsonLdImages.size >= 2) {
+    const deduped = deduplicateByBase(jsonLdImages);
+    console.log(`Using ${deduped.length} JSON-LD images (skipping HTML scrape)`);
+    return deduped.slice(0, 30);
+  }
+
+  // ── Step 2: Fallback — scrape HTML (all img/srcset/data-src) ─────────
+  const urls = new Set<string>();
+
+  // Add any JSON-LD images we did find (even if < 2)
+  for (const u of jsonLdImages) urls.add(u);
+
+  // HTML img src
+  const imgSrcRegex = /<img[^>]+src=["']([^"']+)["']/gi;
+  while ((match = imgSrcRegex.exec(html)) !== null) {
+    const url = match[1].trim();
+    if (isCarImage(url, sourceUrl)) urls.add(cleanImageUrl(url, sourceUrl));
+  }
+
+  // srcset attributes
+  const srcsetRegex = /srcset=["']([^"']+)["']/gi;
+  while ((match = srcsetRegex.exec(html)) !== null) {
+    const srcset = match[1];
+    for (const part of srcset.split(',')) {
+      const url = part.trim().split(/\s+/)[0];
+      if (url && isCarImage(url, sourceUrl)) urls.add(cleanImageUrl(url, sourceUrl));
+    }
+  }
+
+  // data-src (lazy loaded)
+  const dataSrcRegex = /data-src=["']([^"']+)["']/gi;
+  while ((match = dataSrcRegex.exec(html)) !== null) {
+    const url = match[1].trim();
+    if (isCarImage(url, sourceUrl)) urls.add(cleanImageUrl(url, sourceUrl));
+  }
+
+  // Markdown images as last resort
+  const mdImgRegex = /!\[[^\]]*\]\(([^)]+)\)/g;
+  while ((match = mdImgRegex.exec(markdown)) !== null) {
+    const url = match[1].trim();
+    if (isCarImage(url, sourceUrl)) urls.add(cleanImageUrl(url, sourceUrl));
+  }
+
+  // Cap at 15 (HTML scrape is noisier — a real listing rarely has more,
+  // and limiting reduces the chance of capturing "similar cars" thumbnails)
+  return deduplicateByBase(urls).slice(0, 15);
+}
+
+function deduplicateByBase(urls: Set<string>): string[] {
   const seen = new Map<string, string>();
   for (const url of urls) {
     const base = getBaseUrl(url);
-    // Keep the largest/best quality version
     if (!seen.has(base) || url.length > (seen.get(base)?.length || 0)) {
       seen.set(base, url);
     }
   }
-
-  return Array.from(seen.values()).slice(0, 30);
+  return Array.from(seen.values());
 }
 
 function getBaseUrl(url: string): string {
