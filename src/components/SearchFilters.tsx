@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { carBrands, fuelTypes, transmissionTypes, sourceLabels, carColors, doorOptions, bodyTypes, brandModels, modelTrims } from '@/lib/mock-data';
 import { useNavigate } from 'react-router-dom';
 import AutocompleteInput from './AutocompleteInput';
+import SaveSearchDialog from './SaveSearchDialog';
 
 export interface SearchFiltersState {
   brand: string;
@@ -53,11 +54,11 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
   const [filters, setFilters] = useState<SearchFiltersState>(initialFilters ?? defaultFilters);
   const [showAdvanced, setShowAdvanced] = useState(!compact);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const [searchName, setSearchName] = useState('');
+
   const navigate = useNavigate();
   const { save } = useSavedSearches();
 
-  const update = (key: keyof SearchFiltersState, value: any) =>
+  const update = (key: keyof SearchFiltersState, value: SearchFiltersState[keyof SearchFiltersState]) =>
     setFilters(f => ({ ...f, [key]: value }));
 
   const toggleSource = (src: string) => {
@@ -79,14 +80,8 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
     }));
   };
 
-  const handleSaveOpen = () => {
-    setSearchName(filters.brand && filters.model ? `${filters.brand} ${filters.model}` : filters.brand || 'Ricerca');
-    setSaveDialogOpen(true);
-  };
-
-  const handleSaveConfirm = () => {
-    if (searchName.trim()) save(searchName.trim(), filters);
-    setSaveDialogOpen(false);
+  const handleSaveConfirm = (name: string) => {
+    save(name, filters);
   };
 
   const handleSearch = () => {
@@ -113,8 +108,20 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
     filters.sellerType !== 'all' || filters.emissionClass
   );
 
+  const defaultSaveName = filters.brand && filters.model
+    ? `${filters.brand} ${filters.model}`
+    : filters.brand || 'Ricerca';
+
   return (
     <div className="w-full space-y-4">
+      {/* Save search dialog */}
+      <SaveSearchDialog
+        open={saveDialogOpen}
+        defaultName={defaultSaveName}
+        onSave={handleSaveConfirm}
+        onClose={() => setSaveDialogOpen(false)}
+      />
+
       {/* Main search row */}
       <div className="flex flex-col sm:flex-row gap-3">
         <Select value={filters.brand} onValueChange={v => update('brand', v)}>
@@ -175,7 +182,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
           Cerca offerte
         </Button>
         {(filters.brand || filters.model) && (
-          <Button variant="outline" onClick={handleSaveOpen} size="lg" className="gap-2 shrink-0">
+          <Button variant="outline" onClick={() => setSaveDialogOpen(true)} size="lg" className="gap-2 shrink-0">
             <Bookmark className="h-4 w-4" />
             Salva
           </Button>
@@ -259,31 +266,37 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Anno min</Label>
                 <Input type="number" placeholder="2018" value={filters.yearMin}
+                  min={1900} max={new Date().getFullYear() + 1}
                   onChange={e => update('yearMin', e.target.value)} className="bg-background" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Anno max</Label>
                 <Input type="number" placeholder="2024" value={filters.yearMax}
+                  min={1900} max={new Date().getFullYear() + 1}
                   onChange={e => update('yearMax', e.target.value)} className="bg-background" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Prezzo min €</Label>
                 <Input type="number" placeholder="5.000" value={filters.priceMin}
+                  min={0}
                   onChange={e => update('priceMin', e.target.value)} className="bg-background" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Prezzo max €</Label>
                 <Input type="number" placeholder="50.000" value={filters.priceMax}
+                  min={0}
                   onChange={e => update('priceMax', e.target.value)} className="bg-background" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Km min</Label>
                 <Input type="number" placeholder="0" value={filters.kmMin}
+                  min={0}
                   onChange={e => update('kmMin', e.target.value)} className="bg-background" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Km max</Label>
                 <Input type="number" placeholder="100.000" value={filters.kmMax}
+                  min={0}
                   onChange={e => update('kmMax', e.target.value)} className="bg-background" />
               </div>
               <div className="space-y-1.5">

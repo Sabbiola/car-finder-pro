@@ -1,11 +1,14 @@
 import { useState, useCallback } from 'react';
+import { MAX_RECENTLY_VIEWED } from '@/lib/constants';
 
-const KEY = 'car-finder-recent';
-const MAX = 10;
+const STORAGE_KEY = 'car-finder-recent';
 
 function readFromStorage(): string[] {
   try {
-    return JSON.parse(localStorage.getItem(KEY) || '[]');
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(x => typeof x === 'string') : [];
   } catch {
     return [];
   }
@@ -16,8 +19,12 @@ export function useRecentlyViewed() {
 
   const addRecent = useCallback((id: string) => {
     setRecentIds(prev => {
-      const next = [id, ...prev.filter(x => x !== id)].slice(0, MAX);
-      localStorage.setItem(KEY, JSON.stringify(next));
+      const next = [id, ...prev.filter(x => x !== id)].slice(0, MAX_RECENTLY_VIEWED);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch (err) {
+        console.warn('[useRecentlyViewed] Failed to persist to localStorage:', err);
+      }
       return next;
     });
   }, []);

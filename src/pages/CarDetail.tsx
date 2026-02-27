@@ -15,6 +15,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Refere
 import LoanCalculator from '@/components/LoanCalculator';
 import PriceAlertButton from '@/components/PriceAlertButton';
 import { priceRatingConfig as ratingConfig } from '@/lib/rating-config';
+import { FALLBACK_IMAGE } from '@/lib/constants';
 
 interface ExtendedListing extends CarListing {
   description?: string | null;
@@ -32,7 +33,7 @@ const CarDetail = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { addRecent } = useRecentlyViewed();
-  const canGoBack = location.key !== 'default'; // true if there's real history
+  const canGoBack = location.key !== 'default';
   const [car, setCar] = useState<ExtendedListing | null>(null);
   const [similar, setSimilar] = useState<CarListing[]>([]);
   const [allPrices, setAllPrices] = useState<CarListing[]>([]);
@@ -42,28 +43,31 @@ const CarDetail = () => {
   const [imgIndex, setImgIndex] = useState(0);
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const handleShare = async () => {
-    await navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard not available (e.g. HTTP context)
+    }
   };
 
   const galleryImages = useMemo(() => {
     if (!car) return [];
     const normalize = (u: string) => {
       let url = u.startsWith('//') ? 'https:' + u : u;
-      // New Subito.it CDN uses fullscreen-1x-auto; gallery-2x only worked on the old static.sbito.it
       if (url.includes('images.sbito.it') && url.includes('rule=')) {
         url = url.replace(/rule=[^&]+/, 'rule=fullscreen-1x-auto');
       }
-      // AutoScout24: upgrade thumbnail (250x188) to 800x600
       if (url.includes('autoscout24.net/listing-images/')) {
         url = url.replace(/\/\d+x\d+(\.\w+)$/, '/800x600$1');
       }
       return url;
     };
-    const main = normalize(car.image_url || '') || 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=80';
+    const main = normalize(car.image_url || '') || FALLBACK_IMAGE;
     const extras = (car.image_urls ?? []).map(normalize).filter(u => u && u !== main);
     return [main, ...extras];
   }, [car]);
@@ -86,16 +90,29 @@ const CarDetail = () => {
   }, [prevImage, nextImage]);
 
   useEffect(() => {
+    if (!id) return;
+
+    let cancelled = false;
+
     const fetchCar = async () => {
       setLoading(true);
+      setFetchError(null);
       setImgIndex(0);
-      const { data } = await supabase
-        .from('car_listings')
-        .select('*')
-        .eq('id', id!)
-        .single();
 
-      if (data) {
+      try {
+        const { data, error } = await supabase
+          .from('car_listings')
+          .select('*')
+          .eq('id', id)
+          .single();
+
+        if (cancelled) return;
+
+        if (error || !data) {
+          setFetchError('Auto non trovata o errore nel caricamento.');
+          return;
+        }
+
         const carData = data as ExtendedListing;
         setCar(carData);
         addRecent(carData.id);
@@ -105,6 +122,9 @@ const CarDetail = () => {
           supabase.from('car_listings').select('*').eq('brand', data.brand).eq('model', data.model).order('price', { ascending: true }).limit(20),
           supabase.from('price_history').select('price, recorded_at').eq('listing_id', data.id).order('recorded_at', { ascending: true }).limit(30),
         ]);
+
+        if (cancelled) return;
+
         setSimilar((similarRes.data as CarListing[]) || []);
         setAllPrices((pricesRes.data as CarListing[]) || []);
         setPriceHistory(historyRes.data || []);
@@ -116,33 +136,63 @@ const CarDetail = () => {
           if (idMatch) {
             const slug = carData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
             scrapeUrl = `https://www.autoscout24.it/annunci/${slug}-${idMatch[1]}`;
-            // Persist so future visits don't need to reconstruct
-            supabase.from('car_listings').update({ source_url: scrapeUrl }).eq('id', carData.id);
+            // Fire-and-forget: persist resolved URL for future visits
+            supabase
+              .from('car_listings')
+              .update({ source_url: scrapeUrl })
+              .eq('id', carData.id)
+              .then(({ error: updateErr }) => {
+                if (updateErr) console.warn('[CarDetail] Failed to persist source_url:', updateErr.message);
+              });
           }
         }
-        if (scrapeUrl) setResolvedUrl(scrapeUrl);
+        if (scrapeUrl && !cancelled) setResolvedUrl(scrapeUrl);
 
         if (!carData.detail_scraped && scrapeUrl) {
+          if (cancelled) return;
           setDetailLoading(true);
           try {
             const { data: scrapeResult } = await supabase.functions.invoke('scrape-detail', {
               body: { listingId: carData.id, sourceUrl: scrapeUrl },
             });
+            if (cancelled) return;
             if (scrapeResult?.success && !scrapeResult?.cached) {
-              const { data: updated } = await supabase.from('car_listings').select('*').eq('id', id!).single();
-              if (updated) setCar(updated as ExtendedListing);
+              const { data: updated, error: refreshErr } = await supabase
+                .from('car_listings')
+                .select('*')
+                .eq('id', id)
+                .single();
+              if (!cancelled) {
+                if (refreshErr) {
+                  console.warn('[CarDetail] Failed to refresh after scrape:', refreshErr.message);
+                } else if (updated) {
+                  setCar(updated as ExtendedListing);
+                }
+              }
             }
           } catch (err) {
-            console.error('Detail scrape error:', err);
+            if (!cancelled) console.error('[CarDetail] Detail scrape error:', err);
           } finally {
-            setDetailLoading(false);
+            if (!cancelled) setDetailLoading(false);
           }
         }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('[CarDetail] Unexpected fetch error:', err);
+          setFetchError('Errore imprevisto nel caricamento dell\'auto.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setLoading(false);
     };
-    if (id) fetchCar();
-  }, [id]);
+
+    fetchCar();
+
+    // Cleanup: prevent stale state updates if the user navigates away
+    return () => {
+      cancelled = true;
+    };
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const chartData = useMemo(() => {
     if (!allPrices.length || !car) return [];
@@ -170,12 +220,13 @@ const CarDetail = () => {
     );
   }
 
-  if (!car) {
+  if (fetchError || !car) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
-        <div className="container py-16 text-center">
-          <p className="text-sm text-muted-foreground">Auto non trovata</p>
+        <div className="container py-16 text-center space-y-4">
+          <p className="text-sm text-muted-foreground">{fetchError || 'Auto non trovata'}</p>
+          <Button variant="outline" onClick={() => navigate(-1)}>← Torna indietro</Button>
         </div>
       </div>
     );
@@ -227,7 +278,7 @@ const CarDetail = () => {
                 loading="lazy"
                 referrerPolicy="no-referrer"
                 onError={e => {
-                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=800&q=80';
+                  (e.target as HTMLImageElement).src = FALLBACK_IMAGE;
                 }}
               />
               {/* Nav arrows */}
@@ -235,12 +286,14 @@ const CarDetail = () => {
                 <>
                   <button
                     onClick={prevImage}
+                    aria-label="Immagine precedente"
                     className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/90 dark:bg-black/70 rounded-full p-2 shadow-md hover:scale-110 transition-transform"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
                   <button
                     onClick={nextImage}
+                    aria-label="Immagine successiva"
                     className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/90 dark:bg-black/70 rounded-full p-2 shadow-md hover:scale-110 transition-transform"
                   >
                     <ChevronRight className="h-4 w-4" />
@@ -272,7 +325,7 @@ const CarDetail = () => {
                   <FavoriteButton id={listing.id} className="flex-shrink-0 mt-1" />
                   <Button variant="outline" size="icon" onClick={handleShare}
                     className="rounded-xl h-9 w-9 flex-shrink-0 mt-1"
-                    aria-label="Condividi">
+                    aria-label="Condividi link annuncio">
                     {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Share2 className="h-4 w-4" />}
                   </Button>
                 </div>
@@ -316,7 +369,7 @@ const CarDetail = () => {
                   className="flex-1 gap-2 font-semibold rounded-xl h-12 bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 border-0 text-white shadow-md hover:shadow-violet-200 transition-all disabled:opacity-40"
                   onClick={() => {
                     const url = listing.url !== '#' ? listing.url : resolvedUrl;
-                    if (url) window.open(url, '_blank');
+                    if (url) window.open(url, '_blank', 'noopener,noreferrer');
                   }}
                   disabled={listing.url === '#' && !resolvedUrl}
                 >
@@ -335,6 +388,7 @@ const CarDetail = () => {
               <button
                 key={i}
                 onClick={() => setImgIndex(i)}
+                aria-label={`Foto ${i + 1}`}
                 className={`flex-shrink-0 w-16 h-12 rounded-xl overflow-hidden transition-all ${
                   i === imgIndex
                     ? 'ring-2 ring-violet-500 scale-105 shadow-md'
@@ -365,7 +419,7 @@ const CarDetail = () => {
         {/* Extra data sections (Dati tecnici, Colore e interni, Equipaggiamento) */}
         {(() => {
           const ex = car.extra_data as Record<string, unknown> | null | undefined;
-          if (!ex) return null;
+          if (!ex || typeof ex !== 'object') return null;
 
           const techFields = [
             { label: 'Trazione',     value: ex.drive_type as string },

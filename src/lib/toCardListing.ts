@@ -1,4 +1,5 @@
 import type { CarListing } from '@/lib/api/listings';
+import { FALLBACK_IMAGE } from '@/lib/constants';
 
 export type CardListing = {
   id: string;
@@ -23,8 +24,6 @@ export type CardListing = {
   doors: number;
   bodyType: string;
 };
-
-const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=80';
 
 function normalizeUrl(url: string | null | undefined): string | null {
   if (!url) return null;

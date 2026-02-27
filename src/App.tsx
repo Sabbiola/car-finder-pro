@@ -13,32 +13,48 @@ import Profile from "./pages/Profile";
 import { CompareProvider } from "./hooks/useCompare";
 import { AuthProvider } from "./contexts/AuthContext";
 import CompareBar from "./components/CompareBar";
+import ErrorBoundary from "./components/ErrorBoundary";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 5 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
+    },
+    mutations: {
+      retry: 0,
+    },
+  },
+});
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <CompareProvider>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/risultati" element={<SearchResults />} />
-              <Route path="/auto/:id" element={<CarDetail />} />
-              <Route path="/preferiti" element={<Preferiti />} />
-              <Route path="/confronta" element={<Confronta />} />
-              <Route path="/profilo" element={<Profile />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-            <CompareBar />
-          </CompareProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <CompareProvider>
+              <ErrorBoundary>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/risultati" element={<SearchResults />} />
+                  <Route path="/auto/:id" element={<CarDetail />} />
+                  <Route path="/preferiti" element={<Preferiti />} />
+                  <Route path="/confronta" element={<Confronta />} />
+                  <Route path="/profilo" element={<Profile />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </ErrorBoundary>
+              <CompareBar />
+            </CompareProvider>
+          </BrowserRouter>
+        </TooltipProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;

@@ -6,7 +6,7 @@ import { fetchListingsByIds } from '@/lib/api/fetchByIds';
 import type { CarListing } from '@/lib/api/listings';
 import { priceRatingConfig } from '@/lib/rating-config';
 
-const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=80';
+import { FALLBACK_IMAGE } from '@/lib/constants';
 
 type RowDef = {
   label: string;
@@ -184,3 +184,4 @@ const Confronta = () => {
 };
 
 export default Confronta;
+

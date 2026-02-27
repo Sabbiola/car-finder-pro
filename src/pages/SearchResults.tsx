@@ -10,8 +10,7 @@ import { scrapeListings, fetchListings, type CarListing } from '@/lib/api/listin
 import { toCardListing } from '@/lib/toCardListing';
 import { useToast } from '@/hooks/use-toast';
 import { sourceLabels, sourceColors } from '@/lib/mock-data';
-
-type SortOption = 'price-asc' | 'price-desc' | 'km-asc' | 'year-desc' | 'value-asc' | 'best-deal';
+import { VALID_SORT_OPTIONS, type SortOption, PAGE_SIZE, CACHE_TTL_HOURS } from '@/lib/constants';
 
 const sortLabels: Record<SortOption, string> = {
   'price-asc': 'Prezzo ↑',
@@ -22,9 +21,19 @@ const sortLabels: Record<SortOption, string> = {
   'best-deal': 'Migliori affari',
 };
 
-const PAGE_SIZE = 12;
+function parseSortParam(raw: string | null): SortOption {
+  if (raw && (VALID_SORT_OPTIONS as readonly string[]).includes(raw)) {
+    return raw as SortOption;
+  }
+  return 'price-asc';
+}
 
 function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
+  const sourcesRaw = params.get('sources');
+  const sources = sourcesRaw
+    ? sourcesRaw.split(',').filter(s => s.length > 0)
+    : ['autoscout24', 'subito', 'automobile', 'brumbrum'];
+
   return {
     brand: params.get('brand') || '',
     model: params.get('model') || '',
@@ -38,7 +47,7 @@ function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
     fuel: params.get('fuel') || '',
     transmission: params.get('transmission') || '',
     isNew: params.get('isNew') === 'true' ? true : params.get('isNew') === 'false' ? false : null,
-    sources: params.get('sources') ? params.get('sources')!.split(',') : ['autoscout24', 'subito', 'automobile', 'brumbrum'],
+    sources,
     color: params.get('color') || '',
     doors: params.get('doors') || '',
     bodyType: params.get('bodyType') || '',
@@ -50,8 +59,8 @@ function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
 
 const SearchResults = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [sort, setSort] = useState<SortOption>((searchParams.get('sort') as SortOption) || 'price-asc');
-  const initialFilters = useMemo(() => parseFiltersFromParams(searchParams), []);
+  const [sort, setSort] = useState<SortOption>(() => parseSortParam(searchParams.get('sort')));
+  const initialFilters = useMemo(() => parseFiltersFromParams(searchParams), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [filters, setFilters] = useState<SearchFiltersState>(initialFilters);
   const [listings, setListings] = useState<CarListing[]>([]);
   const [loading, setLoading] = useState(false);
@@ -62,33 +71,30 @@ const SearchResults = () => {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  const CACHE_TTL_HOURS = 6;
-
-  const doSearch = async (forceRefresh = false) => {
-    if (!filters.brand) return;
+  const doSearch = async (currentFilters: SearchFiltersState, forceRefresh = false) => {
+    if (!currentFilters.brand) return;
     setLoading(true);
     try {
       if (!forceRefresh) {
-        const existing = await fetchListings(filters);
+        const existing = await fetchListings(currentFilters);
         if (existing.length > 0) {
-          // Check cache freshness: use the oldest scraped_at in the result set
           const newestTs = Math.max(...existing.map(l => new Date(l.scraped_at).getTime()));
-          const ageHours = (Date.now() - newestTs) / 3600000;
+          const ageHours = (Date.now() - newestTs) / 3_600_000;
           if (ageHours < CACHE_TTL_HOURS) {
             setListings(existing);
             setScraped(true);
             setLoading(false);
             return;
           }
-          // Cache stale: show existing results while re-scraping in background
+          // Cache stale: show existing while re-scraping in background
           setListings(existing);
           setScraped(true);
         }
       }
       toast({ title: 'Ricerca in corso...', description: 'Scraping annunci reali dai portali' });
-      const result = await scrapeListings(filters);
+      const result = await scrapeListings(currentFilters);
       if (result?.success) {
-        const fresh = await fetchListings(filters);
+        const fresh = await fetchListings(currentFilters);
         setListings(fresh);
         setScraped(true);
         toast({ title: `${fresh.length} annunci trovati` });
@@ -96,14 +102,16 @@ const SearchResults = () => {
         toast({ title: 'Errore', description: result?.error || 'Scraping fallito', variant: 'destructive' });
       }
     } catch (err) {
-      console.error('Error fetching listings:', err);
+      console.error('[SearchResults] Error fetching listings:', err);
       toast({ title: 'Errore', description: 'Impossibile caricare gli annunci', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { doSearch(); }, [filters]);
+  useEffect(() => {
+    doSearch(filters);
+  }, [filters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSearch = (newFilters: SearchFiltersState) => {
     setScraped(false);
@@ -119,7 +127,6 @@ const SearchResults = () => {
       case 'price-desc': list.sort((a, b) => b.price - a.price); break;
       case 'km-asc': list.sort((a, b) => a.km - b.km); break;
       case 'year-desc': list.sort((a, b) => b.year - a.year); break;
-      // Miglior valore: prezzo / (anni età + 1) — più basso è meglio
       case 'value-asc':
         list.sort((a, b) => {
           const scoreA = a.price / (currentYear - a.year + 1);
@@ -127,7 +134,6 @@ const SearchResults = () => {
           return scoreA - scoreB;
         });
         break;
-      // Migliori affari: best > good > normal, poi prezzo asc
       case 'best-deal':
         list.sort((a, b) => {
           const order: Record<string, number> = { best: 0, good: 1, normal: 2 };
@@ -222,7 +228,7 @@ const SearchResults = () => {
               </span>
             )}
             {!loading && scraped && (
-              <button onClick={() => doSearch(true)} className="text-xs text-muted-foreground hover:text-accent hover:underline transition-colors">
+              <button onClick={() => doSearch(filters, true)} className="text-xs text-muted-foreground hover:text-accent hover:underline transition-colors">
                 ↻ Aggiorna
               </button>
             )}
@@ -265,7 +271,7 @@ const SearchResults = () => {
             </button>
 
           <Select value={sort} onValueChange={v => {
-            const s = v as SortOption;
+            const s = parseSortParam(v);
             setSort(s);
             setSearchParams(prev => { prev.set('sort', s); return prev; }, { replace: true });
           }}>
@@ -329,7 +335,7 @@ const SearchResults = () => {
           <div className="text-center py-16 text-muted-foreground space-y-2">
             <p className="text-sm font-semibold text-foreground">Nessun risultato</p>
             <p className="text-xs">Modifica i filtri di ricerca o cambia brand/modello</p>
-            <button onClick={() => doSearch(true)} className="text-xs text-violet-600 hover:underline mt-2 block mx-auto">
+            <button onClick={() => doSearch(filters, true)} className="text-xs text-violet-600 hover:underline mt-2 block mx-auto">
               ↻ Riprova
             </button>
           </div>

@@ -6,6 +6,7 @@ import { Loader2, Sparkles, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
+import { z } from 'zod';
 import type { SearchFiltersState } from './SearchFilters';
 
 interface Props {
@@ -19,6 +20,22 @@ const EXAMPLES = [
   'Fiat 500 o Panda ibrida, zona Milano, massimo 15.000€',
   'Berlina tedesca con cambio automatico, tra 20k e 35k euro',
 ];
+
+// Validate the AI function response to prevent processing malicious/unexpected data
+const AIFiltersSchema = z.object({
+  brand: z.string().optional(),
+  model: z.string().optional(),
+  trim: z.string().optional(),
+  yearMin: z.union([z.string(), z.number()]).optional().transform(v => v != null ? String(v) : undefined),
+  yearMax: z.union([z.string(), z.number()]).optional().transform(v => v != null ? String(v) : undefined),
+  priceMin: z.union([z.string(), z.number()]).optional().transform(v => v != null ? String(v) : undefined),
+  priceMax: z.union([z.string(), z.number()]).optional().transform(v => v != null ? String(v) : undefined),
+  kmMax: z.union([z.string(), z.number()]).optional().transform(v => v != null ? String(v) : undefined),
+  fuel: z.string().optional(),
+  transmission: z.string().optional(),
+  bodyType: z.string().optional(),
+  location: z.string().optional(),
+}).strip(); // strip unknown keys for safety
 
 const AISearchDialog = ({ open, onClose }: Props) => {
   const [query, setQuery] = useState('');
@@ -41,23 +58,33 @@ const AISearchDialog = ({ open, onClose }: Props) => {
         });
         return;
       }
-      const filters: Partial<SearchFiltersState> = data.filters;
+
+      // Validate and sanitize AI output before using it
+      const parsed = AIFiltersSchema.safeParse(data.filters ?? {});
+      if (!parsed.success) {
+        console.error('[AISearchDialog] Invalid AI response schema:', parsed.error);
+        toast({ title: 'Errore', description: 'Risposta AI non valida', variant: 'destructive' });
+        return;
+      }
+      const filters = parsed.data as Partial<SearchFiltersState>;
+
       const params = new URLSearchParams();
-      if (filters.brand) params.set('brand', String(filters.brand));
-      if (filters.model) params.set('model', String(filters.model));
-      if (filters.yearMin) params.set('yearMin', String(filters.yearMin));
-      if (filters.yearMax) params.set('yearMax', String(filters.yearMax));
-      if (filters.priceMin) params.set('priceMin', String(filters.priceMin));
-      if (filters.priceMax) params.set('priceMax', String(filters.priceMax));
-      if ((filters as any).kmMax) params.set('kmMax', String((filters as any).kmMax));
-      if (filters.fuel) params.set('fuel', String(filters.fuel));
-      if (filters.transmission) params.set('transmission', String(filters.transmission));
-      if (filters.bodyType) params.set('bodyType', String(filters.bodyType));
-      if (filters.location) params.set('location', String(filters.location));
+      if (filters.brand) params.set('brand', filters.brand);
+      if (filters.model) params.set('model', filters.model);
+      if (filters.yearMin) params.set('yearMin', filters.yearMin);
+      if (filters.yearMax) params.set('yearMax', filters.yearMax);
+      if (filters.priceMin) params.set('priceMin', filters.priceMin);
+      if (filters.priceMax) params.set('priceMax', filters.priceMax);
+      if ((filters as Record<string, unknown>).kmMax) params.set('kmMax', String((filters as Record<string, unknown>).kmMax));
+      if (filters.fuel) params.set('fuel', filters.fuel);
+      if (filters.transmission) params.set('transmission', filters.transmission);
+      if (filters.bodyType) params.set('bodyType', filters.bodyType);
+      if (filters.location) params.set('location', filters.location);
       params.set('sources', 'autoscout24,subito,automobile,brumbrum');
       onClose();
       navigate(`/risultati?${params.toString()}`);
     } catch (err) {
+      console.error('[AISearchDialog] Unexpected error:', err);
       toast({ title: 'Errore', description: 'Servizio AI non disponibile', variant: 'destructive' });
     } finally {
       setLoading(false);
