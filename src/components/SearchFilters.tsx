@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { carBrands, fuelTypes, transmissionTypes, sourceLabels, carColors, doorOptions, bodyTypes, brandModels, modelTrims } from '@/lib/mock-data';
 import { useNavigate } from 'react-router-dom';
 import AutocompleteInput from './AutocompleteInput';
@@ -415,26 +414,6 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
         )}
       </AnimatePresence>
 
-      {/* Save search dialog */}
-      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
-        <DialogContent className="sm:max-w-xs">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-semibold">Salva ricerca</DialogTitle>
-          </DialogHeader>
-          <Input
-            value={searchName}
-            onChange={e => setSearchName(e.target.value)}
-            placeholder="Nome ricerca..."
-            className="mt-1"
-            onKeyDown={e => { if (e.key === 'Enter') handleSaveConfirm(); }}
-            autoFocus
-          />
-          <DialogFooter className="flex gap-2 mt-2">
-            <Button variant="outline" size="sm" onClick={() => setSaveDialogOpen(false)}>Annulla</Button>
-            <Button size="sm" onClick={handleSaveConfirm} disabled={!searchName.trim()}>Salva</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
