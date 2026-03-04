@@ -160,8 +160,12 @@ function parseSubitoListings(markdown: string, brand: string, model: string, tri
     const imgMatch = block.match(/!\[.*?\]\((https:\/\/(?:images|static)\.sbito\.it[^\s)]+)\)/);
     const imageUrl = imgMatch ? imgMatch[1] : null;
 
-    const urlMatch = block.match(/\[.*?\]\((https:\/\/www\.subito\.it\/auto\/[^\s)]+)\)/);
-    const sourceUrl = urlMatch ? urlMatch[1] : null;
+    // Try multiple URL patterns: markdown link, bare URL, /auto-usate/ path variant
+    const urlMatch =
+      block.match(/\[.*?\]\((https:\/\/www\.subito\.it\/(?:auto|auto-usate)\/[^\s)]+)\)/) ||
+      block.match(/(https:\/\/www\.subito\.it\/(?:auto|auto-usate)\/[^\s)>\]"]+\.htm\b[^\s)>\]"]*)/) ||
+      block.match(/(https:\/\/www\.subito\.it\/(?:auto|auto-usate)\/[^\s)>\]"]+)/);
+    const sourceUrl = urlMatch ? urlMatch[1].replace(/[)>\]"]+$/, '') : null;
 
     const priceMatch = block.match(/([\d.]+)\s*€/);
     if (!priceMatch) continue;
