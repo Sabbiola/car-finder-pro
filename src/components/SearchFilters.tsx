@@ -139,9 +139,17 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
       />
 
       {/* Main search row */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <Select value={filters.brand} onValueChange={v => update('brand', v)}>
-          <SelectTrigger className="sm:w-48 bg-card">
+      <div className="flex flex-col lg:flex-row gap-3">
+        <Select
+          value={filters.brand}
+          onValueChange={v => setFilters(f => ({
+            ...f,
+            brand: v,
+            model: '',
+            trim: '',
+          }))}
+        >
+          <SelectTrigger className="w-full lg:w-48 bg-card">
             <SelectValue placeholder="Marca" />
           </SelectTrigger>
           <SelectContent>
@@ -151,58 +159,61 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
           </SelectContent>
         </Select>
 
-        <Select
-          value={filters.model}
-          onValueChange={v => { update('model', v); update('trim', ''); }}
-          disabled={!filters.brand}
-        >
-          <SelectTrigger className="sm:w-48 bg-card">
-            <SelectValue placeholder={filters.brand ? 'Modello' : 'Scegli prima la marca'} />
-          </SelectTrigger>
-          <SelectContent>
-            {(brandModels[filters.brand] || []).map(m => (
-              <SelectItem key={m} value={m}>{m}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={filters.trim}
-          onValueChange={v => update('trim', v)}
-          disabled={!filters.brand || !filters.model}
-        >
-          <SelectTrigger className="sm:w-52 bg-card">
-            <SelectValue placeholder={filters.model ? 'Allestimento' : 'Scegli prima il modello'} />
-          </SelectTrigger>
-          <SelectContent>
-            {(modelTrims[filters.brand]?.[filters.model] || []).map(t => (
-              <SelectItem key={t} value={t}>{t}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {/* AutocompleteInput: only shown when brand is not yet chosen via Select (avoids dual-input confusion) */}
-        {!filters.brand && (
+        {filters.brand ? (
+          <Select
+            value={filters.model}
+            onValueChange={v => { update('model', v); update('trim', ''); }}
+          >
+            <SelectTrigger className="w-full lg:w-48 bg-card">
+              <SelectValue placeholder="Modello" />
+            </SelectTrigger>
+            <SelectContent>
+              {(brandModels[filters.brand] || []).map(m => (
+                <SelectItem key={m} value={m}>{m}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
           <AutocompleteInput
             value={filters.model}
             onChange={v => update('model', v)}
             selectedBrand={filters.brand}
             onSelectBrand={v => { update('brand', v); update('model', ''); }}
             onSelectModel={v => update('model', v)}
-            placeholder="Oppure cerca liberam..."
+            placeholder="Cerca marca o modello"
+            className="lg:min-w-[220px] lg:flex-1"
           />
         )}
 
-        <Button onClick={handleSearch} size="lg" className="gap-2 font-semibold">
-          <Search className="h-4 w-4" />
-          Cerca offerte
-        </Button>
-        {(filters.brand || filters.model) && (
-          <Button variant="outline" onClick={() => setSaveDialogOpen(true)} size="lg" className="gap-2 shrink-0">
-            <Bookmark className="h-4 w-4" />
-            Salva
-          </Button>
+        {filters.brand && (
+          <Select
+            value={filters.trim}
+            onValueChange={v => update('trim', v)}
+            disabled={!filters.model}
+          >
+            <SelectTrigger className="w-full lg:w-52 bg-card">
+              <SelectValue placeholder={filters.model ? 'Allestimento' : 'Scegli prima il modello'} />
+            </SelectTrigger>
+            <SelectContent>
+              {(modelTrims[filters.brand]?.[filters.model] || []).map(t => (
+                <SelectItem key={t} value={t}>{t}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
+
+        <div className="flex w-full lg:w-auto gap-3">
+          <Button onClick={handleSearch} size="lg" className="gap-2 font-semibold flex-1 lg:flex-none">
+            <Search className="h-4 w-4" />
+            Cerca offerte
+          </Button>
+          {(filters.brand || filters.model) && (
+            <Button variant="outline" onClick={() => setSaveDialogOpen(true)} size="lg" className="gap-2 shrink-0">
+              <Bookmark className="h-4 w-4" />
+              Salva
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Condition toggle + advanced toggle */}

@@ -4,7 +4,6 @@ import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { carBrands, brandModels } from '@/lib/mock-data';
 import { cn } from '@/lib/utils';
-import VoiceSearchButton from './VoiceSearchButton';
 
 interface Suggestion {
   type: 'brand' | 'model';
@@ -105,15 +104,10 @@ const AutocompleteInput = ({
     }
   };
 
-  const handleVoiceResult = useCallback((text: string) => {
-    onChange(text);
-    setFocused(true);
-  }, [onChange]);
-
   const showDropdown = focused && suggestions.length > 0;
 
   return (
-    <div ref={wrapperRef} className={cn('relative flex-1', className)}>
+    <div ref={wrapperRef} className={cn('relative w-full min-w-0', className)}>
       <div className="relative flex items-center">
         <Search className="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
         <Input
@@ -122,11 +116,8 @@ const AutocompleteInput = ({
           onFocus={() => setFocused(true)}
           onKeyDown={onKeyDown}
           placeholder={placeholder}
-          className="pl-9 pr-10 bg-card"
+          className="pl-9 bg-card text-foreground"
         />
-        <div className="absolute right-1">
-          <VoiceSearchButton onResult={handleVoiceResult} />
-        </div>
       </div>
 
       <AnimatePresence>
