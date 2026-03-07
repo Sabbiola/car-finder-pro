@@ -1,7 +1,4 @@
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { buildCorsHeaders, isOriginAllowed } from '../_shared/cors.ts';
 
 interface Filters {
   brand?: string; model?: string;
@@ -153,8 +150,22 @@ Query: ${query}`;
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = buildCorsHeaders(req);
   if (req.method === 'OPTIONS') {
+    if (!isOriginAllowed(req)) {
+      return new Response(JSON.stringify({ success: false, error: 'Origin not allowed' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (!isOriginAllowed(req)) {
+    return new Response(
+      JSON.stringify({ success: false, error: 'Origin not allowed' }),
+      { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 
   try {

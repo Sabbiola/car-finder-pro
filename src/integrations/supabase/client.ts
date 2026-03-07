@@ -1,8 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const isTestEnv = import.meta.env.MODE === 'test' || import.meta.env.VITEST;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || (isTestEnv ? 'http://127.0.0.1:54321' : undefined);
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || (isTestEnv ? 'test-publishable-key' : undefined);
 
 // Fail fast at startup if required env vars are missing
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {

@@ -1,10 +1,13 @@
 project_id = "zmtvsgekbxrbkeeznsuq"
 
 [functions.scrape-listings]
-verify_jwt = false
+verify_jwt = true
 
 [functions.firecrawl-scrape]
-verify_jwt = false
+verify_jwt = true
 
 [functions.scrape-detail]
-verify_jwt = false
+verify_jwt = true
+
+[functions.ai-search]
+verify_jwt = true

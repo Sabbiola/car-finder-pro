@@ -1,73 +1,76 @@
-# Welcome to your Lovable project
+# Car Finder Pro
 
-## Project info
+Web app per cercare, confrontare e salvare annunci auto usate da piu fonti (AutoScout24, Subito.it, Automobile.it, Brumbrum), con scraping via Supabase Edge Functions.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Stack
 
-## How can I edit this code?
+- React 18 + Vite + TypeScript
+- Tailwind + shadcn/ui
+- Supabase (Postgres + Auth + Edge Functions)
+- Vitest + Testing Library
 
-There are several ways of editing your application.
+## Requisiti
 
-**Use Lovable**
+- Node.js 20+
+- npm 10+
+- Supabase project configurato
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Setup locale
 
-Changes made via Lovable will be committed automatically to this repo.
+1. Installa dipendenze:
 
-**Use your preferred IDE**
+```bash
+npm ci
+```
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+2. Crea `.env` da `.env.example` e compila:
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+```bash
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_PUBLISHABLE_KEY=...
+VITE_SUPABASE_PROJECT_ID=...
+```
 
-Follow these steps:
+3. Avvia l'app:
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## Script utili
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```bash
+npm run lint
+npm run test
+npm run build
+```
 
-**Use GitHub Codespaces**
+## Edge Functions
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Funzioni principali in `supabase/functions/`:
 
-## What technologies are used for this project?
+- `scrape-listings`
+- `scrape-detail`
+- `ai-search`
+- `firecrawl-scrape`
 
-This project is built with:
+### Sicurezza
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+- JWT verification abilitata (`verify_jwt = true`) su tutte le funzioni.
+- CORS con allowlist tramite variabile `ALLOWED_ORIGINS` (lista separata da virgole).
 
-## How can I deploy this project?
+Esempio:
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+```bash
+ALLOWED_ORIGINS=https://your-app.com,https://staging.your-app.com,http://localhost:5173
+```
 
-## Can I connect a custom domain to my Lovable project?
+## CI/CD
 
-Yes, you can!
+- `.github/workflows/ci.yml`: lint, test, build frontend + typecheck Edge Functions.
+- `.github/workflows/deploy-functions.yml`: deploy delle Edge Functions su `main`.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Note sicurezza operative
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- Non salvare PAT/Git token dentro URL remote Git.
+- Se un token e stato committato o salvato in `.git/config`, ruotalo subito.

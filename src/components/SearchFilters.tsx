@@ -83,26 +83,33 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
     save(name, filters);
   };
 
+  const normalizeFilters = (current: SearchFiltersState): SearchFiltersState => {
+    const next = { ...current };
+    if (next.priceMin && next.priceMax && parseInt(next.priceMin) > parseInt(next.priceMax)) {
+      next.priceMax = '';
+    }
+    if (next.yearMin && next.yearMax && parseInt(next.yearMin) > parseInt(next.yearMax)) {
+      next.yearMax = '';
+    }
+    if (next.kmMin && next.kmMax && parseInt(next.kmMin) > parseInt(next.kmMax)) {
+      next.kmMax = '';
+    }
+    return next;
+  };
+
   const handleSearch = () => {
-    if (filters.priceMin && filters.priceMax && parseInt(filters.priceMin) > parseInt(filters.priceMax)) {
-      update('priceMax', '');
-    }
-    if (filters.yearMin && filters.yearMax && parseInt(filters.yearMin) > parseInt(filters.yearMax)) {
-      update('yearMax', '');
-    }
-    if (filters.kmMin && filters.kmMax && parseInt(filters.kmMin) > parseInt(filters.kmMax)) {
-      update('kmMax', '');
-    }
+    const nextFilters = normalizeFilters(filters);
+    setFilters(nextFilters);
 
     if (onSearch) {
-      onSearch(filters);
+      onSearch(nextFilters);
     } else {
       const params = new URLSearchParams();
-      Object.entries(filters).forEach(([k, v]) => {
+      Object.entries(nextFilters).forEach(([k, v]) => {
         if (Array.isArray(v)) params.set(k, v.join(','));
         else if (v !== '' && v !== false && v !== null) params.set(k, String(v));
       });
-      if (filters.isNew === false) params.set('isNew', 'false');
+      if (nextFilters.isNew === false) params.set('isNew', 'false');
       navigate(`/risultati?${params.toString()}`);
     }
   };

@@ -24,7 +24,7 @@ export const CACHE_TTL_HOURS = 6;
 export const MAX_RECENTLY_VIEWED = 10;
 
 /** Maximum cars in the compare basket */
-export const MAX_COMPARE_ITEMS = 4;
+export const MAX_COMPARE_ITEMS = 3;
 
 /** Supabase function invoke timeout (ms) */
 export const FUNCTION_TIMEOUT_MS = 30_000;

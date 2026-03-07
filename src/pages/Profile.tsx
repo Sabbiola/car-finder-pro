@@ -12,6 +12,7 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { useSavedSearches } from '@/hooks/useSavedSearches';
 import { supabase } from '@/integrations/supabase/client';
 import type { CarListing } from '@/lib/api/listings';
+import { toCardListing } from '@/lib/toCardListing';
 import type { SearchFiltersState } from '@/components/SearchFilters';
 
 // Cast to any to bypass missing table types (price_alerts, user_favorites etc.)
@@ -338,9 +339,8 @@ export default function Profile() {
             )}
             {!favLoading && favListings.length > 0 && (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {favListings.map(listing => (
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  <CarCard key={listing.id} listing={listing as any} />
+                {favListings.map((listing, index) => (
+                  <CarCard key={listing.id} listing={toCardListing(listing)} index={index} />
                 ))}
               </div>
             )}

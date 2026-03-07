@@ -2,6 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useFavorites } from '../hooks/useFavorites';
 
+vi.mock('../contexts/AuthContext', () => ({
+  useAuth: () => ({ user: null }),
+}));
+
 // Mock localStorage
 const localStorageMock = (() => {
   let store: Record<string, string> = {};

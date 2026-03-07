@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-
-const MAX_COMPARE = 3;
+import { MAX_COMPARE_ITEMS } from '@/lib/constants';
 
 interface CompareContextValue {
   compareIds: string[];
@@ -18,7 +17,7 @@ export function CompareProvider({ children }: { children: ReactNode }) {
 
   const addToCompare = useCallback((id: string) => {
     setCompareIds(prev => {
-      if (prev.includes(id) || prev.length >= MAX_COMPARE) return prev;
+      if (prev.includes(id) || prev.length >= MAX_COMPARE_ITEMS) return prev;
       return [...prev, id];
     });
   }, []);
@@ -34,7 +33,7 @@ export function CompareProvider({ children }: { children: ReactNode }) {
   return (
     <CompareContext.Provider value={{
       compareIds, addToCompare, removeFromCompare, clearCompare, isInCompare,
-      canAdd: compareIds.length < MAX_COMPARE,
+      canAdd: compareIds.length < MAX_COMPARE_ITEMS,
     }}>
       {children}
     </CompareContext.Provider>
