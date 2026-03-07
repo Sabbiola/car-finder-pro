@@ -84,6 +84,16 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
   };
 
   const handleSearch = () => {
+    if (filters.priceMin && filters.priceMax && parseInt(filters.priceMin) > parseInt(filters.priceMax)) {
+      update('priceMax', '');
+    }
+    if (filters.yearMin && filters.yearMax && parseInt(filters.yearMin) > parseInt(filters.yearMax)) {
+      update('yearMax', '');
+    }
+    if (filters.kmMin && filters.kmMax && parseInt(filters.kmMin) > parseInt(filters.kmMax)) {
+      update('kmMax', '');
+    }
+
     if (onSearch) {
       onSearch(filters);
     } else {

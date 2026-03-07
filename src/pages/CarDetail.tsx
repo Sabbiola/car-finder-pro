@@ -1,6 +1,7 @@
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ArrowLeft, ExternalLink, Loader2, ChevronLeft, ChevronRight, Award, FileText, MapPin, Share2, Check } from 'lucide-react';
+import { Helmet } from 'react-helmet-async';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Header from '@/components/Header';
@@ -16,6 +17,8 @@ import LoanCalculator from '@/components/LoanCalculator';
 import PriceAlertButton from '@/components/PriceAlertButton';
 import { priceRatingConfig as ratingConfig } from '@/lib/rating-config';
 import { FALLBACK_IMAGE } from '@/lib/constants';
+import Lightbox from 'yet-another-react-lightbox';
+import 'yet-another-react-lightbox/styles.css';
 
 interface ExtendedListing extends CarListing {
   description?: string | null;
@@ -44,6 +47,7 @@ const CarDetail = () => {
   const [resolvedUrl, setResolvedUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const handleShare = async () => {
     try {
@@ -233,6 +237,26 @@ const CarDetail = () => {
   }
 
   const listing = toCardListing(car);
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Car',
+    name: listing.title,
+    brand: { '@type': 'Brand', name: listing.brand },
+    model: listing.model,
+    vehicleModelDate: String(listing.year),
+    mileageFromOdometer: { '@type': 'QuantitativeValue', value: listing.km, unitCode: 'KMT' },
+    fuelType: listing.fuel || undefined,
+    offers: {
+      '@type': 'Offer',
+      price: listing.price,
+      priceCurrency: 'EUR',
+      availability: 'https://schema.org/InStock',
+      url: window.location.href,
+    },
+    image: galleryImages[0],
+  };
+
   const priceRating = listing.priceRating || 'normal';
   const ratingStyle = ratingConfig[priceRating];
 
@@ -253,6 +277,11 @@ const CarDetail = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>{listing.title} — €{listing.price.toLocaleString('it-IT')} | AutoDeal Finder</title>
+        <meta name="description" content={`${listing.title} a €${listing.price.toLocaleString('it-IT')} — ${listing.year}, ${listing.km.toLocaleString('it-IT')} km, ${listing.fuel || ''} ${listing.transmission || ''}. ${listing.location || ''}`} />
+        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
+      </Helmet>
       <Header />
 
       <div className="container py-6 space-y-8">
@@ -274,9 +303,10 @@ const CarDetail = () => {
               <img
                 src={galleryImages[imgIndex]}
                 alt={`${listing.title} - foto ${imgIndex + 1}`}
-                className="w-full h-full object-cover transition-opacity duration-200"
+                className="w-full h-full object-cover transition-opacity duration-200 cursor-pointer"
                 loading="lazy"
                 referrerPolicy="no-referrer"
+                onClick={() => setLightboxOpen(true)}
                 onError={e => {
                   (e.target as HTMLImageElement).src = FALLBACK_IMAGE;
                 }}
@@ -313,6 +343,13 @@ const CarDetail = () => {
                 </div>
               )}
             </div>
+
+            <Lightbox
+              open={lightboxOpen}
+              close={() => setLightboxOpen(false)}
+              index={imgIndex}
+              slides={galleryImages.map(src => ({ src }))}
+            />
 
             {/* Details panel */}
             <div className="p-6 lg:p-8 space-y-6 bg-card">

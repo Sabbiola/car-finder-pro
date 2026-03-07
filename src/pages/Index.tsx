@@ -4,6 +4,7 @@ import RecentlyViewedSection from '@/components/RecentlyViewedSection';
 import { useSavedSearches } from '@/hooks/useSavedSearches';
 import { useNavigate } from 'react-router-dom';
 import { Bookmark, X } from 'lucide-react';
+import { Helmet } from 'react-helmet-async';
 
 function buildParams(filters: SearchFiltersState): string {
   const params = new URLSearchParams();
@@ -34,6 +35,10 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>AutoDeal Finder — Confronta prezzi auto nuove e usate</title>
+        <meta name="description" content="Trova le migliori offerte auto in Italia. Confronta prezzi da AutoScout24, Subito.it, Automobile.it e BrumBrum in un unico posto." />
+      </Helmet>
       <Header />
 
       {/* Hero */}

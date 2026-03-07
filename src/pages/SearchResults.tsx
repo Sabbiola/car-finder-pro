@@ -1,9 +1,12 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { ArrowUpDown, Loader2, LayoutGrid, Map, Link2, Check } from 'lucide-react';
+import { Helmet } from 'react-helmet-async';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Header from '@/components/Header';
 import SearchFilters, { SearchFiltersState } from '@/components/SearchFilters';
 import CarCard from '@/components/CarCard';
+import CarCardSkeleton from '@/components/CarCardSkeleton';
+import ActiveFilterChips from '@/components/ActiveFilterChips';
 import ListingsMap from '@/components/ListingsMap';
 import { useSearchParams } from 'react-router-dom';
 import { scrapeListings, fetchListings, type CarListing } from '@/lib/api/listings';
@@ -182,13 +185,21 @@ const SearchResults = () => {
   // Reset visible count when results change
   useEffect(() => { setVisibleCount(PAGE_SIZE); }, [listings, sort]);
 
+  const { brand, model } = filters;
+
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>{brand && model ? `${brand} ${model}` : brand || 'Risultati ricerca'} — AutoDeal Finder</title>
+        <meta name="description" content={`Confronta ${listings.length} offerte${brand ? ` ${brand}` : ''}${model ? ` ${model}` : ''} da AutoScout24, Subito.it e altri.`} />
+      </Helmet>
       <Header />
       <div className="container py-6 space-y-6">
         <div className="animate-brutal-in">
           <SearchFilters compact onSearch={handleSearch} initialFilters={filters} />
         </div>
+
+        <ActiveFilterChips filters={filters} onChange={handleSearch} />
 
         <div className="flex items-center justify-between border-b border-border pb-3 animate-brutal-up" style={{ animationDelay: '100ms' }}>
           <div className="flex items-center gap-3">
@@ -306,6 +317,12 @@ const SearchResults = () => {
 
         {viewMode === 'map' ? (
           <ListingsMap listings={results} />
+        ) : loading && !scraped ? (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <CarCardSkeleton key={i} />
+            ))}
+          </div>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 stagger-children">
             {visibleResults.map((listing, i) => (
