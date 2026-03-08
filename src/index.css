@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -102,11 +102,16 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', sans-serif;
+    font-family: "Inter", sans-serif;
   }
 
-  h1, h2, h3, h4, h5, h6 {
-    font-family: 'Plus Jakarta Sans', sans-serif;
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: "Plus Jakarta Sans", sans-serif;
     letter-spacing: -0.02em;
   }
 }
@@ -114,24 +119,49 @@
 /* ── Playful animations ── */
 
 @keyframes float-up {
-  0%   { transform: translateY(32px); opacity: 0; }
-  100% { transform: translateY(0);    opacity: 1; }
+  0% {
+    transform: translateY(32px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 @keyframes slide-in {
-  0%   { transform: translateX(-20px); opacity: 0; }
-  100% { transform: translateX(0);     opacity: 1; }
+  0% {
+    transform: translateX(-20px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 @keyframes pop-in {
-  0%   { transform: scale(0.85); opacity: 0; }
-  60%  { transform: scale(1.04); }
-  100% { transform: scale(1);    opacity: 1; }
+  0% {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 @keyframes gentle-bounce {
-  0%, 100% { transform: translateY(0); }
-  50%       { transform: translateY(-5px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
 }
 
 .animate-brutal-up {
@@ -148,31 +178,57 @@
 
 /* Card hover — gentle lift */
 .brutal-hover {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 .brutal-hover:hover {
   transform: translateY(-3px);
 }
 
 /* Glitch / scan — kept but neutralised */
-.glitch-hover { position: relative; }
-.glitch-hover::before { display: none; }
-.scan-hover::before   { display: none; }
+.glitch-hover {
+  position: relative;
+}
+.glitch-hover::before {
+  display: none;
+}
+.scan-hover::before {
+  display: none;
+}
 
 /* Stagger children */
 .stagger-children > * {
   opacity: 0;
   animation: float-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-.stagger-children > *:nth-child(1)  { animation-delay: 0ms; }
-.stagger-children > *:nth-child(2)  { animation-delay: 55ms; }
-.stagger-children > *:nth-child(3)  { animation-delay: 110ms; }
-.stagger-children > *:nth-child(4)  { animation-delay: 165ms; }
-.stagger-children > *:nth-child(5)  { animation-delay: 220ms; }
-.stagger-children > *:nth-child(6)  { animation-delay: 275ms; }
-.stagger-children > *:nth-child(7)  { animation-delay: 330ms; }
-.stagger-children > *:nth-child(8)  { animation-delay: 385ms; }
-.stagger-children > *:nth-child(n+9){ animation-delay: 440ms; }
+.stagger-children > *:nth-child(1) {
+  animation-delay: 0ms;
+}
+.stagger-children > *:nth-child(2) {
+  animation-delay: 55ms;
+}
+.stagger-children > *:nth-child(3) {
+  animation-delay: 110ms;
+}
+.stagger-children > *:nth-child(4) {
+  animation-delay: 165ms;
+}
+.stagger-children > *:nth-child(5) {
+  animation-delay: 220ms;
+}
+.stagger-children > *:nth-child(6) {
+  animation-delay: 275ms;
+}
+.stagger-children > *:nth-child(7) {
+  animation-delay: 330ms;
+}
+.stagger-children > *:nth-child(8) {
+  animation-delay: 385ms;
+}
+.stagger-children > *:nth-child(n + 9) {
+  animation-delay: 440ms;
+}
 
 /* Gradient text utility */
 .gradient-text {

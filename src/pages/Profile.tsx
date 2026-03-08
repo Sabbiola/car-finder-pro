@@ -1,19 +1,19 @@
-import { useState, useEffect } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
-import { User, Bell, Bookmark, Heart, LogOut, Trash2, Search, Calendar, Euro } from 'lucide-react';
-import Header from '@/components/Header';
-import CarCard from '@/components/CarCard';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { useAuth } from '@/contexts/AuthContext';
-import { useFavorites } from '@/hooks/useFavorites';
-import { useSavedSearches } from '@/hooks/useSavedSearches';
-import { supabase } from '@/integrations/supabase/client';
-import type { CarListing } from '@/lib/api/listings';
-import { toCardListing } from '@/lib/toCardListing';
-import type { SearchFiltersState } from '@/components/SearchFilters';
+import { useState, useEffect } from "react";
+import { Navigate, useNavigate } from "react-router-dom";
+import { User, Bell, Bookmark, Heart, LogOut, Trash2, Search, Calendar, Euro } from "lucide-react";
+import Header from "@/components/Header";
+import CarCard from "@/components/CarCard";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { useAuth } from "@/contexts/AuthContext";
+import { useFavorites } from "@/hooks/useFavorites";
+import { useSavedSearches } from "@/hooks/useSavedSearches";
+import { supabase } from "@/integrations/supabase/client";
+import type { CarListing } from "@/lib/api/listings";
+import { toCardListing } from "@/lib/toCardListing";
+import type { SearchFiltersState } from "@/components/SearchFilters";
 
 // Cast to any to bypass missing table types (price_alerts, user_favorites etc.)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -37,10 +37,11 @@ function filtersLabel(filters: SearchFiltersState): string {
   const parts: string[] = [];
   if (filters.brand) parts.push(filters.brand);
   if (filters.model) parts.push(filters.model);
-  if (filters.yearMin || filters.yearMax) parts.push(`${filters.yearMin || ''}–${filters.yearMax || ''}`);
-  if (filters.priceMax) parts.push(`max €${Number(filters.priceMax).toLocaleString('it-IT')}`);
+  if (filters.yearMin || filters.yearMax)
+    parts.push(`${filters.yearMin || ""}–${filters.yearMax || ""}`);
+  if (filters.priceMax) parts.push(`max €${Number(filters.priceMax).toLocaleString("it-IT")}`);
   if (filters.fuel) parts.push(filters.fuel);
-  return parts.length ? parts.join(' · ') : 'Tutti i filtri';
+  return parts.length ? parts.join(" · ") : "Tutti i filtri";
 }
 
 export default function Profile() {
@@ -53,17 +54,18 @@ export default function Profile() {
   const [alertsLoading, setAlertsLoading] = useState(false);
   const [favListings, setFavListings] = useState<CarListing[]>([]);
   const [favLoading, setFavLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('info');
+  const [activeTab, setActiveTab] = useState("info");
 
   // Load alerts when tab is active — must be before any early return
   useEffect(() => {
-    if (activeTab !== 'alerts' || !user) return;
+    if (activeTab !== "alerts" || !user) return;
     setAlertsLoading(true);
-    sb
-      .from('price_alerts')
-      .select('id, listing_id, target_price, is_active, notified_at, created_at, car_listings(title, price, image_url)')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
+    sb.from("price_alerts")
+      .select(
+        "id, listing_id, target_price, is_active, notified_at, created_at, car_listings(title, price, image_url)",
+      )
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
       .then(({ data }: { data: AlertRow[] | null }) => {
         setAlerts(data || []);
         setAlertsLoading(false);
@@ -72,13 +74,15 @@ export default function Profile() {
 
   // Load favorite listings when tab is active — must be before any early return
   useEffect(() => {
-    if (activeTab !== 'favorites' || !user) return;
-    if (favorites.length === 0) { setFavListings([]); return; }
+    if (activeTab !== "favorites" || !user) return;
+    if (favorites.length === 0) {
+      setFavListings([]);
+      return;
+    }
     setFavLoading(true);
-    sb
-      .from('car_listings')
-      .select('*')
-      .in('id', favorites)
+    sb.from("car_listings")
+      .select("*")
+      .in("id", favorites)
       .then(({ data }: { data: CarListing[] | null }) => {
         setFavListings(data || []);
         setFavLoading(false);
@@ -98,25 +102,27 @@ export default function Profile() {
   }
   if (!user) return <Navigate to="/" replace />;
 
-  const initials = user.email ? user.email.slice(0, 2).toUpperCase() : 'U';
-  const joinedDate = new Date(user.created_at).toLocaleDateString('it-IT', {
-    year: 'numeric', month: 'long', day: 'numeric',
+  const initials = user.email ? user.email.slice(0, 2).toUpperCase() : "U";
+  const joinedDate = new Date(user.created_at).toLocaleDateString("it-IT", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
   });
 
   const deleteAlert = async (id: string) => {
-    await sb.from('price_alerts').delete().eq('id', id);
-    setAlerts(prev => prev.filter(a => a.id !== id));
+    await sb.from("price_alerts").delete().eq("id", id);
+    setAlerts((prev) => prev.filter((a) => a.id !== id));
   };
 
   function buildSearchParams(filters: SearchFiltersState): string {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([k, v]) => {
-      if (k === 'isNew') {
-        if (v === true) params.set('isNew', 'true');
-        else if (v === false) params.set('isNew', 'false');
+      if (k === "isNew") {
+        if (v === true) params.set("isNew", "true");
+        else if (v === false) params.set("isNew", "false");
       } else if (Array.isArray(v)) {
-        if ((v as string[]).length) params.set(k, (v as string[]).join(','));
-      } else if (v !== '' && v !== null && v !== undefined) {
+        if ((v as string[]).length) params.set(k, (v as string[]).join(","));
+      } else if (v !== "" && v !== null && v !== undefined) {
         params.set(k, String(v));
       }
     });
@@ -131,7 +137,6 @@ export default function Profile() {
     <div className="min-h-screen bg-background">
       <Header />
       <div className="container py-8 max-w-4xl">
-
         {/* Page title */}
         <div className="flex items-center gap-3 border-b border-border pb-4 mb-8 animate-brutal-in">
           <User className="h-5 w-5" />
@@ -191,7 +196,7 @@ export default function Profile() {
                   <p className="text-xs text-muted-foreground mt-0.5">Ricerche</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-foreground">{alerts.length || '–'}</p>
+                  <p className="text-2xl font-bold text-foreground">{alerts.length || "–"}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">Alert</p>
                 </div>
               </div>
@@ -220,11 +225,12 @@ export default function Profile() {
                   <Bell className="h-8 w-8 mx-auto mb-3 text-muted-foreground/50" />
                   <p className="text-sm text-muted-foreground">Nessun alert attivo.</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Apri un annuncio e clicca sull&apos;icona campanella per impostare un alert prezzo.
+                    Apri un annuncio e clicca sull&apos;icona campanella per impostare un alert
+                    prezzo.
                   </p>
                 </div>
               )}
-              {alerts.map(alert => (
+              {alerts.map((alert) => (
                 <div
                   key={alert.id}
                   className="flex items-center gap-4 rounded-2xl border border-border/60 bg-card p-4"
@@ -238,20 +244,28 @@ export default function Profile() {
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">
-                      {alert.car_listings?.title || 'Auto'}
+                      {alert.car_listings?.title || "Auto"}
                     </p>
                     <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Euro className="h-3 w-3" />
-                        Attuale: <strong className="text-foreground">€{(alert.car_listings?.price || 0).toLocaleString('it-IT')}</strong>
+                        Attuale:{" "}
+                        <strong className="text-foreground">
+                          €{(alert.car_listings?.price || 0).toLocaleString("it-IT")}
+                        </strong>
                       </span>
                       <span>
-                        Target: <strong className="text-violet-600">€{alert.target_price.toLocaleString('it-IT')}</strong>
+                        Target:{" "}
+                        <strong className="text-violet-600">
+                          €{alert.target_price.toLocaleString("it-IT")}
+                        </strong>
                       </span>
                     </div>
                     <div className="mt-1.5">
                       {alert.notified_at ? (
-                        <Badge variant="secondary" className="text-[10px]">Notificato</Badge>
+                        <Badge variant="secondary" className="text-[10px]">
+                          Notificato
+                        </Badge>
                       ) : (
                         <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-0">
                           Attivo
@@ -284,7 +298,7 @@ export default function Profile() {
                   </p>
                 </div>
               )}
-              {searches.map(search => (
+              {searches.map((search) => (
                 <div
                   key={search.id}
                   className="flex items-center gap-4 rounded-2xl border border-border/60 bg-card p-4"
@@ -296,7 +310,7 @@ export default function Profile() {
                     </p>
                     <p className="text-[10px] text-muted-foreground/60 mt-0.5 flex items-center gap-1">
                       <Calendar className="h-2.5 w-2.5" />
-                      {new Date(search.createdAt).toLocaleDateString('it-IT')}
+                      {new Date(search.createdAt).toLocaleDateString("it-IT")}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -335,7 +349,9 @@ export default function Profile() {
               </div>
             )}
             {favLoading && (
-              <p className="text-sm text-muted-foreground py-8 text-center">Caricamento preferiti…</p>
+              <p className="text-sm text-muted-foreground py-8 text-center">
+                Caricamento preferiti…
+              </p>
             )}
             {!favLoading && favListings.length > 0 && (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">

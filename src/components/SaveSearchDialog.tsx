@@ -1,9 +1,15 @@
-import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Bookmark } from 'lucide-react';
+import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Bookmark } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -23,7 +29,7 @@ const SaveSearchDialog = ({ open, defaultName, onSave, onClose }: Props) => {
   };
 
   return (
-    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm rounded-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -38,14 +44,18 @@ const SaveSearchDialog = ({ open, defaultName, onSave, onClose }: Props) => {
           <Input
             id="search-name"
             value={name}
-            onChange={e => setName(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSave();
+            }}
             autoFocus
             className="rounded-xl"
           />
         </div>
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose} className="rounded-xl">Annulla</Button>
+          <Button variant="outline" onClick={onClose} className="rounded-xl">
+            Annulla
+          </Button>
           <Button
             onClick={handleSave}
             disabled={!name.trim()}

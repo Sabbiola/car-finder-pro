@@ -1,10 +1,10 @@
-import { ExternalLink, Award, MapPin } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { CarListing, sourceLabels, sourceColors } from '@/lib/mock-data';
-import { useNavigate } from 'react-router-dom';
-import FavoriteButton from '@/components/FavoriteButton';
-import CompareButton from '@/components/CompareButton';
-import { priceRatingConfig } from '@/lib/rating-config';
+import { ExternalLink, Award, MapPin } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { CarListing, sourceLabels, sourceColors } from "@/lib/mock-data";
+import { useNavigate } from "react-router-dom";
+import FavoriteButton from "@/components/FavoriteButton";
+import CompareButton from "@/components/CompareButton";
+import { priceRatingConfig } from "@/lib/rating-config";
 
 interface Props {
   listing: CarListing;
@@ -14,8 +14,8 @@ interface Props {
 
 const CarCard = ({ listing, showCompare }: Props) => {
   const navigate = useNavigate();
-  const rating = priceRatingConfig[listing.priceRating || 'normal'];
-  const isBest = listing.priceRating === 'best';
+  const rating = priceRatingConfig[listing.priceRating || "normal"];
+  const isBest = listing.priceRating === "best";
 
   return (
     <div
@@ -30,16 +30,17 @@ const CarCard = ({ listing, showCompare }: Props) => {
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           loading="lazy"
           referrerPolicy="no-referrer"
-          onError={e => {
-            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=80';
+          onError={(e) => {
+            (e.target as HTMLImageElement).src =
+              "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=80";
           }}
         />
         {/* Source badge(s) */}
         <div className="absolute top-2 left-2 flex flex-wrap gap-1 max-w-[70%]">
-          {(listing.allSources || [listing.source]).map(src => (
+          {(listing.allSources || [listing.source]).map((src) => (
             <span
               key={src}
-              className={`${sourceColors[src] || 'bg-gray-500'} text-white text-[10px] font-semibold px-2.5 py-0.5 rounded-full shadow-sm`}
+              className={`${sourceColors[src] || "bg-gray-500"} text-white text-[10px] font-semibold px-2.5 py-0.5 rounded-full shadow-sm`}
             >
               {sourceLabels[src] || src}
             </span>
@@ -63,21 +64,25 @@ const CarCard = ({ listing, showCompare }: Props) => {
         </h3>
 
         <div className="text-2xl font-bold bg-gradient-to-r from-violet-600 to-indigo-500 bg-clip-text text-transparent">
-          €{listing.price.toLocaleString('it-IT')}
+          €{listing.price.toLocaleString("it-IT")}
         </div>
 
         {/* Spec pills */}
         <div className="flex flex-wrap gap-1.5">
-          <span className="text-[11px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{listing.year}</span>
           <span className="text-[11px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-            {listing.km > 0 ? `${(listing.km / 1000).toFixed(0)}k km` : 'Nuovo'}
+            {listing.year}
+          </span>
+          <span className="text-[11px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+            {listing.km > 0 ? `${(listing.km / 1000).toFixed(0)}k km` : "Nuovo"}
           </span>
           {listing.fuel && (
-            <span className="text-[11px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{listing.fuel}</span>
+            <span className="text-[11px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+              {listing.fuel}
+            </span>
           )}
           {listing.transmission && (
             <span className="text-[11px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-              {listing.transmission === 'Automatico' ? 'Auto' : 'Man'}
+              {listing.transmission === "Automatico" ? "Auto" : "Man"}
             </span>
           )}
         </div>
@@ -92,14 +97,20 @@ const CarCard = ({ listing, showCompare }: Props) => {
         {/* Bottom row */}
         <div className="flex items-center justify-between pt-2 border-t border-border/50 gap-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant="outline" className={`text-[10px] font-semibold rounded-full px-2.5 py-0.5 border-0 ${rating.className}`}>
+            <Badge
+              variant="outline"
+              className={`text-[10px] font-semibold rounded-full px-2.5 py-0.5 border-0 ${rating.className}`}
+            >
               {rating.label}
             </Badge>
             {showCompare && <CompareButton id={listing.id} />}
           </div>
           <button
             className="text-muted-foreground hover:text-accent transition-colors"
-            onClick={e => { e.stopPropagation(); window.open(listing.url, '_blank'); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              window.open(listing.url, "_blank");
+            }}
           >
             <ExternalLink className="h-3.5 w-3.5" />
           </button>

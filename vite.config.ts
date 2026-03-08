@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   test: {
-    environment: 'jsdom',
+    environment: "jsdom",
     globals: true,
     setupFiles: [],
   },

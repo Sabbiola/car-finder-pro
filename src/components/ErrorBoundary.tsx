@@ -1,6 +1,6 @@
-import { Component, type ReactNode, type ErrorInfo } from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Component, type ReactNode, type ErrorInfo } from "react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   children: ReactNode;
@@ -24,7 +24,7 @@ class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     // Log to console in development; swap for Sentry/DataDog in production
-    console.error('[ErrorBoundary] Uncaught error:', error, info.componentStack);
+    console.error("[ErrorBoundary] Uncaught error:", error, info.componentStack);
   }
 
   handleReset = () => {
@@ -57,23 +57,21 @@ class ErrorBoundary extends Component<Props, State> {
                   </summary>
                   <pre className="mt-2 p-3 bg-muted rounded-xl text-[10px] overflow-auto max-h-40">
                     {this.state.error.message}
-                    {'\n'}
+                    {"\n"}
                     {this.state.error.stack}
                   </pre>
                 </details>
               )}
             </div>
             <div className="flex gap-3 justify-center">
-              <Button
-                onClick={this.handleReset}
-                variant="outline"
-                className="gap-2 rounded-xl"
-              >
+              <Button onClick={this.handleReset} variant="outline" className="gap-2 rounded-xl">
                 <RefreshCw className="h-4 w-4" />
                 Riprova
               </Button>
               <Button
-                onClick={() => { window.location.href = '/'; }}
+                onClick={() => {
+                  window.location.href = "/";
+                }}
                 className="gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-500 text-white border-0"
               >
                 Torna alla home

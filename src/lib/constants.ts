@@ -1,15 +1,15 @@
 /** Fallback image used when a car listing has no photo */
 export const FALLBACK_IMAGE =
-  'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=80';
+  "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=80";
 
 /** Valid sort options for search results */
 export const VALID_SORT_OPTIONS = [
-  'price-asc',
-  'price-desc',
-  'km-asc',
-  'year-desc',
-  'value-asc',
-  'best-deal',
+  "price-asc",
+  "price-desc",
+  "km-asc",
+  "year-desc",
+  "value-asc",
+  "best-deal",
 ] as const;
 
 export type SortOption = (typeof VALID_SORT_OPTIONS)[number];

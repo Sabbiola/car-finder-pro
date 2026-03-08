@@ -1,75 +1,81 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { ArrowUpDown, Loader2, LayoutGrid, Map, Link2, Check } from 'lucide-react';
-import { Helmet } from 'react-helmet-async';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import Header from '@/components/Header';
-import SearchFilters, { SearchFiltersState } from '@/components/SearchFilters';
-import CarCard from '@/components/CarCard';
-import CarCardSkeleton from '@/components/CarCardSkeleton';
-import ActiveFilterChips from '@/components/ActiveFilterChips';
-import ListingsMap from '@/components/ListingsMap';
-import { useSearchParams } from 'react-router-dom';
-import { scrapeListings, fetchListings, type CarListing } from '@/lib/api/listings';
-import { toCardListing } from '@/lib/toCardListing';
-import { useToast } from '@/hooks/use-toast';
-import { sourceLabels, sourceColors } from '@/lib/mock-data';
-import { VALID_SORT_OPTIONS, type SortOption, PAGE_SIZE, CACHE_TTL_HOURS } from '@/lib/constants';
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { ArrowUpDown, Loader2, LayoutGrid, Map, Link2, Check } from "lucide-react";
+import { Helmet } from "react-helmet-async";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import Header from "@/components/Header";
+import SearchFilters, { SearchFiltersState } from "@/components/SearchFilters";
+import CarCard from "@/components/CarCard";
+import CarCardSkeleton from "@/components/CarCardSkeleton";
+import ActiveFilterChips from "@/components/ActiveFilterChips";
+import ListingsMap from "@/components/ListingsMap";
+import { useSearchParams } from "react-router-dom";
+import { scrapeListings, fetchListings, type CarListing } from "@/lib/api/listings";
+import { toCardListing } from "@/lib/toCardListing";
+import { useToast } from "@/hooks/use-toast";
+import { sourceLabels, sourceColors } from "@/lib/mock-data";
+import { VALID_SORT_OPTIONS, type SortOption, PAGE_SIZE, CACHE_TTL_HOURS } from "@/lib/constants";
 
 const sortLabels: Record<SortOption, string> = {
-  'price-asc': 'Prezzo ↑',
-  'price-desc': 'Prezzo ↓',
-  'km-asc': 'Km ↑',
-  'year-desc': 'Anno ↓',
-  'value-asc': 'Miglior valore',
-  'best-deal': 'Migliori affari',
+  "price-asc": "Prezzo ↑",
+  "price-desc": "Prezzo ↓",
+  "km-asc": "Km ↑",
+  "year-desc": "Anno ↓",
+  "value-asc": "Miglior valore",
+  "best-deal": "Migliori affari",
 };
 
 function parseSortParam(raw: string | null): SortOption {
   if (raw && (VALID_SORT_OPTIONS as readonly string[]).includes(raw)) {
     return raw as SortOption;
   }
-  return 'price-asc';
+  return "price-asc";
 }
 
 function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
-  const sourcesRaw = params.get('sources');
+  const sourcesRaw = params.get("sources");
   const sources = sourcesRaw
-    ? sourcesRaw.split(',').filter(s => s.length > 0)
-    : ['autoscout24', 'subito', 'automobile', 'brumbrum'];
+    ? sourcesRaw.split(",").filter((s) => s.length > 0)
+    : ["autoscout24", "subito", "automobile", "brumbrum"];
 
   return {
-    brand: params.get('brand') || '',
-    model: params.get('model') || '',
-    trim: params.get('trim') || '',
-    yearMin: params.get('yearMin') || '',
-    yearMax: params.get('yearMax') || '',
-    priceMin: params.get('priceMin') || '',
-    priceMax: params.get('priceMax') || '',
-    kmMin: params.get('kmMin') || '',
-    kmMax: params.get('kmMax') || '',
-    fuel: params.get('fuel') || '',
-    transmission: params.get('transmission') || '',
-    isNew: params.get('isNew') === 'true' ? true : params.get('isNew') === 'false' ? false : null,
+    brand: params.get("brand") || "",
+    model: params.get("model") || "",
+    trim: params.get("trim") || "",
+    yearMin: params.get("yearMin") || "",
+    yearMax: params.get("yearMax") || "",
+    priceMin: params.get("priceMin") || "",
+    priceMax: params.get("priceMax") || "",
+    kmMin: params.get("kmMin") || "",
+    kmMax: params.get("kmMax") || "",
+    fuel: params.get("fuel") || "",
+    transmission: params.get("transmission") || "",
+    isNew: params.get("isNew") === "true" ? true : params.get("isNew") === "false" ? false : null,
     sources,
-    color: params.get('color') || '',
-    doors: params.get('doors') || '',
-    bodyType: params.get('bodyType') || '',
-    location: params.get('location') || '',
-    sellerType: (params.get('sellerType') as 'all' | 'private' | 'dealer') || 'all',
-    emissionClass: params.get('emissionClass') || '',
+    color: params.get("color") || "",
+    doors: params.get("doors") || "",
+    bodyType: params.get("bodyType") || "",
+    location: params.get("location") || "",
+    sellerType: (params.get("sellerType") as "all" | "private" | "dealer") || "all",
+    emissionClass: params.get("emissionClass") || "",
   };
 }
 
 const SearchResults = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [sort, setSort] = useState<SortOption>(() => parseSortParam(searchParams.get('sort')));
+  const [sort, setSort] = useState<SortOption>(() => parseSortParam(searchParams.get("sort")));
   const initialFilters = useMemo(() => parseFiltersFromParams(searchParams), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [filters, setFilters] = useState<SearchFiltersState>(initialFilters);
   const [listings, setListings] = useState<CarListing[]>([]);
   const [loading, setLoading] = useState(false);
   const [scraped, setScraped] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
+  const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
   const [copied, setCopied] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -81,7 +87,7 @@ const SearchResults = () => {
       if (!forceRefresh) {
         const existing = await fetchListings(currentFilters);
         if (existing.length > 0) {
-          const newestTs = Math.max(...existing.map(l => new Date(l.scraped_at).getTime()));
+          const newestTs = Math.max(...existing.map((l) => new Date(l.scraped_at).getTime()));
           const ageHours = (Date.now() - newestTs) / 3_600_000;
           if (ageHours < CACHE_TTL_HOURS) {
             setListings(existing);
@@ -94,7 +100,7 @@ const SearchResults = () => {
           setScraped(true);
         }
       }
-      toast({ title: 'Ricerca in corso...', description: 'Scraping annunci reali dai portali' });
+      toast({ title: "Ricerca in corso...", description: "Scraping annunci reali dai portali" });
       const result = await scrapeListings(currentFilters);
       if (result?.success) {
         const fresh = await fetchListings(currentFilters);
@@ -102,11 +108,19 @@ const SearchResults = () => {
         setScraped(true);
         toast({ title: `${fresh.length} annunci trovati` });
       } else {
-        toast({ title: 'Errore', description: result?.error || 'Scraping fallito', variant: 'destructive' });
+        toast({
+          title: "Errore",
+          description: result?.error || "Scraping fallito",
+          variant: "destructive",
+        });
       }
     } catch (err) {
-      console.error('[SearchResults] Error fetching listings:', err);
-      toast({ title: 'Errore', description: 'Impossibile caricare gli annunci', variant: 'destructive' });
+      console.error("[SearchResults] Error fetching listings:", err);
+      toast({
+        title: "Errore",
+        description: "Impossibile caricare gli annunci",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -126,22 +140,30 @@ const SearchResults = () => {
     const list = [...listings];
     const currentYear = new Date().getFullYear();
     switch (sort) {
-      case 'price-asc': list.sort((a, b) => a.price - b.price); break;
-      case 'price-desc': list.sort((a, b) => b.price - a.price); break;
-      case 'km-asc': list.sort((a, b) => a.km - b.km); break;
-      case 'year-desc': list.sort((a, b) => b.year - a.year); break;
-      case 'value-asc':
+      case "price-asc":
+        list.sort((a, b) => a.price - b.price);
+        break;
+      case "price-desc":
+        list.sort((a, b) => b.price - a.price);
+        break;
+      case "km-asc":
+        list.sort((a, b) => a.km - b.km);
+        break;
+      case "year-desc":
+        list.sort((a, b) => b.year - a.year);
+        break;
+      case "value-asc":
         list.sort((a, b) => {
           const scoreA = a.price / (currentYear - a.year + 1);
           const scoreB = b.price / (currentYear - b.year + 1);
           return scoreA - scoreB;
         });
         break;
-      case 'best-deal':
+      case "best-deal":
         list.sort((a, b) => {
           const order: Record<string, number> = { best: 0, good: 1, normal: 2 };
-          const ra = order[a.price_rating || 'normal'] ?? 2;
-          const rb = order[b.price_rating || 'normal'] ?? 2;
+          const ra = order[a.price_rating || "normal"] ?? 2;
+          const rb = order[b.price_rating || "normal"] ?? 2;
           return ra !== rb ? ra - rb : a.price - b.price;
         });
         break;
@@ -154,19 +176,22 @@ const SearchResults = () => {
 
   const stats = useMemo(() => {
     if (!results.length) return null;
-    const prices = results.map(r => r.price);
-    const kms = results.map(r => r.km).filter(k => k > 0);
-    const fuelCounts = results.reduce((acc, r) => {
-      if (r.fuel) acc[r.fuel] = (acc[r.fuel] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    const prices = results.map((r) => r.price);
+    const kms = results.map((r) => r.km).filter((k) => k > 0);
+    const fuelCounts = results.reduce(
+      (acc, r) => {
+        if (r.fuel) acc[r.fuel] = (acc[r.fuel] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
     const topFuel = Object.entries(fuelCounts).sort((a, b) => b[1] - a[1])[0];
     return {
       minPrice: Math.min(...prices),
       avgPrice: Math.round(prices.reduce((s, p) => s + p, 0) / prices.length),
       maxPrice: Math.max(...prices),
       avgKm: kms.length ? Math.round(kms.reduce((s, k) => s + k, 0) / kms.length) : null,
-      topFuel: topFuel ? `${topFuel[0]} ${Math.round(topFuel[1] / results.length * 100)}%` : null,
+      topFuel: topFuel ? `${topFuel[0]} ${Math.round((topFuel[1] / results.length) * 100)}%` : null,
     };
   }, [results]);
 
@@ -175,23 +200,32 @@ const SearchResults = () => {
     const el = sentinelRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
-      entries => { if (entries[0].isIntersecting && hasMore) setVisibleCount(c => c + PAGE_SIZE); },
-      { rootMargin: '200px' }
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore) setVisibleCount((c) => c + PAGE_SIZE);
+      },
+      { rootMargin: "200px" },
     );
     observer.observe(el);
     return () => observer.disconnect();
   }, [hasMore]);
 
   // Reset visible count when results change
-  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [listings, sort]);
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [listings, sort]);
 
   const { brand, model } = filters;
 
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
-        <title>{brand && model ? `${brand} ${model}` : brand || 'Risultati ricerca'} — AutoDeal Finder</title>
-        <meta name="description" content={`Confronta ${listings.length} offerte${brand ? ` ${brand}` : ''}${model ? ` ${model}` : ''} da AutoScout24, Subito.it e altri.`} />
+        <title>
+          {brand && model ? `${brand} ${model}` : brand || "Risultati ricerca"} — AutoDeal Finder
+        </title>
+        <meta
+          name="description"
+          content={`Confronta ${listings.length} offerte${brand ? ` ${brand}` : ""}${model ? ` ${model}` : ""} da AutoScout24, Subito.it e altri.`}
+        />
       </Helmet>
       <Header />
       <div className="container py-6 space-y-6">
@@ -201,7 +235,10 @@ const SearchResults = () => {
 
         <ActiveFilterChips filters={filters} onChange={handleSearch} />
 
-        <div className="flex items-center justify-between border-b border-border pb-3 animate-brutal-up" style={{ animationDelay: '100ms' }}>
+        <div
+          className="flex items-center justify-between border-b border-border pb-3 animate-brutal-up"
+          style={{ animationDelay: "100ms" }}
+        >
           <div className="flex items-center gap-3">
             {loading && !scraped ? (
               <span className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -215,16 +252,21 @@ const SearchResults = () => {
                 </p>
                 {scraped && results.length > 0 && (
                   <div className="flex items-center gap-1 flex-wrap">
-                    {(['autoscout24', 'subito', 'automobile', 'brumbrum'] as const).map(src => {
-                      const count = listings.filter(l => l.source === src).length;
+                    {(["autoscout24", "subito", "automobile", "brumbrum"] as const).map((src) => {
+                      const count = listings.filter((l) => l.source === src).length;
                       return (
                         <span
                           key={src}
-                          className={`text-[9px] font-semibold px-2 py-0.5 rounded-full text-white ${count > 0 ? sourceColors[src] : 'bg-muted text-muted-foreground'}`}
+                          className={`text-[9px] font-semibold px-2 py-0.5 rounded-full text-white ${count > 0 ? sourceColors[src] : "bg-muted text-muted-foreground"}`}
                           style={count === 0 ? { opacity: 0.4 } : undefined}
                           title={`${sourceLabels[src]}: ${count} annunci`}
                         >
-                          {sourceLabels[src].replace('AutoScout24', 'AS24').replace('Automobile.it', 'Auto.it').replace('Subito.it', 'Subito').replace('Brumbrum', 'BB')}: {count}
+                          {sourceLabels[src]
+                            .replace("AutoScout24", "AS24")
+                            .replace("Automobile.it", "Auto.it")
+                            .replace("Subito.it", "Subito")
+                            .replace("Brumbrum", "BB")}
+                          : {count}
                         </span>
                       );
                     })}
@@ -239,7 +281,10 @@ const SearchResults = () => {
               </span>
             )}
             {!loading && scraped && (
-              <button onClick={() => doSearch(filters, true)} className="text-xs text-muted-foreground hover:text-accent hover:underline transition-colors">
+              <button
+                onClick={() => doSearch(filters, true)}
+                className="text-xs text-muted-foreground hover:text-accent hover:underline transition-colors"
+              >
                 ↻ Aggiorna
               </button>
             )}
@@ -249,15 +294,15 @@ const SearchResults = () => {
             {/* View toggle — segmented control */}
             <div className="flex items-center gap-0.5 bg-muted p-0.5 rounded-lg">
               <button
-                onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                onClick={() => setViewMode("grid")}
+                className={`p-1.5 rounded-md transition-all ${viewMode === "grid" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 aria-label="Vista griglia"
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
               </button>
               <button
-                onClick={() => setViewMode('map')}
-                className={`p-1.5 rounded-md transition-all ${viewMode === 'map' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                onClick={() => setViewMode("map")}
+                className={`p-1.5 rounded-md transition-all ${viewMode === "map" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 aria-label="Vista mappa"
               >
                 <Map className="h-3.5 w-3.5" />
@@ -275,47 +320,64 @@ const SearchResults = () => {
               title="Copia link ricerca"
               aria-label="Copia link"
             >
-              {copied
-                ? <Check className="h-3.5 w-3.5 text-emerald-500" />
-                : <Link2 className="h-3.5 w-3.5" />
-              }
+              {copied ? (
+                <Check className="h-3.5 w-3.5 text-emerald-500" />
+              ) : (
+                <Link2 className="h-3.5 w-3.5" />
+              )}
             </button>
 
-          <Select value={sort} onValueChange={v => {
-            const s = parseSortParam(v);
-            setSort(s);
-            setSearchParams(prev => { prev.set('sort', s); return prev; }, { replace: true });
-          }}>
-            <SelectTrigger className="w-40 bg-card text-xs rounded-lg border">
-              <ArrowUpDown className="h-3 w-3 mr-1 text-muted-foreground" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="rounded-xl border shadow-lg">
-              {Object.entries(sortLabels).map(([k, v]) => (
-                <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Select
+              value={sort}
+              onValueChange={(v) => {
+                const s = parseSortParam(v);
+                setSort(s);
+                setSearchParams(
+                  (prev) => {
+                    prev.set("sort", s);
+                    return prev;
+                  },
+                  { replace: true },
+                );
+              }}
+            >
+              <SelectTrigger className="w-40 bg-card text-xs rounded-lg border">
+                <ArrowUpDown className="h-3 w-3 mr-1 text-muted-foreground" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border shadow-lg">
+                {Object.entries(sortLabels).map(([k, v]) => (
+                  <SelectItem key={k} value={k} className="text-xs">
+                    {v}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
         {stats && scraped && (
           <div className="flex flex-wrap gap-2 animate-brutal-in">
             {[
-              { label: 'Min', value: `€${stats.minPrice.toLocaleString('it-IT')}` },
-              { label: 'Media', value: `€${stats.avgPrice.toLocaleString('it-IT')}` },
-              { label: 'Max', value: `€${stats.maxPrice.toLocaleString('it-IT')}` },
-              ...(stats.avgKm ? [{ label: 'Km medi', value: stats.avgKm.toLocaleString('it-IT') }] : []),
-              ...(stats.topFuel ? [{ label: 'Carburante', value: stats.topFuel }] : []),
+              { label: "Min", value: `€${stats.minPrice.toLocaleString("it-IT")}` },
+              { label: "Media", value: `€${stats.avgPrice.toLocaleString("it-IT")}` },
+              { label: "Max", value: `€${stats.maxPrice.toLocaleString("it-IT")}` },
+              ...(stats.avgKm
+                ? [{ label: "Km medi", value: stats.avgKm.toLocaleString("it-IT") }]
+                : []),
+              ...(stats.topFuel ? [{ label: "Carburante", value: stats.topFuel }] : []),
             ].map(({ label, value }) => (
-              <span key={label} className="text-xs bg-muted px-3 py-1.5 rounded-full text-muted-foreground">
+              <span
+                key={label}
+                className="text-xs bg-muted px-3 py-1.5 rounded-full text-muted-foreground"
+              >
                 {label} <strong className="text-foreground">{value}</strong>
               </span>
             ))}
           </div>
         )}
 
-        {viewMode === 'map' ? (
+        {viewMode === "map" ? (
           <ListingsMap listings={results} />
         ) : loading && !scraped ? (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -332,7 +394,7 @@ const SearchResults = () => {
         )}
 
         {/* Infinite scroll sentinel — grid mode only */}
-        {viewMode === 'grid' && (
+        {viewMode === "grid" && (
           <>
             <div ref={sentinelRef} className="h-4" />
             {hasMore && (
@@ -352,7 +414,10 @@ const SearchResults = () => {
           <div className="text-center py-16 text-muted-foreground space-y-2">
             <p className="text-sm font-semibold text-foreground">Nessun risultato</p>
             <p className="text-xs">Modifica i filtri di ricerca o cambia brand/modello</p>
-            <button onClick={() => doSearch(filters, true)} className="text-xs text-violet-600 hover:underline mt-2 block mx-auto">
+            <button
+              onClick={() => doSearch(filters, true)}
+              className="text-xs text-violet-600 hover:underline mt-2 block mx-auto"
+            >
               ↻ Riprova
             </button>
           </div>

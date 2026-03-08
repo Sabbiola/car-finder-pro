@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import type { SearchFiltersState } from '@/components/SearchFilters';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { useState, useEffect } from "react";
+import type { SearchFiltersState } from "@/components/SearchFilters";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface SavedSearch {
   id: string;
@@ -10,10 +10,14 @@ export interface SavedSearch {
   createdAt: string;
 }
 
-const LS_KEY = 'savedSearches';
+const LS_KEY = "savedSearches";
 
 function readFromStorage(): SavedSearch[] {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch { return []; }
+  try {
+    return JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+  } catch {
+    return [];
+  }
 }
 
 export function useSavedSearches() {
@@ -27,19 +31,21 @@ export function useSavedSearches() {
       return;
     }
     supabase
-      .from('user_saved_searches')
-      .select('id, name, filters, created_at')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
+      .from("user_saved_searches")
+      .select("id, name, filters, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
       .limit(20)
       .then(({ data }) => {
         if (data) {
-          setSearches(data.map(r => ({
-            id: r.id,
-            name: r.name,
-            filters: r.filters as SearchFiltersState,
-            createdAt: r.created_at,
-          })));
+          setSearches(
+            data.map((r) => ({
+              id: r.id,
+              name: r.name,
+              filters: r.filters as SearchFiltersState,
+              createdAt: r.created_at,
+            })),
+          );
         }
       });
   }, [user]);
@@ -47,16 +53,26 @@ export function useSavedSearches() {
   const save = async (name: string, filters: SearchFiltersState) => {
     if (user) {
       const { data } = await supabase
-        .from('user_saved_searches')
+        .from("user_saved_searches")
         .insert({ user_id: user.id, name, filters })
-        .select('id, name, filters, created_at')
+        .select("id, name, filters, created_at")
         .single();
       if (data) {
-        const entry: SavedSearch = { id: data.id, name: data.name, filters: data.filters as SearchFiltersState, createdAt: data.created_at };
-        setSearches(prev => [entry, ...prev].slice(0, 20));
+        const entry: SavedSearch = {
+          id: data.id,
+          name: data.name,
+          filters: data.filters as SearchFiltersState,
+          createdAt: data.created_at,
+        };
+        setSearches((prev) => [entry, ...prev].slice(0, 20));
       }
     } else {
-      const entry: SavedSearch = { id: Date.now().toString(), name, filters, createdAt: new Date().toISOString() };
+      const entry: SavedSearch = {
+        id: Date.now().toString(),
+        name,
+        filters,
+        createdAt: new Date().toISOString(),
+      };
       const next = [entry, ...searches].slice(0, 10);
       setSearches(next);
       localStorage.setItem(LS_KEY, JSON.stringify(next));
@@ -65,10 +81,10 @@ export function useSavedSearches() {
 
   const remove = async (id: string) => {
     if (user) {
-      await supabase.from('user_saved_searches').delete().eq('id', id).eq('user_id', user.id);
-      setSearches(prev => prev.filter(s => s.id !== id));
+      await supabase.from("user_saved_searches").delete().eq("id", id).eq("user_id", user.id);
+      setSearches((prev) => prev.filter((s) => s.id !== id));
     } else {
-      const next = searches.filter(s => s.id !== id);
+      const next = searches.filter((s) => s.id !== id);
       setSearches(next);
       localStorage.setItem(LS_KEY, JSON.stringify(next));
     }

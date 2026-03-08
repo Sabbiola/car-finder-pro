@@ -1,5 +1,5 @@
-import { X } from 'lucide-react';
-import type { SearchFiltersState } from './SearchFilters';
+import { X } from "lucide-react";
+import type { SearchFiltersState } from "./SearchFilters";
 
 interface Props {
   filters: SearchFiltersState;
@@ -7,49 +7,75 @@ interface Props {
 }
 
 const defaultValues: Record<string, unknown> = {
-  brand: '', model: '', trim: '', yearMin: '', yearMax: '',
-  priceMin: '', priceMax: '', kmMin: '', kmMax: '',
-  fuel: '', transmission: '', isNew: null,
-  color: '', doors: '', bodyType: '', location: '',
-  sellerType: 'all', emissionClass: '',
+  brand: "",
+  model: "",
+  trim: "",
+  yearMin: "",
+  yearMax: "",
+  priceMin: "",
+  priceMax: "",
+  kmMin: "",
+  kmMax: "",
+  fuel: "",
+  transmission: "",
+  isNew: null,
+  color: "",
+  doors: "",
+  bodyType: "",
+  location: "",
+  sellerType: "all",
+  emissionClass: "",
 };
 
 const labels: Record<string, string> = {
-  brand: 'Marca', model: 'Modello', trim: 'Allestimento',
-  yearMin: 'Anno min', yearMax: 'Anno max',
-  priceMin: 'Prezzo min', priceMax: 'Prezzo max',
-  kmMin: 'Km min', kmMax: 'Km max',
-  fuel: 'Alimentazione', transmission: 'Cambio',
-  color: 'Colore', doors: 'Porte', bodyType: 'Carrozzeria',
-  location: 'Località', emissionClass: 'Euro',
+  brand: "Marca",
+  model: "Modello",
+  trim: "Allestimento",
+  yearMin: "Anno min",
+  yearMax: "Anno max",
+  priceMin: "Prezzo min",
+  priceMax: "Prezzo max",
+  kmMin: "Km min",
+  kmMax: "Km max",
+  fuel: "Alimentazione",
+  transmission: "Cambio",
+  color: "Colore",
+  doors: "Porte",
+  bodyType: "Carrozzeria",
+  location: "Località",
+  emissionClass: "Euro",
 };
 
 const ActiveFilterChips = ({ filters, onChange }: Props) => {
   const chips: { key: keyof SearchFiltersState; label: string; value: string }[] = [];
 
   for (const [key, val] of Object.entries(filters)) {
-    if (key === 'sources' || key === 'isNew' || key === 'sellerType') continue;
-    if (val === defaultValues[key] || val === '' || val === null || val === undefined) continue;
+    if (key === "sources" || key === "isNew" || key === "sellerType") continue;
+    if (val === defaultValues[key] || val === "" || val === null || val === undefined) continue;
     const label = labels[key] || key;
     chips.push({ key: key as keyof SearchFiltersState, label, value: String(val) });
   }
 
-  if (filters.isNew === true) chips.push({ key: 'isNew', label: 'Condizione', value: 'Nuovo' });
-  if (filters.isNew === false) chips.push({ key: 'isNew', label: 'Condizione', value: 'Usato' });
-  if (filters.sellerType !== 'all') {
-    chips.push({ key: 'sellerType', label: 'Venditore', value: filters.sellerType === 'dealer' ? 'Concessionarie' : 'Privati' });
+  if (filters.isNew === true) chips.push({ key: "isNew", label: "Condizione", value: "Nuovo" });
+  if (filters.isNew === false) chips.push({ key: "isNew", label: "Condizione", value: "Usato" });
+  if (filters.sellerType !== "all") {
+    chips.push({
+      key: "sellerType",
+      label: "Venditore",
+      value: filters.sellerType === "dealer" ? "Concessionarie" : "Privati",
+    });
   }
 
   if (chips.length === 0) return null;
 
   const remove = (key: keyof SearchFiltersState) => {
-    onChange({ ...filters, [key]: defaultValues[key as string] ?? '' });
+    onChange({ ...filters, [key]: defaultValues[key as string] ?? "" });
   };
 
   const clearAll = () => {
     const reset = { ...filters };
     for (const chip of chips) {
-      (reset as Record<string, unknown>)[chip.key] = defaultValues[chip.key as string] ?? '';
+      (reset as Record<string, unknown>)[chip.key] = defaultValues[chip.key as string] ?? "";
     }
     onChange(reset);
   };

@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
-import { useRecentlyViewed } from '@/hooks/useRecentlyViewed';
-import { fetchListingsByIds } from '@/lib/api/fetchByIds';
-import { toCardListing } from '@/lib/toCardListing';
-import CarCard from '@/components/CarCard';
-import type { CarListing } from '@/lib/api/listings';
+import { useEffect, useState } from "react";
+import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
+import { fetchListingsByIds } from "@/lib/api/fetchByIds";
+import { toCardListing } from "@/lib/toCardListing";
+import CarCard from "@/components/CarCard";
+import type { CarListing } from "@/lib/api/listings";
 
 const RecentlyViewedSection = () => {
   const { recentIds } = useRecentlyViewed();
@@ -19,12 +19,12 @@ const RecentlyViewedSection = () => {
     setError(false);
 
     fetchListingsByIds(recentIds.slice(0, 6))
-      .then(data => {
+      .then((data) => {
         if (!cancelled) setListings(data);
       })
-      .catch(err => {
+      .catch((err) => {
         if (!cancelled) {
-          console.error('[RecentlyViewedSection] Failed to load:', err);
+          console.error("[RecentlyViewedSection] Failed to load:", err);
           setError(true);
         }
       })
@@ -32,8 +32,10 @@ const RecentlyViewedSection = () => {
         if (!cancelled) setLoading(false);
       });
 
-    return () => { cancelled = true; };
-  }, [recentIds.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true;
+    };
+  }, [recentIds.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!recentIds.length || (!loading && !listings.length && !error)) return null;
 
@@ -53,12 +55,8 @@ const RecentlyViewedSection = () => {
     <section className="border-t border-border/60">
       <div className="container py-12 space-y-6">
         <div className="flex items-baseline justify-between">
-          <h2 className="text-lg font-bold">
-            Visti di recente
-          </h2>
-          <span className="text-xs text-muted-foreground">
-            {listings.length} auto
-          </span>
+          <h2 className="text-lg font-bold">Visti di recente</h2>
+          <span className="text-xs text-muted-foreground">{listings.length} auto</span>
         </div>
 
         <div className="flex gap-4 overflow-x-auto pb-2 sm:grid sm:grid-cols-3 lg:grid-cols-6 sm:overflow-visible">

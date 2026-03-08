@@ -1,12 +1,12 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { carBrands, brandModels } from '@/lib/mock-data';
-import { cn } from '@/lib/utils';
+import { useState, useRef, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { carBrands, brandModels } from "@/lib/mock-data";
+import { cn } from "@/lib/utils";
 
 interface Suggestion {
-  type: 'brand' | 'model';
+  type: "brand" | "model";
   brand: string;
   model?: string;
   label: string;
@@ -20,21 +20,21 @@ function getSuggestions(query: string, selectedBrand: string): Suggestion[] {
 
   if (!selectedBrand || q) {
     // Suggest brands
-    carBrands.forEach(brand => {
+    carBrands.forEach((brand) => {
       if (brand.toLowerCase().includes(q)) {
-        results.push({ type: 'brand', brand, label: brand });
+        results.push({ type: "brand", brand, label: brand });
       }
     });
   }
 
   // Suggest models
   const brandsToSearch = selectedBrand ? [selectedBrand] : carBrands;
-  brandsToSearch.forEach(brand => {
+  brandsToSearch.forEach((brand) => {
     const models = brandModels[brand] || [];
-    models.forEach(model => {
+    models.forEach((model) => {
       const full = `${brand} ${model}`.toLowerCase();
       if (q && (model.toLowerCase().includes(q) || full.includes(q))) {
-        results.push({ type: 'model', brand, model, label: `${brand} ${model}` });
+        results.push({ type: "model", brand, model, label: `${brand} ${model}` });
       }
     });
   });
@@ -53,7 +53,13 @@ interface Props {
 }
 
 const AutocompleteInput = ({
-  value, onChange, selectedBrand, onSelectBrand, onSelectModel, placeholder, className,
+  value,
+  onChange,
+  selectedBrand,
+  onSelectBrand,
+  onSelectModel,
+  placeholder,
+  className,
 }: Props) => {
   const [focused, setFocused] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -72,34 +78,37 @@ const AutocompleteInput = ({
         setFocused(false);
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const select = useCallback((s: Suggestion) => {
-    if (s.type === 'brand') {
-      onSelectBrand(s.brand);
-      onChange('');
-    } else if (s.model) {
-      onSelectBrand(s.brand);
-      onSelectModel(s.model);
-      onChange(s.model);
-    }
-    setFocused(false);
-  }, [onSelectBrand, onSelectModel, onChange]);
+  const select = useCallback(
+    (s: Suggestion) => {
+      if (s.type === "brand") {
+        onSelectBrand(s.brand);
+        onChange("");
+      } else if (s.model) {
+        onSelectBrand(s.brand);
+        onSelectModel(s.model);
+        onChange(s.model);
+      }
+      setFocused(false);
+    },
+    [onSelectBrand, onSelectModel, onChange],
+  );
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (!suggestions.length) return;
-    if (e.key === 'ArrowDown') {
+    if (e.key === "ArrowDown") {
       e.preventDefault();
-      setHighlightIndex(i => Math.min(i + 1, suggestions.length - 1));
-    } else if (e.key === 'ArrowUp') {
+      setHighlightIndex((i) => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setHighlightIndex(i => Math.max(i - 1, 0));
-    } else if (e.key === 'Enter' && highlightIndex >= 0) {
+      setHighlightIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter" && highlightIndex >= 0) {
       e.preventDefault();
       select(suggestions[highlightIndex]);
-    } else if (e.key === 'Escape') {
+    } else if (e.key === "Escape") {
       setFocused(false);
     }
   };
@@ -107,12 +116,12 @@ const AutocompleteInput = ({
   const showDropdown = focused && suggestions.length > 0;
 
   return (
-    <div ref={wrapperRef} className={cn('relative w-full min-w-0', className)}>
+    <div ref={wrapperRef} className={cn("relative w-full min-w-0", className)}>
       <div className="relative flex items-center">
         <Search className="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
         <Input
           value={value}
-          onChange={e => onChange(e.target.value)}
+          onChange={(e) => onChange(e.target.value)}
           onFocus={() => setFocused(true)}
           onKeyDown={onKeyDown}
           placeholder={placeholder}
@@ -133,17 +142,24 @@ const AutocompleteInput = ({
               <button
                 key={s.label + i}
                 className={cn(
-                  'w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors',
-                  i === highlightIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
+                  "w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors",
+                  i === highlightIndex ? "bg-accent text-accent-foreground" : "hover:bg-accent/50",
                 )}
                 onMouseEnter={() => setHighlightIndex(i)}
-                onMouseDown={e => { e.preventDefault(); select(s); }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  select(s);
+                }}
               >
-                <span className={cn(
-                  'text-[10px] font-semibold px-1.5 py-0.5 rounded',
-                  s.type === 'brand' ? 'bg-primary/10 text-primary' : 'bg-accent text-accent-foreground'
-                )}>
-                  {s.type === 'brand' ? 'Marca' : 'Modello'}
+                <span
+                  className={cn(
+                    "text-[10px] font-semibold px-1.5 py-0.5 rounded",
+                    s.type === "brand"
+                      ? "bg-primary/10 text-primary"
+                      : "bg-accent text-accent-foreground",
+                  )}
+                >
+                  {s.type === "brand" ? "Marca" : "Modello"}
                 </span>
                 <span className="font-medium">{s.label}</span>
               </button>

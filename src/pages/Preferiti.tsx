@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
-import { Heart, Loader2 } from 'lucide-react';
-import Header from '@/components/Header';
-import CarCard from '@/components/CarCard';
-import { useFavorites } from '@/hooks/useFavorites';
-import { fetchListingsByIds } from '@/lib/api/fetchByIds';
-import { toCardListing } from '@/lib/toCardListing';
-import type { CarListing } from '@/lib/api/listings';
+import { useEffect, useState } from "react";
+import { Heart, Loader2 } from "lucide-react";
+import Header from "@/components/Header";
+import CarCard from "@/components/CarCard";
+import { useFavorites } from "@/hooks/useFavorites";
+import { fetchListingsByIds } from "@/lib/api/fetchByIds";
+import { toCardListing } from "@/lib/toCardListing";
+import type { CarListing } from "@/lib/api/listings";
 
 const Preferiti = () => {
   const { favorites } = useFavorites();
@@ -14,26 +14,26 @@ const Preferiti = () => {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (!favorites.length) { setListings([]); return; }
+    if (!favorites.length) {
+      setListings([]);
+      return;
+    }
     setLoading(true);
     setError(false);
     fetchListingsByIds(favorites)
       .then(setListings)
       .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [favorites.join(',')]);
+  }, [favorites.join(",")]);
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
       <div className="container py-6 space-y-6">
-
         <div className="flex items-center gap-3 border-b border-border pb-4 animate-brutal-in">
           <Heart className="h-5 w-5" />
           <h1 className="text-xl font-bold">Preferiti</h1>
-          <span className="text-xs text-muted-foreground">
-            ({favorites.length})
-          </span>
+          <span className="text-xs text-muted-foreground">({favorites.length})</span>
         </div>
 
         {loading && (

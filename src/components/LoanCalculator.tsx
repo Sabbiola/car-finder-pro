@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
-import { Calculator } from 'lucide-react';
-import { Slider } from '@/components/ui/slider';
-import { Label } from '@/components/ui/label';
+import { useState, useMemo } from "react";
+import { Calculator } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { Label } from "@/components/ui/label";
 
 interface Props {
   price: number;
@@ -13,14 +13,16 @@ const LoanCalculator = ({ price }: Props) => {
   const [annualRate, setAnnualRate] = useState(6.9);
 
   const { monthlyPayment, totalCost, totalInterest, financed } = useMemo(() => {
-    const downPayment = Math.round(price * downPaymentPct / 100);
+    const downPayment = Math.round((price * downPaymentPct) / 100);
     const financed = price - downPayment;
     const monthlyRate = annualRate / 100 / 12;
     let monthlyPayment: number;
     if (monthlyRate === 0) {
       monthlyPayment = financed / months;
     } else {
-      monthlyPayment = financed * (monthlyRate * Math.pow(1 + monthlyRate, months)) / (Math.pow(1 + monthlyRate, months) - 1);
+      monthlyPayment =
+        (financed * (monthlyRate * Math.pow(1 + monthlyRate, months))) /
+        (Math.pow(1 + monthlyRate, months) - 1);
     }
     const totalCost = monthlyPayment * months + downPayment;
     const totalInterest = totalCost - price;
@@ -45,11 +47,14 @@ const LoanCalculator = ({ price }: Props) => {
           <div className="flex justify-between items-center">
             <Label className="text-xs text-muted-foreground">Anticipo</Label>
             <span className="text-sm font-bold">
-              {downPaymentPct}% — €{Math.round(price * downPaymentPct / 100).toLocaleString('it-IT')}
+              {downPaymentPct}% — €
+              {Math.round((price * downPaymentPct) / 100).toLocaleString("it-IT")}
             </span>
           </div>
           <Slider
-            min={0} max={50} step={5}
+            min={0}
+            max={50}
+            step={5}
             value={[downPaymentPct]}
             onValueChange={([v]) => setDownPaymentPct(v)}
             className="w-full"
@@ -63,7 +68,9 @@ const LoanCalculator = ({ price }: Props) => {
             <span className="text-sm font-bold">{months} mesi</span>
           </div>
           <Slider
-            min={12} max={84} step={12}
+            min={12}
+            max={84}
+            step={12}
             value={[months]}
             onValueChange={([v]) => setMonths(v)}
             className="w-full"
@@ -77,7 +84,9 @@ const LoanCalculator = ({ price }: Props) => {
             <span className="text-sm font-bold">{annualRate.toFixed(1)}%</span>
           </div>
           <Slider
-            min={1} max={15} step={0.1}
+            min={1}
+            max={15}
+            step={0.1}
             value={[annualRate]}
             onValueChange={([v]) => setAnnualRate(v)}
             className="w-full"
@@ -87,24 +96,32 @@ const LoanCalculator = ({ price }: Props) => {
         {/* Risultati */}
         <div className="grid grid-cols-2 gap-2 pt-1">
           <div className="bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-900/20 dark:to-indigo-900/20 rounded-xl p-3 col-span-2">
-            <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Rata mensile stimata</div>
+            <div className="text-[10px] font-medium text-muted-foreground mb-0.5">
+              Rata mensile stimata
+            </div>
             <div className="text-2xl font-extrabold text-violet-600 dark:text-violet-400">
-              €{monthlyPayment.toLocaleString('it-IT')}/mese
+              €{monthlyPayment.toLocaleString("it-IT")}/mese
             </div>
           </div>
           <div className="bg-muted/60 rounded-xl p-3">
-            <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Importo finanziato</div>
-            <div className="text-sm font-bold">€{financed.toLocaleString('it-IT')}</div>
+            <div className="text-[10px] font-medium text-muted-foreground mb-0.5">
+              Importo finanziato
+            </div>
+            <div className="text-sm font-bold">€{financed.toLocaleString("it-IT")}</div>
           </div>
           <div className="bg-muted/60 rounded-xl p-3">
-            <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Interessi totali</div>
+            <div className="text-[10px] font-medium text-muted-foreground mb-0.5">
+              Interessi totali
+            </div>
             <div className="text-sm font-bold text-amber-600 dark:text-amber-400">
-              +€{totalInterest.toLocaleString('it-IT')}
+              +€{totalInterest.toLocaleString("it-IT")}
             </div>
           </div>
           <div className="bg-muted/60 rounded-xl p-3 col-span-2">
-            <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Costo totale (anticipo + rate)</div>
-            <div className="text-sm font-bold">€{totalCost.toLocaleString('it-IT')}</div>
+            <div className="text-[10px] font-medium text-muted-foreground mb-0.5">
+              Costo totale (anticipo + rate)
+            </div>
+            <div className="text-sm font-bold">€{totalCost.toLocaleString("it-IT")}</div>
           </div>
         </div>
 

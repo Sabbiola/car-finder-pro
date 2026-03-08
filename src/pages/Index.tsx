@@ -1,21 +1,21 @@
-import SearchFilters, { type SearchFiltersState } from '@/components/SearchFilters';
-import Header from '@/components/Header';
-import RecentlyViewedSection from '@/components/RecentlyViewedSection';
-import { useSavedSearches } from '@/hooks/useSavedSearches';
-import { useNavigate } from 'react-router-dom';
-import { Bookmark, X } from 'lucide-react';
-import { Helmet } from 'react-helmet-async';
+import SearchFilters, { type SearchFiltersState } from "@/components/SearchFilters";
+import Header from "@/components/Header";
+import RecentlyViewedSection from "@/components/RecentlyViewedSection";
+import { useSavedSearches } from "@/hooks/useSavedSearches";
+import { useNavigate } from "react-router-dom";
+import { Bookmark, X } from "lucide-react";
+import { Helmet } from "react-helmet-async";
 
 function buildParams(filters: SearchFiltersState): string {
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([k, v]) => {
-    if (k === 'isNew') {
-      if (v === true) params.set('isNew', 'true');
-      else if (v === false) params.set('isNew', 'false');
+    if (k === "isNew") {
+      if (v === true) params.set("isNew", "true");
+      else if (v === false) params.set("isNew", "false");
       // null = omit (show all)
     } else if (Array.isArray(v)) {
-      params.set(k, v.join(','));
-    } else if (v !== '' && v !== null) {
+      params.set(k, v.join(","));
+    } else if (v !== "" && v !== null) {
       params.set(k, String(v));
     }
   });
@@ -23,10 +23,26 @@ function buildParams(filters: SearchFiltersState): string {
 }
 
 const features = [
-  { title: 'Ricerca istantanea', desc: 'Confronta annunci da tutti i portali in un click', gradient: 'from-violet-500 to-indigo-500' },
-  { title: 'Migliori offerte',   desc: 'Algoritmo che individua i prezzi più competitivi', gradient: 'from-pink-500 to-rose-500' },
-  { title: 'Andamento prezzi',   desc: 'Grafici per capire se è il momento giusto',        gradient: 'from-amber-500 to-orange-500' },
-  { title: 'Fonti verificate',   desc: 'AutoScout24, Subito.it, Automobile.it',            gradient: 'from-teal-500 to-green-500' },
+  {
+    title: "Ricerca istantanea",
+    desc: "Confronta annunci da tutti i portali in un click",
+    gradient: "from-violet-500 to-indigo-500",
+  },
+  {
+    title: "Migliori offerte",
+    desc: "Algoritmo che individua i prezzi più competitivi",
+    gradient: "from-pink-500 to-rose-500",
+  },
+  {
+    title: "Andamento prezzi",
+    desc: "Grafici per capire se è il momento giusto",
+    gradient: "from-amber-500 to-orange-500",
+  },
+  {
+    title: "Fonti verificate",
+    desc: "AutoScout24, Subito.it, Automobile.it",
+    gradient: "from-teal-500 to-green-500",
+  },
 ];
 
 const Index = () => {
@@ -37,7 +53,10 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <Helmet>
         <title>AutoDeal Finder — Confronta prezzi auto nuove e usate</title>
-        <meta name="description" content="Trova le migliori offerte auto in Italia. Confronta prezzi da AutoScout24, Subito.it, Automobile.it e BrumBrum in un unico posto." />
+        <meta
+          name="description"
+          content="Trova le migliori offerte auto in Italia. Confronta prezzi da AutoScout24, Subito.it, Automobile.it e BrumBrum in un unico posto."
+        />
       </Helmet>
       <Header />
 
@@ -56,20 +75,24 @@ const Index = () => {
 
           <h1 className="text-5xl md:text-7xl font-extrabold leading-[0.95] tracking-tight">
             Trova l'auto
-            <br />al prezzo
+            <br />
+            al prezzo
             <br />
             <span className="bg-gradient-to-r from-violet-600 via-purple-500 to-pink-500 bg-clip-text text-transparent">
               migliore.
             </span>
           </h1>
 
-          <p className="text-base text-muted-foreground max-w-md leading-relaxed animate-brutal-in" style={{ animationDelay: '200ms' }}>
-            Aggregatore real-time di annunci auto da tutti i portali italiani.
-            Confronta, analizza, risparmia.
+          <p
+            className="text-base text-muted-foreground max-w-md leading-relaxed animate-brutal-in"
+            style={{ animationDelay: "200ms" }}
+          >
+            Aggregatore real-time di annunci auto da tutti i portali italiani. Confronta, analizza,
+            risparmia.
           </p>
         </div>
 
-        <div className="max-w-4xl animate-brutal-up" style={{ animationDelay: '300ms' }}>
+        <div className="max-w-4xl animate-brutal-up" style={{ animationDelay: "300ms" }}>
           <SearchFilters />
         </div>
       </section>
@@ -79,8 +102,13 @@ const Index = () => {
         <div className="container py-16">
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 stagger-children">
             {features.map((f, i) => (
-              <div key={f.title} className="p-6 rounded-2xl border border-border/60 bg-card hover:shadow-md transition-shadow">
-                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${f.gradient} flex items-center justify-center mb-4 shadow-sm`}>
+              <div
+                key={f.title}
+                className="p-6 rounded-2xl border border-border/60 bg-card hover:shadow-md transition-shadow"
+              >
+                <div
+                  className={`w-10 h-10 rounded-xl bg-gradient-to-br ${f.gradient} flex items-center justify-center mb-4 shadow-sm`}
+                >
                   <span className="text-white text-sm font-bold">0{i + 1}</span>
                 </div>
                 <h3 className="text-sm font-bold mb-1">{f.title}</h3>
@@ -99,7 +127,7 @@ const Index = () => {
               <h2 className="text-sm font-semibold">Ricerche salvate</h2>
             </div>
             <div className="flex flex-wrap gap-2">
-              {searches.map(s => (
+              {searches.map((s) => (
                 <div key={s.id} className="flex items-center gap-1 bg-muted rounded-xl px-3 py-2">
                   <button
                     onClick={() => navigate(`/risultati?${buildParams(s.filters)}`)}
@@ -124,9 +152,7 @@ const Index = () => {
       <RecentlyViewedSection />
 
       <footer className="border-t border-border/60 py-6">
-        <div className="container text-xs text-muted-foreground">
-          © 2026 AutoDeal Finder
-        </div>
+        <div className="container text-xs text-muted-foreground">© 2026 AutoDeal Finder</div>
       </footer>
     </div>
   );
