@@ -35,7 +35,7 @@ const RecentlyViewedSection = () => {
     return () => {
       cancelled = true;
     };
-  }, [recentIds.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [recentIds]);
 
   if (!recentIds.length || (!loading && !listings.length && !error)) return null;
 

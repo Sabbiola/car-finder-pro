@@ -6,7 +6,19 @@ import tseslint from "typescript-eslint";
 import prettier from "eslint-config-prettier";
 
 export default tseslint.config(
-  { ignores: ["dist"] },
+  {
+    ignores: [
+      "dist",
+      "coverage",
+      "playwright-report",
+      "test-results",
+      "node_modules",
+      "vitest.config.ts.timestamp-*",
+    ],
+    linterOptions: {
+      reportUnusedDisableDirectives: "error",
+    },
+  },
 
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -26,9 +38,11 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
 
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
+      "react-hooks/exhaustive-deps": "error",
+      "no-console": ["warn", { allow: ["warn", "error"] }],
 
       "@typescript-eslint/no-unused-vars": [
-        "warn",
+        "error",
         {
           argsIgnorePattern: "^_",
           varsIgnorePattern: "^_",
@@ -36,7 +50,22 @@ export default tseslint.config(
         },
       ],
 
-      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-explicit-any": "error",
+    },
+  },
+
+  {
+    files: ["src/**/*.test.{ts,tsx}", "src/**/__tests__/**/*.{ts,tsx}", "src/test/**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+      "no-console": "off",
+    },
+  },
+
+  {
+    files: ["src/pages/Profile.tsx"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
     },
   },
 );

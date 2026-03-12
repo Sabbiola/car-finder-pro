@@ -17,7 +17,7 @@ const CompareBar = () => {
       return;
     }
     fetchListingsByIds(compareIds).then(setPreviews).catch(console.error);
-  }, [compareIds.join(",")]);
+  }, [compareIds]);
 
   return (
     <AnimatePresence>

@@ -248,7 +248,7 @@ const CarDetail = () => {
     return () => {
       cancelled = true;
     };
-  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, addRecent]);
 
   const chartData = useMemo(() => {
     if (!allPrices.length || !car) return [];

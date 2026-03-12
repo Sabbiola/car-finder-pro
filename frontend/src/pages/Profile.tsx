@@ -16,7 +16,6 @@ import { toCardListing } from "@/lib/toCardListing";
 import type { SearchFiltersState } from "@/components/SearchFilters";
 
 // Cast to any to bypass missing table types (price_alerts, user_favorites etc.)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
 
 interface AlertRow {

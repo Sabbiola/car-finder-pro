@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { ArrowUpDown, Loader2, LayoutGrid, Map, Link2, Check } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import {
@@ -73,11 +73,19 @@ function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
   };
 }
 
+function mergeUniqueListings(left: CarListing[], right: CarListing[]): CarListing[] {
+  const map = new Map<string, CarListing>();
+  for (const listing of [...left, ...right]) {
+    const key = listing.source_url || `${listing.source}|${listing.title}|${listing.price}|${listing.year}`;
+    if (!map.has(key)) map.set(key, listing);
+  }
+  return [...map.values()];
+}
+
 const SearchResults = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [sort, setSort] = useState<SortOption>(() => parseSortParam(searchParams.get("sort")));
-  const initialFilters = useMemo(() => parseFiltersFromParams(searchParams), []); // eslint-disable-line react-hooks/exhaustive-deps
-  const [filters, setFilters] = useState<SearchFiltersState>(initialFilters);
+  const [filters, setFilters] = useState<SearchFiltersState>(() => parseFiltersFromParams(searchParams));
   const [listings, setListings] = useState<CarListing[]>([]);
   const [loading, setLoading] = useState(false);
   const [scraped, setScraped] = useState(false);
@@ -92,16 +100,7 @@ const SearchResults = () => {
   const streamAbortRef = useRef<AbortController | null>(null);
   const { toast } = useToast();
 
-  const mergeUnique = (left: CarListing[], right: CarListing[]): CarListing[] => {
-    const map = new Map<string, CarListing>();
-    for (const listing of [...left, ...right]) {
-      const key = listing.source_url || `${listing.source}|${listing.title}|${listing.price}|${listing.year}`;
-      if (!map.has(key)) map.set(key, listing);
-    }
-    return [...map.values()];
-  };
-
-  const doSearch = async (currentFilters: SearchFiltersState, forceRefresh = false) => {
+  const doSearch = useCallback(async (currentFilters: SearchFiltersState, forceRefresh = false) => {
     if (!currentFilters.brand) {
       streamAbortRef.current?.abort();
       setLoading(false);
@@ -143,7 +142,7 @@ const SearchResults = () => {
                   setStreamProviderCount((prev) => ({ ...prev, [event.provider]: event.fetched_count || 0 }));
                 }
               } else if (event.event === "result") {
-                streamedResults = mergeUnique(streamedResults, [event.listing]);
+                streamedResults = mergeUniqueListings(streamedResults, [event.listing]);
                 setListings(streamedResults);
               } else if (event.event === "error") {
                 streamErrorsLocal.push(event.message);
@@ -163,7 +162,7 @@ const SearchResults = () => {
         }
         if (isStaleRequest()) return;
 
-        const finalResults = mergeUnique(streamedResults, legacyResults);
+        const finalResults = mergeUniqueListings(streamedResults, legacyResults);
         setListings(finalResults);
         setScraped(true);
         toast({
@@ -223,11 +222,11 @@ const SearchResults = () => {
         setLoading(false);
       }
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     doSearch(filters);
-  }, [filters]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [doSearch, filters]);
 
   useEffect(() => {
     return () => {

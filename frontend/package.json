@@ -8,6 +8,8 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint src tailwind.config.ts",
+    "lint:strict": "eslint src tailwind.config.ts --max-warnings=0",
+    "lint:fix": "eslint src tailwind.config.ts --fix",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
