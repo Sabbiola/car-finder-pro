@@ -49,7 +49,7 @@ function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
   const sourcesRaw = params.get("sources");
   const sources = sourcesRaw
     ? sourcesRaw.split(",").filter((s) => s.length > 0)
-    : ["autoscout24", "subito", "automobile", "brumbrum"];
+    : ["autoscout24", "subito", "ebay", "automobile", "brumbrum"];
 
   return {
     brand: params.get("brand") || "",
@@ -126,7 +126,7 @@ const SearchResults = () => {
       if (useFastApiStream) {
         const selectedSources = currentFilters.sources?.length
           ? currentFilters.sources
-          : ["autoscout24", "subito", "automobile", "brumbrum"];
+          : ["autoscout24", "subito", "ebay", "automobile", "brumbrum"];
         const coreSources = selectedSources.filter((s) => FASTAPI_CORE_SOURCES.includes(s as (typeof FASTAPI_CORE_SOURCES)[number]));
         const legacySources = selectedSources.filter((s) => !coreSources.includes(s));
 
@@ -380,7 +380,7 @@ const SearchResults = () => {
                 </p>
                 {scraped && results.length > 0 && (
                   <div className="flex items-center gap-1 flex-wrap">
-                    {(["autoscout24", "subito", "automobile", "brumbrum"] as const).map((src) => {
+                    {Object.keys(sourceLabels).map((src) => {
                       const count = listings.filter((l) => l.source === src).length;
                       return (
                         <span
@@ -393,6 +393,7 @@ const SearchResults = () => {
                             .replace("AutoScout24", "AS24")
                             .replace("Automobile.it", "Auto.it")
                             .replace("Subito.it", "Subito")
+                            .replace("eBay Motors", "eBay")
                             .replace("Brumbrum", "BB")}
                           : {count}
                         </span>

@@ -37,8 +37,8 @@ def detect_body_type(text: str) -> str | None:
         return "Station Wagon"
     if "suv" in t or "crossover" in t or "4x4" in t:
         return "SUV"
-    if "coupé" in t or "coupe" in t:
-        return "Coupé"
+    if "coup\u00e9" in t or "coupe" in t:
+        return "Coup\u00e9"
     if "berlina" in t or "sedan" in t or "hatchback" in t:
         return "Berlina"
     if "monovolume" in t or "minivan" in t or re.search(r"\bmpv\b", t):

@@ -61,6 +61,7 @@ Durante la release di transizione:
 - `supabase/functions/scrape-listings` fa da proxy verso FastAPI
 - se FastAPI fallisce, il proxy puo fare fallback legacy (configurabile)
 - provider core migrati: `autoscout24`, `subito`
+- provider esteso: `ebay` (`official_api`, abilitato via credenziali env)
 - provider non migrati restano su path legacy
 
 Env flag principali edge:
@@ -126,6 +127,10 @@ PROVIDER_TIMEOUT_SECONDS=30
 SCRAPINGBEE_API_KEY=
 LEGACY_SCRAPE_LISTINGS_URL=
 FASTAPI_PROXY_MODE=primary_with_fallback
+EBAY_CLIENT_ID=
+EBAY_CLIENT_SECRET=
+EBAY_MARKETPLACE_ID=EBAY_IT
+TEST_STUB_MODE=false
 ```
 
 ### Infra/Edge (root `.env`)
@@ -163,10 +168,10 @@ Workflow principali:
 - [x] backend provider-based base + provider core
 - [x] endpoint metadata/providers/health/search
 - [x] proxy legacy -> FastAPI con fallback
-- [ ] dedup/ranking avanzati
-- [ ] observability estesa
-- [ ] test E2E completi
-- [ ] estensione provider successivi
+- [x] dedup/ranking avanzati
+- [x] observability estesa
+- [x] test E2E smoke completi (Playwright + CI gate)
+- [x] estensione provider successivi (eBay Motors)
 
 ## Sicurezza
 

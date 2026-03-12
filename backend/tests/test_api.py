@@ -20,8 +20,18 @@ class StubRegistry:
                 provider_type="html_scraper",
                 market="IT",
                 enabled=True,
+                configured=True,
                 supports_filters=["brand", "model"],
-            )
+            ),
+            ProviderInfo(
+                id="ebay",
+                name="eBay Motors",
+                provider_type="official_api",
+                market="IT",
+                enabled=True,
+                configured=False,
+                supports_filters=["query", "brand", "model"],
+            ),
         ]
 
     async def health(self) -> list[ProviderHealth]:
@@ -32,6 +42,9 @@ class StubRegistry:
                 configured=True,
                 latency_ms=420,
                 error_rate=0.0,
+                total_calls=3,
+                failed_calls=1,
+                last_error="transient timeout",
                 last_success=datetime.now(timezone.utc),
             )
         ]
@@ -138,12 +151,18 @@ def test_providers_and_health_contract() -> None:
     assert providers_response.status_code == 200
     providers_payload = providers_response.json()
     assert providers_payload["providers"][0]["id"] == "autoscout24"
+    by_provider_id = {provider["id"]: provider for provider in providers_payload["providers"]}
+    assert by_provider_id["autoscout24"]["configured"] is True
+    assert by_provider_id["ebay"]["configured"] is False
 
     health_response = client.get("/api/providers/health")
     assert health_response.status_code == 200
     health_payload = health_response.json()
     assert health_payload["providers"][0]["provider"] == "autoscout24"
     assert health_payload["providers"][0]["latency_ms"] == 420
+    assert health_payload["providers"][0]["total_calls"] == 3
+    assert health_payload["providers"][0]["failed_calls"] == 1
+    assert health_payload["providers"][0]["last_error"] == "transient timeout"
 
     metadata_response = client.get("/api/filters/metadata")
     assert metadata_response.status_code == 200

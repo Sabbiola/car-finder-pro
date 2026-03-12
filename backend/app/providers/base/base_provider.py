@@ -8,6 +8,9 @@ from app.providers.base.models import ProviderHealth, ProviderInfo
 class BaseProvider(ABC):
     info: ProviderInfo
 
+    def is_configured(self) -> bool:
+        return True
+
     @abstractmethod
     async def search(self, request: SearchRequest) -> list[VehicleListing]:
         raise NotImplementedError
@@ -16,6 +19,6 @@ class BaseProvider(ABC):
         return ProviderHealth(
             provider=self.info.id,
             enabled=self.info.enabled,
-            configured=True,
+            configured=self.is_configured(),
             error_rate=0.0,
         )

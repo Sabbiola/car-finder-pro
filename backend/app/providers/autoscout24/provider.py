@@ -1,12 +1,12 @@
 from urllib.parse import quote_plus
 
+from app.core.settings import get_settings
 from app.models.search import SearchRequest
 from app.models.vehicle import VehicleListing
-from app.core.settings import get_settings
-from app.providers.base.base_provider import BaseProvider
-from app.providers.common.scrapingbee import fetch_markdown
-from app.providers.base.models import ProviderHealth, ProviderInfo
 from app.providers.autoscout24.parser import parse_autoscout_markdown
+from app.providers.base.base_provider import BaseProvider
+from app.providers.base.models import ProviderHealth, ProviderInfo
+from app.providers.common.scrapingbee import fetch_markdown
 
 
 class AutoScout24Provider(BaseProvider):
@@ -59,7 +59,8 @@ class AutoScout24Provider(BaseProvider):
                 "SUV": "3",
                 "Berlina": "1",
                 "Station Wagon": "4",
-                "Coupé": "2",
+                "Coup\u00e9": "2",
+                "Coupe": "2",
                 "Cabrio": "5",
                 "Monovolume": "6",
             }
@@ -87,7 +88,41 @@ class AutoScout24Provider(BaseProvider):
         urls.append(f"{base}{separator}page=2")
         return urls
 
+    def is_configured(self) -> bool:
+        settings = get_settings()
+        if settings.test_stub_mode:
+            return True
+        return bool(settings.scrapingbee_api_key)
+
+    @staticmethod
+    def _stub_listings(request: SearchRequest) -> list[VehicleListing]:
+        model_name = request.model or "320d"
+        return [
+            VehicleListing(
+                provider="autoscout24",
+                market="IT",
+                url="https://stub.autoscout24.local/listing-1",
+                title=f"BMW {model_name} Stub AutoScout24",
+                description="Stub listing for test mode",
+                price_amount=24900,
+                year=2021,
+                make=request.brand or "BMW",
+                model=model_name,
+                mileage_value=42000,
+                fuel_type="Diesel",
+                transmission="Automatico",
+                body_style="Berlina",
+                city="Milano",
+                country="IT",
+                images=["https://images.example.com/as24-stub.jpg"],
+            )
+        ]
+
     async def search(self, request: SearchRequest) -> list[VehicleListing]:
+        settings = get_settings()
+        if settings.test_stub_mode:
+            return self._stub_listings(request)
+
         all_listings: list[VehicleListing] = []
         for url in self._build_urls(request):
             markdown = await fetch_markdown(url, wait_ms=8000)
@@ -96,10 +131,9 @@ class AutoScout24Provider(BaseProvider):
         return all_listings
 
     async def health(self) -> ProviderHealth:
-        settings = get_settings()
         return ProviderHealth(
             provider=self.info.id,
             enabled=self.info.enabled,
-            configured=bool(settings.scrapingbee_api_key),
+            configured=self.is_configured(),
             error_rate=0.0,
         )

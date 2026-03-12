@@ -18,8 +18,12 @@ class Settings(BaseSettings):
     max_provider_concurrency: int = 4
     provider_timeout_seconds: int = 30
     scrapingbee_api_key: str | None = None
+    ebay_client_id: str | None = None
+    ebay_client_secret: str | None = None
+    ebay_marketplace_id: str = "EBAY_IT"
     legacy_scrape_listings_url: str | None = None
     fastapi_proxy_mode: str = "primary_with_fallback"
+    test_stub_mode: bool = False
 
     @field_validator("cors_origins", mode="before")
     @classmethod

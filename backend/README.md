@@ -22,9 +22,11 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ## Note architetturali
 - provider core migrati: `autoscout24`, `subito`
+- provider esteso: `ebay` (`official_api`, configurabile via `EBAY_CLIENT_ID` / `EBAY_CLIENT_SECRET`)
 - orchestrazione concorrente con timeout e gestione failure parziali
 - dedup/ranking base lato backend
-- metriche runtime provider esposte in `/api/providers/health` (`latency_ms`, `error_rate`, `last_success`)
+- metriche runtime provider esposte in `/api/providers/health`
+  (`latency_ms`, `error_rate`, `last_success`, `total_calls`, `failed_calls`, `last_error`)
 
 ## Test
 Da `backend/`:

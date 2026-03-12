@@ -12,7 +12,7 @@ export type CardListing = {
   fuel: string;
   transmission: string;
   power: string;
-  source: "autoscout24" | "subito" | "automobile" | "brumbrum";
+  source: "autoscout24" | "subito" | "ebay" | "automobile" | "brumbrum";
   allSources: string[];
   imageUrl: string;
   location: string;

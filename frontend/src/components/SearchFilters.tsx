@@ -71,7 +71,7 @@ const defaultFilters: SearchFiltersState = {
   fuel: "",
   transmission: "",
   isNew: null,
-  sources: ["autoscout24", "subito", "automobile", "brumbrum"],
+  sources: ["autoscout24", "subito", "ebay", "automobile", "brumbrum"],
   color: "",
   doors: "",
   bodyType: "",
@@ -102,10 +102,12 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
     const metadataSources = metadata?.providers?.map((provider) => provider.id) || [];
     const ordered = [...new Set([...fallbackOrder, ...metadataSources])];
     return ordered.map((id) => {
-      const metadataLabel = metadata?.providers?.find((provider) => provider.id === id)?.name;
+      const metadataProvider = metadata?.providers?.find((provider) => provider.id === id);
+      const metadataLabel = metadataProvider?.name;
       return {
         id,
         label: sourceLabels[id as keyof typeof sourceLabels] || metadataLabel || id,
+        configured: metadataProvider?.configured ?? true,
       };
     });
   }, [metadata]);
@@ -577,13 +579,21 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
               <div className="col-span-2 sm:col-span-3 lg:col-span-6 space-y-2">
                 <Label className="text-xs text-muted-foreground">Fonti</Label>
                 <div className="flex flex-wrap gap-4">
-                  {availableSources.map(({ id, label }) => (
+                  {availableSources.map(({ id, label, configured }) => (
                     <label key={id} className="flex items-center gap-2 cursor-pointer">
                       <Checkbox
                         checked={filters.sources.includes(id)}
-                        onCheckedChange={() => toggleSource(id)}
+                        disabled={configured === false}
+                        onCheckedChange={() => {
+                          if (configured === false) return;
+                          toggleSource(id);
+                        }}
                       />
-                      <span className="text-sm">{label}</span>
+                      <span
+                        className={`text-sm ${configured === false ? "text-muted-foreground line-through" : ""}`}
+                      >
+                        {configured === false ? `${label} (setup richiesto)` : label}
+                      </span>
                     </label>
                   ))}
                 </div>

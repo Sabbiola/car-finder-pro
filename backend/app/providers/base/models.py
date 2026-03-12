@@ -13,6 +13,7 @@ class ProviderInfo(BaseModel):
     provider_type: ProviderType
     market: str
     enabled: bool = True
+    configured: bool = True
     supports_filters: list[str] = Field(default_factory=list)
 
 
@@ -23,4 +24,7 @@ class ProviderHealth(BaseModel):
     last_success: datetime | None = None
     latency_ms: int | None = None
     error_rate: float = 0.0
+    total_calls: int = 0
+    failed_calls: int = 0
+    last_error: str | None = None
     checked_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

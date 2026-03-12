@@ -9,6 +9,7 @@ export interface FilterMetadataResponse {
     id: string;
     name: string;
     enabled: boolean;
+    configured?: boolean;
     market?: string;
     provider_type?: "official_api" | "partner_api" | "html_scraper" | "browser_scraper";
     supports_filters?: string[];

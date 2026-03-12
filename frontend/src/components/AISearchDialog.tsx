@@ -98,7 +98,7 @@ const AISearchDialog = ({ open, onClose }: Props) => {
       if (filters.transmission) params.set("transmission", filters.transmission);
       if (filters.bodyType) params.set("bodyType", filters.bodyType);
       if (filters.location) params.set("location", filters.location);
-      params.set("sources", "autoscout24,subito,automobile,brumbrum");
+      params.set("sources", "autoscout24,subito,ebay,automobile,brumbrum");
       onClose();
       navigate(`/risultati?${params.toString()}`);
     } catch (err) {

@@ -37,7 +37,46 @@ class SubitoProvider(BaseProvider):
         separator = "&" if "?" in base else "?"
         return [base, f"{base}{separator}o=2", f"{base}{separator}o=3"]
 
+    def is_configured(self) -> bool:
+        settings = get_settings()
+        if settings.test_stub_mode:
+            return True
+        return bool(settings.scrapingbee_api_key)
+
+    @staticmethod
+    def _stub_listings(request: SearchRequest) -> list[VehicleListing]:
+        query = (request.query or "").lower()
+        brand = (request.brand or "").lower()
+        if "fail-subito" in query or "fail-subito" in brand:
+            raise RuntimeError("Subito test stub forced failure")
+        model_name = request.model or "320d"
+        return [
+            VehicleListing(
+                provider="subito",
+                market="IT",
+                url="https://stub.subito.local/listing-1",
+                title=f"BMW {model_name} Stub Subito",
+                description="Stub listing for test mode",
+                price_amount=25900,
+                year=2020,
+                make=request.brand or "BMW",
+                model=model_name,
+                mileage_value=51000,
+                fuel_type="Diesel",
+                transmission="Manuale",
+                body_style="Berlina",
+                city="Roma",
+                country="IT",
+                images=["https://images.example.com/subito-stub.jpg"],
+                seller_type="private",
+            )
+        ]
+
     async def search(self, request: SearchRequest) -> list[VehicleListing]:
+        settings = get_settings()
+        if settings.test_stub_mode:
+            return self._stub_listings(request)
+
         all_listings: list[VehicleListing] = []
         for url in self._build_urls(request):
             markdown = await fetch_markdown(url, wait_ms=7000)
@@ -46,10 +85,9 @@ class SubitoProvider(BaseProvider):
         return all_listings
 
     async def health(self) -> ProviderHealth:
-        settings = get_settings()
         return ProviderHealth(
             provider=self.info.id,
             enabled=self.info.enabled,
-            configured=bool(settings.scrapingbee_api_key),
+            configured=self.is_configured(),
             error_rate=0.0,
         )

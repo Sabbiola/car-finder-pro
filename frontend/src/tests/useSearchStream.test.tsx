@@ -53,4 +53,51 @@ describe("useSearchStream", () => {
     expect(result.current.error).toBeNull();
     expect(result.current.isStreaming).toBe(false);
   });
+
+  it("keeps streaming state coherent when provider error events arrive", async () => {
+    vi.mocked(streamSearch).mockImplementation(async ({ onEvent }) => {
+      onEvent({
+        event: "progress",
+        provider: "subito",
+        status: "started",
+        timestamp: new Date().toISOString(),
+      });
+      onEvent({
+        event: "error",
+        provider: "subito",
+        code: "provider_failure",
+        message: "subito timeout",
+        retryable: false,
+        timestamp: new Date().toISOString(),
+      });
+      onEvent({
+        event: "complete",
+        total_results: 0,
+        provider_summary: {},
+        duration_ms: 120,
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    const { result } = renderHook(() => useSearchStream<{ brand: string }, { id: string }>());
+    await act(async () => {
+      await result.current.start({ brand: "BMW" });
+    });
+
+    expect(result.current.events.some((event) => event.event === "error")).toBe(true);
+    expect(result.current.error).toBeNull();
+    expect(result.current.isStreaming).toBe(false);
+  });
+
+  it("sets error when stream request fails", async () => {
+    vi.mocked(streamSearch).mockRejectedValueOnce(new Error("HTTP 500"));
+    const { result } = renderHook(() => useSearchStream<{ brand: string }, { id: string }>());
+
+    await act(async () => {
+      await result.current.start({ brand: "BMW" });
+    });
+
+    expect(result.current.isStreaming).toBe(false);
+    expect(result.current.error).toContain("HTTP 500");
+  });
 });

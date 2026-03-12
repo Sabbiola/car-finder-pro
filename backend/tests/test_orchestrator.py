@@ -18,7 +18,9 @@ class FakeProvider(BaseProvider):
         results: Sequence[VehicleListing] | None = None,
         error: Exception | None = None,
         enabled: bool = True,
+        configured: bool = True,
     ) -> None:
+        self._configured = configured
         self.info = ProviderInfo(
             id=provider_id,
             name=provider_id,
@@ -29,6 +31,9 @@ class FakeProvider(BaseProvider):
         )
         self._results = list(results or [])
         self._error = error
+
+    def is_configured(self) -> bool:
+        return self._configured
 
     async def search(self, _request: SearchRequest) -> list[VehicleListing]:
         if self._error is not None:
@@ -89,7 +94,27 @@ async def test_run_search_handles_partial_failures_and_dedup() -> None:
     health = await registry.health()
     by_provider = {entry.provider: entry for entry in health}
     assert by_provider["autoscout24"].error_rate == 0.0
+    assert by_provider["autoscout24"].total_calls == 1
     assert by_provider["subito"].error_rate == 1.0
+    assert by_provider["subito"].failed_calls == 1
+    assert by_provider["subito"].last_error == "provider down"
+
+
+@pytest.mark.asyncio
+async def test_run_search_adds_provider_not_configured_error_for_requested_source() -> None:
+    registry = ProviderRegistry()
+    registry._providers = {  # type: ignore[attr-defined]
+        "ebay": FakeProvider("ebay", configured=False),
+    }
+    registry._stats = {"ebay": ProviderRuntimeStats()}  # type: ignore[attr-defined]
+    orchestrator = SearchOrchestrator(registry=registry)
+
+    response = await orchestrator.run_search(SearchRequest(brand="BMW", sources=["ebay"]))
+
+    assert response.total_results == 0
+    assert response.providers_used == []
+    assert "ebay: provider_not_configured" in response.provider_errors
+    assert "No eligible providers for this request" in response.provider_errors
 
 
 @pytest.mark.asyncio
@@ -104,3 +129,20 @@ async def test_stream_search_emits_error_and_complete() -> None:
     assert "result" in event_names
     assert "error" in event_names
     assert event_names[-1] == "complete"
+
+
+@pytest.mark.asyncio
+async def test_stream_search_emits_provider_not_configured_for_requested_source() -> None:
+    registry = ProviderRegistry()
+    registry._providers = {  # type: ignore[attr-defined]
+        "ebay": FakeProvider("ebay", configured=False),
+    }
+    registry._stats = {"ebay": ProviderRuntimeStats()}  # type: ignore[attr-defined]
+    orchestrator = SearchOrchestrator(registry=registry)
+
+    events = [event async for event in orchestrator.stream_search(SearchRequest(brand="BMW", sources=["ebay"]))]
+    assert events[0]["event"] == "error"
+    assert events[0]["code"] == "provider_not_configured"
+    assert events[1]["event"] == "error"
+    assert events[1]["code"] == "no_provider"
+    assert events[-1]["event"] == "complete"

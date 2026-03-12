@@ -90,7 +90,7 @@ export interface FastApiSearchRequest {
   sources?: string[];
 }
 
-export const FASTAPI_CORE_SOURCES = ["autoscout24", "subito"] as const;
+export const FASTAPI_CORE_SOURCES = ["autoscout24", "subito", "ebay"] as const;
 const LEGACY_ONLY_SOURCES = ["automobile", "brumbrum"];
 
 const mergedCacheByQuery = new Map<string, CarListing[]>();
@@ -113,7 +113,7 @@ function parseMaybeNumber(value: string): number | undefined {
 function normalizeSources(filters: SearchFiltersState): string[] {
   return filters.sources?.length
     ? filters.sources
-    : ["autoscout24", "subito", "automobile", "brumbrum"];
+    : ["autoscout24", "subito", "ebay", "automobile", "brumbrum"];
 }
 
 function splitSources(filters: SearchFiltersState): { coreSources: string[]; legacySources: string[] } {

@@ -11,6 +11,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "npm exec --yes playwright@1.54.2 test",
+    "test:e2e:headed": "npm exec --yes playwright@1.54.2 test --headed",
     "format": "prettier . --write",
     "format:check": "prettier . --check"
   },

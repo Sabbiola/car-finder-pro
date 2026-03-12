@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from time import perf_counter
 from typing import AsyncIterator
 
+from app.core.observability import log_event
 from app.core.settings import get_settings
 from app.core.provider_registry import ProviderRegistry
 from app.dedup.deduplicator import deduplicate_listings
@@ -22,34 +23,74 @@ class SearchOrchestrator:
 
     async def _run_provider(self, provider, request: SearchRequest) -> tuple[str, list[VehicleListing], str | None]:
         started_at = perf_counter()
+        provider_id = provider.info.id
+        log_event("provider_search_started", provider=provider_id)
         try:
             timeout = self.settings.provider_timeout_seconds
             results = await asyncio.wait_for(provider.search(request), timeout=timeout)
             normalized = [normalize_listing(result, provider.info.id) for result in results]
             latency_ms = int((perf_counter() - started_at) * 1000)
-            self.registry.record_success(provider.info.id, latency_ms)
-            return provider.info.id, normalized, None
+            self.registry.record_success(provider_id, latency_ms)
+            log_event(
+                "provider_search_completed",
+                provider=provider_id,
+                duration_ms=latency_ms,
+                status="success",
+                result_count=len(normalized),
+            )
+            return provider_id, normalized, None
         except asyncio.TimeoutError:
             latency_ms = int((perf_counter() - started_at) * 1000)
-            self.registry.record_failure(provider.info.id, latency_ms)
-            return provider.info.id, [], f"Timed out after {self.settings.provider_timeout_seconds}s"
+            error_message = f"Timed out after {self.settings.provider_timeout_seconds}s"
+            self.registry.record_failure(provider_id, latency_ms, error_message)
+            log_event(
+                "provider_search_completed",
+                provider=provider_id,
+                duration_ms=latency_ms,
+                status="timeout",
+                result_count=0,
+                error=error_message,
+            )
+            return provider_id, [], error_message
         except Exception as exc:  # noqa: BLE001
             latency_ms = int((perf_counter() - started_at) * 1000)
-            self.registry.record_failure(provider.info.id, latency_ms)
-            return provider.info.id, [], str(exc)
+            error_message = str(exc)
+            self.registry.record_failure(provider_id, latency_ms, error_message)
+            log_event(
+                "provider_search_completed",
+                provider=provider_id,
+                duration_ms=latency_ms,
+                status="error",
+                result_count=0,
+                error=error_message,
+            )
+            return provider_id, [], error_message
+
+    def _requested_provider_config_errors(self, request: SearchRequest) -> list[str]:
+        if not request.sources:
+            return []
+        errors: list[str] = []
+        for source in request.sources:
+            provider = self.registry.get(source)
+            if provider is None:
+                continue
+            if provider.info.enabled and not provider.is_configured():
+                errors.append(f"{source}: provider_not_configured")
+        return errors
 
     async def run_search(self, request: SearchRequest) -> SearchResponse:
         selected = select_providers(request, self.registry)
+        provider_errors: list[str] = self._requested_provider_config_errors(request)
         if not selected:
             return SearchResponse(
                 total_results=0,
                 listings=[],
                 providers_used=[],
-                provider_errors=["No eligible providers for this request"],
+                provider_errors=provider_errors + ["No eligible providers for this request"],
             )
 
+        log_event("search_started", mode="sync", provider_count=len(selected))
         collected: list[VehicleListing] = []
-        provider_errors: list[str] = []
         semaphore = asyncio.Semaphore(self.settings.max_provider_concurrency)
 
         async def guarded(provider):
@@ -66,6 +107,12 @@ class SearchOrchestrator:
 
         deduped = deduplicate_listings(collected)
         ranked = apply_basic_scoring(deduped)
+        log_event(
+            "search_completed",
+            mode="sync",
+            total_results=len(ranked),
+            provider_errors=len(provider_errors),
+        )
 
         return SearchResponse(
             total_results=len(ranked),
@@ -77,6 +124,18 @@ class SearchOrchestrator:
     async def stream_search(self, request: SearchRequest) -> AsyncIterator[dict]:
         started_at = datetime.now(timezone.utc)
         selected = select_providers(request, self.registry)
+        provider_config_errors = self._requested_provider_config_errors(request)
+        provider_error_count = len(provider_config_errors)
+
+        for error_message in provider_config_errors:
+            provider_id = error_message.split(":", maxsplit=1)[0]
+            yield ErrorEvent(
+                provider=provider_id,
+                code="provider_not_configured",
+                message=error_message,
+                retryable=False,
+            ).model_dump(mode="json")
+
         if not selected:
             yield ErrorEvent(
                 provider=None,
@@ -87,6 +146,7 @@ class SearchOrchestrator:
             yield CompleteEvent(total_results=0, provider_summary={}, duration_ms=0).model_dump(mode="json")
             return
 
+        log_event("search_started", mode="stream", provider_count=len(selected))
         provider_summary: dict[str, int] = defaultdict(int)
         collected: list[VehicleListing] = []
         semaphore = asyncio.Semaphore(self.settings.max_provider_concurrency)
@@ -116,6 +176,7 @@ class SearchOrchestrator:
                     fetched_count=len(normalized),
                 ).model_dump(mode="json")
             except Exception as exc:  # noqa: BLE001
+                provider_error_count += 1
                 yield ErrorEvent(
                     provider=provider_id,
                     code="provider_failure",
@@ -130,6 +191,13 @@ class SearchOrchestrator:
 
         final = apply_basic_scoring(deduplicate_listings(collected))
         duration_ms = int((datetime.now(timezone.utc) - started_at).total_seconds() * 1000)
+        log_event(
+            "search_completed",
+            mode="stream",
+            total_results=len(final),
+            provider_errors=provider_error_count,
+            duration_ms=duration_ms,
+        )
         yield CompleteEvent(
             total_results=len(final),
             provider_summary=dict(provider_summary),

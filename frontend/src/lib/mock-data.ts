@@ -9,7 +9,7 @@ export interface CarListing {
   fuel: string;
   transmission: string;
   power: string;
-  source: "autoscout24" | "subito" | "automobile" | "brumbrum";
+  source: "autoscout24" | "subito" | "ebay" | "automobile" | "brumbrum";
   allSources?: string[];
   imageUrl: string;
   location: string;
@@ -172,6 +172,7 @@ export const bodyTypes = [
 export const sourceLabels: Record<string, string> = {
   autoscout24: "AutoScout24",
   subito: "Subito.it",
+  ebay: "eBay Motors",
   automobile: "Automobile.it",
   brumbrum: "Brumbrum",
 };
@@ -179,6 +180,7 @@ export const sourceLabels: Record<string, string> = {
 export const sourceColors: Record<string, string> = {
   autoscout24: "bg-[hsl(var(--source-autoscout))]",
   subito: "bg-[hsl(var(--source-subito))]",
+  ebay: "bg-slate-700",
   automobile: "bg-[hsl(var(--source-automobile))]",
   brumbrum: "bg-[hsl(var(--source-brumbrum))]",
 };
