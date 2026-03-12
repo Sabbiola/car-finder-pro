@@ -1,0 +1,11 @@
+region	country_area	name	url	integration_type	api_public	priority	status
+EU	Pan-EU	AutoScout24	https://www.autoscout24.com	html_scraper	partner	high	phase_1_core
+EU	Italy	Subito	https://www.subito.it	html_scraper	no	high	phase_1_core
+EU	Germany	mobile.de	https://services.mobile.de	official_api	yes	high	phase_2
+Global	Global	eBay Motors	https://developer.ebay.com	official_api	yes	high	phase_2
+LATAM	Multi-country	Mercado Libre Autos	https://developers.mercadolibre.com	official_api	yes	high	phase_2
+EU	Italy	Automobile.it	https://www.automobile.it	html_scraper	unknown	medium	transition_fallback
+EU	Italy	BrumBrum	https://www.brumbrum.it	html_scraper	no	medium	transition_fallback
+US/Global	Global	Facebook Marketplace	https://www.facebook.com/marketplace	browser_scraper	uncertain	high	phase_3
+US	USA	Craigslist	https://www.craigslist.org	html_scraper	partial	high	phase_3
+EU	UK	Auto Trader UK	https://www.autotrader.co.uk	partner_api	yes	high	phase_3

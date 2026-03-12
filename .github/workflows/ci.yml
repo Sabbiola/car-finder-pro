@@ -8,6 +8,9 @@ on:
 jobs:
   frontend:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
 
@@ -16,6 +19,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -28,6 +32,30 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run backend tests
+        run: pytest -q
+
+      - name: Backend import smoke
+        run: python -c "import app.main; print('backend import ok')"
 
   edge-functions:
     runs-on: ubuntu-latest
@@ -45,3 +73,6 @@ jobs:
           deno check supabase/functions/scrape-detail/index.ts
           deno check supabase/functions/ai-search/index.ts
           deno check supabase/functions/firecrawl-scrape/index.ts
+
+      - name: Proxy contract checks
+        run: deno test supabase/functions/_shared/proxy_contract.test.ts

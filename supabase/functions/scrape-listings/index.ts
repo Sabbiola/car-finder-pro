@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { toLegacyProxyResponse } from "../_shared/proxy_contract.ts";
 
 interface ParsedListing {
   title: string;
@@ -1230,6 +1231,58 @@ Deno.serve(async (req) => {
 
   try {
     const { filters } = await req.json();
+    const fastApiSearchUrl = Deno.env.get("FASTAPI_SEARCH_URL");
+    const proxyMode = Deno.env.get("FASTAPI_PROXY_MODE") || "primary_with_fallback";
+    const forceLegacyOnly = req.headers.get("x-cf-legacy-only") === "1";
+
+    if (fastApiSearchUrl && !forceLegacyOnly && proxyMode !== "legacy_only") {
+      const fastApiPayload = {
+        query: `${filters?.brand || ""} ${filters?.model || ""}`.trim() || undefined,
+        brand: filters?.brand || undefined,
+        model: filters?.model || undefined,
+        trim: filters?.trim || undefined,
+        location: filters?.location || undefined,
+        year_min: filters?.yearMin ? parseInt(filters.yearMin) : undefined,
+        year_max: filters?.yearMax ? parseInt(filters.yearMax) : undefined,
+        price_min: filters?.priceMin ? parseInt(filters.priceMin) : undefined,
+        price_max: filters?.priceMax ? parseInt(filters.priceMax) : undefined,
+        mileage_max: filters?.kmMax ? parseInt(filters.kmMax) : undefined,
+        fuel_types: filters?.fuel ? [filters.fuel] : undefined,
+        body_styles: filters?.bodyType ? [filters.bodyType] : undefined,
+        private_only: filters?.sellerType === "private",
+        mode: "fast",
+        sources: filters?.sources?.length ? filters.sources : undefined,
+      };
+
+      try {
+        const fastApiResponse = await fetch(fastApiSearchUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(fastApiPayload),
+        });
+
+        if (!fastApiResponse.ok) {
+          throw new Error(`FastAPI error ${fastApiResponse.status}: ${(await fastApiResponse.text()).slice(0, 180)}`);
+        }
+
+        const fastApiData = await fastApiResponse.json();
+        return new Response(JSON.stringify(toLegacyProxyResponse(fastApiData)), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (proxyError) {
+        console.error("[scrape-listings] FastAPI proxy failure:", proxyError);
+        if (proxyMode === "fastapi_only") {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: proxyError instanceof Error ? proxyError.message : "FastAPI proxy failed",
+            }),
+            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+      }
+    }
+
     const apiKey = Deno.env.get("SCRAPINGBEE_API_KEY");
     if (!apiKey) {
       return new Response(JSON.stringify({ success: false, error: "ScrapingBee not configured" }), {
@@ -1274,6 +1327,25 @@ Deno.serve(async (req) => {
       : ["autoscout24", "subito", "automobile", "brumbrum"];
 
     const bodyTypeFilter = filters?.bodyType || null;
+    const fuelCodeMap: Record<string, string> = {
+      Benzina: "B",
+      Diesel: "D",
+      Elettrica: "E",
+      Ibrida: "H",
+      GPL: "L",
+      Metano: "M",
+    };
+    const gearCodeMap: Record<string, string> = { Automatico: "A", Manuale: "M" };
+    const asParams = new URLSearchParams();
+    if (yearMin) asParams.set("fregfrom", String(yearMin));
+    if (yearMax) asParams.set("fregto", String(yearMax));
+    if (priceMin) asParams.set("pricefrom", String(priceMin));
+    if (priceMax) asParams.set("priceto", String(priceMax));
+    if (kmMin) asParams.set("kmfrom", String(kmMin));
+    if (kmMax) asParams.set("kmto", String(kmMax));
+    if (fuelFilter && fuelCodeMap[fuelFilter]) asParams.set("fuelc", fuelCodeMap[fuelFilter]);
+    if (transmissionFilter && gearCodeMap[transmissionFilter])
+      asParams.set("gear", gearCodeMap[transmissionFilter]);
     const bodyCodeMap: Record<string, string> = {
       SUV: "3",
       Berlina: "1",
@@ -1282,6 +1354,10 @@ Deno.serve(async (req) => {
       Cabrio: "5",
       Monovolume: "6",
     };
+
+    if (bodyTypeFilter && bodyCodeMap[bodyTypeFilter])
+      asParams.set("body", bodyCodeMap[bodyTypeFilter]);
+    const asParamStr = asParams.toString();
 
     // Require at least one meaningful filter
     if (!brand && !bodyTypeFilter && !fuelFilter && !priceMax && !kmMax && !yearMin) {
@@ -1327,29 +1403,6 @@ Deno.serve(async (req) => {
       }
 
       // --- AutoScout24 ---
-      const fuelCodeMap: Record<string, string> = {
-        Benzina: "B",
-        Diesel: "D",
-        Elettrica: "E",
-        Ibrida: "H",
-        GPL: "L",
-        Metano: "M",
-      };
-      const gearCodeMap: Record<string, string> = { Automatico: "A", Manuale: "M" };
-      const asParams = new URLSearchParams();
-      if (yearMin) asParams.set("fregfrom", String(yearMin));
-      if (yearMax) asParams.set("fregto", String(yearMax));
-      if (priceMin) asParams.set("pricefrom", String(priceMin));
-      if (priceMax) asParams.set("priceto", String(priceMax));
-      if (kmMin) asParams.set("kmfrom", String(kmMin));
-      if (kmMax) asParams.set("kmto", String(kmMax));
-      if (fuelFilter && fuelCodeMap[fuelFilter]) asParams.set("fuelc", fuelCodeMap[fuelFilter]);
-      if (transmissionFilter && gearCodeMap[transmissionFilter])
-        asParams.set("gear", gearCodeMap[transmissionFilter]);
-      if (bodyTypeFilter && bodyCodeMap[bodyTypeFilter])
-        asParams.set("body", bodyCodeMap[bodyTypeFilter]);
-      const asParamStr = asParams.toString();
-
       const asSlug = getAutoScoutModelSlug(brand, model);
       // Normalize brand slug: remove accents/diacritics (handles Škoda, Citroën, etc.)
       const brandSlug = brand
@@ -1540,7 +1593,7 @@ Deno.serve(async (req) => {
       console.log(`Saved: ${upsertable.length} upserted, ${insertOnly.length} inserted`);
     }
 
-    return new Response(JSON.stringify({ success: true, count: unique.length }), {
+    return new Response(JSON.stringify({ success: true, count: unique.length, source: "legacy" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

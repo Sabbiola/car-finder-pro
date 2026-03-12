@@ -26,6 +26,9 @@ jobs:
           deno check supabase/functions/ai-search/index.ts
           deno check supabase/functions/firecrawl-scrape/index.ts
 
+      - name: Proxy contract checks
+        run: deno test supabase/functions/_shared/proxy_contract.test.ts
+
   deploy:
     runs-on: ubuntu-latest
     needs: typecheck
