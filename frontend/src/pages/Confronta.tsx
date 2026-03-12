@@ -3,8 +3,10 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, Share2, Check, ExternalLink } from "lucide-react";
 import Header from "@/components/Header";
 import { fetchListingsByIds } from "@/lib/api/fetchByIds";
-import type { CarListing } from "@/lib/api/listings";
+import type { CarListing, ListingAnalysis } from "@/lib/api/listings";
 import { priceRatingConfig } from "@/lib/rating-config";
+import { getRuntimeConfig } from "@/lib/runtimeConfig";
+import { analyzeListing } from "@/services/api/listingAnalysis";
 
 import { FALLBACK_IMAGE } from "@/lib/constants";
 
@@ -61,6 +63,7 @@ const Confronta = () => {
   const navigate = useNavigate();
   const ids = (searchParams.get("ids") || "").split(",").filter(Boolean);
   const [cars, setCars] = useState<CarListing[]>([]);
+  const [analysesById, setAnalysesById] = useState<Record<string, ListingAnalysis>>({});
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
@@ -80,6 +83,36 @@ const Confronta = () => {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [ids.join(",")]);
+
+  useEffect(() => {
+    const runtime = getRuntimeConfig();
+    if (runtime.backendMode !== "fastapi" || !runtime.apiBaseUrl || cars.length === 0) return;
+
+    let cancelled = false;
+    Promise.all(
+      cars.map(async (car) => ({
+        id: car.id,
+        analysis: await analyzeListing(runtime.apiBaseUrl!, {
+          listing_id: car.id,
+          include: ["deal", "trust", "negotiation", "ownership"],
+        }),
+      })),
+    )
+      .then((entries) => {
+        if (cancelled) return;
+        setAnalysesById(
+          entries.reduce<Record<string, ListingAnalysis>>((acc, entry) => {
+            acc[entry.id] = entry.analysis;
+            return acc;
+          }, {}),
+        );
+      })
+      .catch(console.error);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cars]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -119,84 +152,141 @@ const Confronta = () => {
         )}
 
         {!loading && cars.length > 0 && (
-          <div
-            className="overflow-x-auto rounded-2xl border border-border shadow-sm animate-brutal-up"
-            style={{ animationDelay: "100ms" }}
-          >
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-border bg-muted/40">
-                  <th className="p-4 text-left text-xs font-medium text-muted-foreground w-32">
-                    Spec
-                  </th>
-                  {cars.map((car) => (
-                    <th
-                      key={car.id}
-                      className="p-4 text-left min-w-[220px] align-top border-l border-border"
-                    >
-                      <img
-                        src={car.image_url || FALLBACK_IMAGE}
-                        alt={car.title}
-                        className="w-full h-28 object-cover rounded-xl mb-3"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = FALLBACK_IMAGE;
-                        }}
-                      />
-                      <div className="text-sm font-semibold leading-tight">{car.title}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5 capitalize">
-                        {car.source}
-                      </div>
-                      {car.source_url && car.source_url !== "#" && (
-                        <a
-                          href={car.source_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="mt-1.5 inline-flex items-center gap-1 text-xs text-violet-600 hover:underline"
-                        >
-                          Vai all&apos;annuncio <ExternalLink className="h-3 w-3" />
-                        </a>
-                      )}
+          <div className="space-y-6">
+            <div
+              className="overflow-x-auto rounded-2xl border border-border shadow-sm animate-brutal-up"
+              style={{ animationDelay: "100ms" }}
+            >
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="border-b border-border bg-muted/40">
+                    <th className="p-4 text-left text-xs font-medium text-muted-foreground w-32">
+                      Spec
                     </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, ri) => {
-                  const bestIdx =
-                    row.bestMode && row.numericGet
-                      ? findBestIndex(cars.map(row.numericGet!), row.bestMode)
-                      : null;
-
-                  return (
-                    <tr
-                      key={row.label}
-                      className={`border-b border-border last:border-b-0 transition-colors ${ri % 2 !== 0 ? "bg-muted/20" : ""}`}
-                    >
-                      <td className="p-4 text-xs font-semibold text-muted-foreground whitespace-nowrap">
-                        {row.label}
-                      </td>
-                      {cars.map((car, ci) => {
-                        const isBest = bestIdx === ci;
-                        return (
-                          <td
-                            key={car.id}
-                            className={`p-4 text-sm font-medium border-l border-border ${isBest ? "text-violet-600 dark:text-violet-400" : ""}`}
+                    {cars.map((car) => (
+                      <th
+                        key={car.id}
+                        className="p-4 text-left min-w-[220px] align-top border-l border-border"
+                      >
+                        <img
+                          src={car.image_url || FALLBACK_IMAGE}
+                          alt={car.title}
+                          className="w-full h-28 object-cover rounded-xl mb-3"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = FALLBACK_IMAGE;
+                          }}
+                        />
+                        <div className="text-sm font-semibold leading-tight">{car.title}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5 capitalize">
+                          {car.source}
+                        </div>
+                        {car.source_url && car.source_url !== "#" && (
+                          <a
+                            href={car.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="mt-1.5 inline-flex items-center gap-1 text-xs text-violet-600 hover:underline"
                           >
-                            {String(row.get(car))}
-                            {isBest && (
-                              <span className="ml-2 text-[10px] bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 px-2 py-0.5 rounded-full font-semibold">
-                                Top
-                              </span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
+                            Vai all&apos;annuncio <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, ri) => {
+                    const bestIdx =
+                      row.bestMode && row.numericGet
+                        ? findBestIndex(cars.map(row.numericGet!), row.bestMode)
+                        : null;
+
+                    return (
+                      <tr
+                        key={row.label}
+                        className={`border-b border-border last:border-b-0 transition-colors ${ri % 2 !== 0 ? "bg-muted/20" : ""}`}
+                      >
+                        <td className="p-4 text-xs font-semibold text-muted-foreground whitespace-nowrap">
+                          {row.label}
+                        </td>
+                        {cars.map((car, ci) => {
+                          const isBest = bestIdx === ci;
+                          return (
+                            <td
+                              key={car.id}
+                              className={`p-4 text-sm font-medium border-l border-border ${isBest ? "text-violet-600 dark:text-violet-400" : ""}`}
+                            >
+                              {String(row.get(car))}
+                              {isBest && (
+                                <span className="ml-2 text-[10px] bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 px-2 py-0.5 rounded-full font-semibold">
+                                  Top
+                                </span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {Object.keys(analysesById).length > 0 && (
+              <div className="grid gap-4 lg:grid-cols-3">
+                {cars.map((car) => {
+                  const analysis = analysesById[car.id];
+                  return (
+                    <div key={car.id} className="rounded-2xl border border-border/60 bg-card p-4 space-y-3">
+                      <div className="text-sm font-semibold">{car.title}</div>
+                      <div className="flex flex-wrap gap-2">
+                        {analysis?.deal_summary?.headline && (
+                          <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                            {analysis.deal_summary.headline}
+                          </span>
+                        )}
+                        {analysis?.trust_summary?.risk_level && (
+                          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+                            Risk {analysis.trust_summary.risk_level}
+                          </span>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Perche si</div>
+                        <div className="text-sm text-muted-foreground">
+                          {analysis?.deal_summary?.top_reasons?.[0] || "nessun insight disponibile"}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Perche no</div>
+                        <div className="text-sm text-muted-foreground">
+                          {analysis?.trust_summary?.flags?.[0] || "nessuna criticita dominante"}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
+                          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Target</div>
+                          <div className="text-sm font-semibold">
+                            {analysis?.negotiation_summary?.target_price
+                              ? `EUR ${analysis.negotiation_summary.target_price.toLocaleString("it-IT")}`
+                              : "n/d"}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
+                          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Costo 24 mesi</div>
+                          <div className="text-sm font-semibold">
+                            {analysis?.ownership_estimate?.total_cost_of_ownership
+                              ? `EUR ${analysis.ownership_estimate.total_cost_of_ownership.toLocaleString("it-IT")}`
+                              : "n/d"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
+              </div>
+            )}
           </div>
         )}
 

@@ -5,21 +5,24 @@ from time import perf_counter
 from typing import AsyncIterator
 
 from app.core.observability import log_event
-from app.core.settings import get_settings
 from app.core.provider_registry import ProviderRegistry
+from app.core.settings import get_settings
 from app.dedup.deduplicator import deduplicate_listings
 from app.models.events import CompleteEvent, ErrorEvent, ProgressEvent, ResultEvent
 from app.models.search import SearchRequest, SearchResponse
 from app.models.vehicle import VehicleListing
 from app.normalizers.vehicle_normalizer import normalize_listing
 from app.ranking.scoring import apply_basic_scoring
+from app.services.analysis_service import AnalysisService
 from app.services.provider_selector import select_providers
+from app.services.supabase_market_repository import SupabaseMarketRepository
 
 
 class SearchOrchestrator:
-    def __init__(self, registry: ProviderRegistry) -> None:
+    def __init__(self, registry: ProviderRegistry, analysis_service: AnalysisService | None = None) -> None:
         self.registry = registry
         self.settings = get_settings()
+        self.analysis_service = analysis_service or AnalysisService(repository=SupabaseMarketRepository())
 
     async def _run_provider(self, provider, request: SearchRequest) -> tuple[str, list[VehicleListing], str | None]:
         started_at = perf_counter()
@@ -107,6 +110,7 @@ class SearchOrchestrator:
 
         deduped = deduplicate_listings(collected)
         ranked = apply_basic_scoring(deduped)
+        ranked = await self.analysis_service.enrich_search_results(ranked)
         log_event(
             "search_completed",
             mode="sync",
@@ -166,8 +170,14 @@ class SearchOrchestrator:
                     raise RuntimeError(error)
                 provider_summary[provider_id] += len(normalized)
                 collected.extend(normalized)
-
-                for listing in apply_basic_scoring(normalized):
+                scored_batch = apply_basic_scoring(normalized)
+                for listing in scored_batch:
+                    await self.analysis_service.analyze_listing(
+                        listing,
+                        include=["deal", "trust", "negotiation"],
+                        local_candidates=collected,
+                        use_snapshot=False,
+                    )
                     yield ResultEvent(listing=listing).model_dump(mode="json")
 
                 yield ProgressEvent(

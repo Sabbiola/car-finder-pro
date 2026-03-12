@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 
+from app.api.analysis import router as analysis_router
 from app.api.health import router as health_router
 from app.api.metadata import router as metadata_router
 from app.api.providers import router as providers_router
@@ -36,6 +37,7 @@ app.add_middleware(
 )
 
 app.include_router(search_router, prefix="/api", tags=["search"])
+app.include_router(analysis_router, prefix="/api", tags=["analysis"])
 app.include_router(providers_router, prefix="/api", tags=["providers"])
 app.include_router(health_router, prefix="/api", tags=["health"])
 app.include_router(metadata_router, prefix="/api", tags=["metadata"])

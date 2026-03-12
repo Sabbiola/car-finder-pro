@@ -1,13 +1,14 @@
 import { ExternalLink, Award, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { CarListing, sourceLabels, sourceColors } from "@/lib/mock-data";
+import { sourceLabels, sourceColors } from "@/lib/mock-data";
 import { useNavigate } from "react-router-dom";
 import FavoriteButton from "@/components/FavoriteButton";
 import CompareButton from "@/components/CompareButton";
 import { priceRatingConfig } from "@/lib/rating-config";
+import type { CardListing } from "@/lib/toCardListing";
 
 interface Props {
-  listing: CarListing;
+  listing: CardListing;
   index?: number;
   showCompare?: boolean;
 }

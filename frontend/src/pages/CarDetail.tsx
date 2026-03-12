@@ -18,6 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import Header from "@/components/Header";
 import CarCard from "@/components/CarCard";
 import FavoriteButton from "@/components/FavoriteButton";
+import ListingInsightsPanel from "@/features/results/components/ListingInsightsPanel";
+import { useListingAnalysis } from "@/features/results/hooks/useListingAnalysis";
 import { sourceLabels, sourceColors } from "@/lib/mock-data";
 import { supabase } from "@/integrations/supabase/client";
 import type { CarListing } from "@/lib/api/listings";
@@ -70,6 +72,12 @@ const CarDetail = () => {
   const [copied, setCopied] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const analysisQuery = useListingAnalysis({
+    listingId: car?.id,
+    listing: car,
+    include: ["deal", "trust", "negotiation", "ownership"],
+    enabled: !!car,
+  });
 
   const handleShare = async () => {
     try {
@@ -511,6 +519,18 @@ const CarDetail = () => {
                 />
               </button>
             ))}
+          </div>
+        )}
+
+        {(analysisQuery.data || analysisQuery.isLoading) && (
+          <div className="animate-brutal-up" style={{ animationDelay: "90ms" }}>
+            {analysisQuery.isLoading ? (
+              <div className="rounded-2xl border border-border/60 bg-card p-4 text-sm text-muted-foreground">
+                Caricamento analisi decisionale...
+              </div>
+            ) : (
+              <ListingInsightsPanel listing={car} analysis={analysisQuery.data} />
+            )}
           </div>
         )}
 

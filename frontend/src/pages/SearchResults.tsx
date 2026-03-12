@@ -11,10 +11,10 @@ import {
 import Header from "@/components/Header";
 import ApiConfigBanner from "@/components/ApiConfigBanner";
 import SearchFilters, { SearchFiltersState } from "@/components/SearchFilters";
-import CarCard from "@/components/CarCard";
 import CarCardSkeleton from "@/components/CarCardSkeleton";
 import ActiveFilterChips from "@/components/ActiveFilterChips";
 import ListingsMap from "@/components/ListingsMap";
+import ListingResultCard from "@/features/results/components/ListingResultCard";
 import { useSearchParams } from "react-router-dom";
 import {
   FASTAPI_CORE_SOURCES,
@@ -23,7 +23,6 @@ import {
   streamListings,
   type CarListing,
 } from "@/lib/api/listings";
-import { toCardListing } from "@/lib/toCardListing";
 import { useToast } from "@/hooks/use-toast";
 import { sourceLabels, sourceColors } from "@/lib/mock-data";
 import { VALID_SORT_OPTIONS, type SortOption, PAGE_SIZE, CACHE_TTL_HOURS } from "@/lib/constants";
@@ -517,7 +516,7 @@ const SearchResults = () => {
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 stagger-children">
             {visibleResults.map((listing, i) => (
-              <CarCard key={listing.id} listing={toCardListing(listing)} index={i} showCompare />
+              <ListingResultCard key={listing.id} listing={listing} index={i} />
             ))}
           </div>
         )}

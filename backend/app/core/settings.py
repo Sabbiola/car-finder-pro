@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     ebay_marketplace_id: str = "EBAY_IT"
     observability_webhook_url: str | None = None
     observability_webhook_timeout_seconds: int = 2
+    supabase_url: str | None = None
+    supabase_service_role_key: str | None = None
+    supabase_anon_key: str | None = None
+    analysis_snapshot_ttl_hours: int = 24
+    negotiation_llm_enabled: bool = False
     legacy_scrape_listings_url: str | None = None
     fastapi_proxy_mode: str = "primary_with_fallback"
     test_stub_mode: bool = False

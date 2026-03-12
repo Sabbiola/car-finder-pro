@@ -4,6 +4,88 @@ import { supabase } from "@/integrations/supabase/client";
 import { getRuntimeConfig, type RuntimeConfig } from "@/lib/runtimeConfig";
 import { streamSearch } from "@/services/api/searchStream";
 
+export type AnalysisConfidence = "high" | "medium" | "low" | "insufficient";
+export type RiskLevel = "low" | "medium" | "high";
+
+export interface DealSummary {
+  headline?: string | null;
+  summary?: string | null;
+  top_reasons?: string[];
+  benchmark_price?: number | null;
+  price_delta_pct?: number | null;
+  days_on_market?: number | null;
+  price_change_count?: number;
+  comparable_count?: number;
+  confidence?: AnalysisConfidence;
+}
+
+export interface SellerProfile {
+  seller_type_inferred?: string | null;
+  seller_name?: string | null;
+  seller_url?: string | null;
+  confidence?: AnalysisConfidence;
+  notes?: string[];
+}
+
+export interface TrustSummary {
+  trust_score?: number | null;
+  risk_level?: RiskLevel;
+  flags?: string[];
+  seller_profile?: SellerProfile | null;
+  data_completeness_score?: number | null;
+  duplicate_cluster_size?: number;
+  image_reuse_count?: number;
+  summary?: string | null;
+}
+
+export interface NegotiationSummary {
+  target_price?: number | null;
+  opening_offer?: number | null;
+  walk_away_price?: number | null;
+  negotiation_headroom_pct?: number | null;
+  arguments?: string[];
+  questions_for_seller?: string[];
+  inspection_checklist?: string[];
+  message_template?: string | null;
+  confidence?: AnalysisConfidence;
+}
+
+export interface OwnershipProfile {
+  annual_km: number;
+  horizon_months: number;
+  fuel_price_per_liter: number;
+  electricity_price_per_kwh: number;
+  insurance_band: "low" | "medium" | "high";
+}
+
+export interface OwnershipScenario {
+  label: "best" | "base" | "worst";
+  total_cost: number;
+  monthly_cost: number;
+}
+
+export interface OwnershipEstimate {
+  depreciation_cost?: number;
+  fuel_or_energy_cost?: number;
+  maintenance_cost?: number;
+  insurance_cost?: number;
+  total_cost_of_ownership?: number;
+  monthly_cost?: number;
+  scenario_best?: OwnershipScenario;
+  scenario_base?: OwnershipScenario;
+  scenario_worst?: OwnershipScenario;
+  summary?: string | null;
+}
+
+export interface ListingAnalysis {
+  listing_id?: string | null;
+  listing_hash?: string | null;
+  deal_summary?: DealSummary | null;
+  trust_summary?: TrustSummary | null;
+  negotiation_summary?: NegotiationSummary | null;
+  ownership_estimate?: OwnershipEstimate | null;
+}
+
 export interface CarListing {
   id: string;
   title: string;
@@ -35,6 +117,16 @@ export interface CarListing {
   detail_scraped?: boolean;
   image_urls?: string[] | null;
   extra_data?: Record<string, unknown> | null;
+  seller_name?: string | null;
+  seller_external_id?: string | null;
+  seller_url?: string | null;
+  seller_phone_hash?: string | null;
+  listing_hash?: string | null;
+  deal_score?: number | null;
+  reason_codes?: string[] | null;
+  deal_summary?: DealSummary | null;
+  trust_summary?: TrustSummary | null;
+  negotiation_summary?: NegotiationSummary | null;
 }
 
 interface FastApiVehicleListing {
@@ -62,6 +154,14 @@ interface FastApiVehicleListing {
   deal_score?: number | null;
   reason_codes?: string[] | null;
   scraped_at?: string | null;
+  seller_name?: string | null;
+  seller_external_id?: string | null;
+  seller_url?: string | null;
+  seller_phone_hash?: string | null;
+  listing_hash?: string | null;
+  deal_summary?: DealSummary | null;
+  trust_summary?: TrustSummary | null;
+  negotiation_summary?: NegotiationSummary | null;
 }
 
 interface FastApiSearchResponse {
@@ -190,6 +290,16 @@ export function mapFastApiListing(item: FastApiVehicleListing): CarListing {
       raw_payload: item.raw_payload || null,
       deal_score: item.deal_score ?? null,
     },
+    seller_name: item.seller_name || null,
+    seller_external_id: item.seller_external_id || null,
+    seller_url: item.seller_url || null,
+    seller_phone_hash: item.seller_phone_hash || null,
+    listing_hash: item.listing_hash || null,
+    deal_score: item.deal_score ?? null,
+    reason_codes: item.reason_codes || [],
+    deal_summary: item.deal_summary || null,
+    trust_summary: item.trust_summary || null,
+    negotiation_summary: item.negotiation_summary || null,
   };
 }
 

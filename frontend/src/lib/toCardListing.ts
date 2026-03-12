@@ -1,4 +1,4 @@
-import type { CarListing } from "@/lib/api/listings";
+import type { CarListing, DealSummary, NegotiationSummary, TrustSummary } from "@/lib/api/listings";
 import { FALLBACK_IMAGE } from "@/lib/constants";
 
 export type CardListing = {
@@ -23,6 +23,9 @@ export type CardListing = {
   color: string;
   doors: number;
   bodyType: string;
+  dealSummary?: DealSummary | null;
+  trustSummary?: TrustSummary | null;
+  negotiationSummary?: NegotiationSummary | null;
 };
 
 function normalizeUrl(url: string | null | undefined): string | null {
@@ -62,5 +65,8 @@ export function toCardListing(l: CarListing): CardListing {
     color: l.color || "",
     doors: l.doors || 4,
     bodyType: l.body_type || "",
+    dealSummary: l.deal_summary || null,
+    trustSummary: l.trust_summary || null,
+    negotiationSummary: l.negotiation_summary || null,
   };
 }

@@ -4,7 +4,9 @@ from datetime import datetime, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from app.core.dependencies import get_provider_registry, get_search_orchestrator
+from app.core.dependencies import get_analysis_service, get_provider_registry, get_search_orchestrator
+from app.models.analysis import DealSummary, ListingAnalysis, NegotiationSummary, OwnershipEstimate, OwnershipScenario, TrustSummary
+from app.models.analysis_request import AnalyzeListingRequest
 from app.main import app
 from app.models.search import SearchResponse
 from app.models.vehicle import VehicleListing
@@ -63,6 +65,32 @@ class StubOrchestrator:
             url="https://example.com/a",
             deal_score=82.0,
             reason_codes=["PRICE_SIGNIFICANTLY_BELOW_MARKET"],
+            deal_summary=DealSummary(
+                headline="Affare interessante",
+                summary="Sotto benchmark locale.",
+                top_reasons=["9% sotto benchmark"],
+                benchmark_price=27500,
+                price_delta_pct=-9.0,
+                comparable_count=12,
+                confidence="medium",
+            ),
+            trust_summary=TrustSummary(
+                trust_score=71.0,
+                risk_level="medium",
+                flags=["poche foto"],
+                summary="Annuncio da verificare prima di trattare.",
+            ),
+            negotiation_summary=NegotiationSummary(
+                target_price=25200,
+                opening_offer=24400,
+                walk_away_price=25200,
+                negotiation_headroom_pct=4.0,
+                arguments=["annuncio online da 20 giorni"],
+                questions_for_seller=["tagliandi documentati?"],
+                inspection_checklist=["controllare pneumatici"],
+                message_template="Ciao, valuterei un'offerta dopo visione.",
+                confidence="medium",
+            ),
         )
         return SearchResponse(
             total_results=1,
@@ -103,6 +131,52 @@ class StubOrchestrator:
         }
 
 
+class StubAnalysisService:
+    async def analyze_request(self, _request: AnalyzeListingRequest) -> ListingAnalysis:
+        return ListingAnalysis(
+            listing_id="listing-1",
+            listing_hash="hash-1",
+            deal_summary=DealSummary(
+                headline="Affare interessante",
+                summary="Sotto benchmark locale.",
+                top_reasons=["9% sotto benchmark"],
+                benchmark_price=27500,
+                price_delta_pct=-9.0,
+                comparable_count=12,
+                confidence="medium",
+            ),
+            trust_summary=TrustSummary(
+                trust_score=71.0,
+                risk_level="medium",
+                flags=["poche foto"],
+                summary="Annuncio da verificare prima di trattare.",
+            ),
+            negotiation_summary=NegotiationSummary(
+                target_price=25200,
+                opening_offer=24400,
+                walk_away_price=25200,
+                negotiation_headroom_pct=4.0,
+                arguments=["annuncio online da 20 giorni"],
+                questions_for_seller=["tagliandi documentati?"],
+                inspection_checklist=["controllare pneumatici"],
+                message_template="Ciao, valuterei un'offerta dopo visione.",
+                confidence="medium",
+            ),
+            ownership_estimate=OwnershipEstimate(
+                depreciation_cost=2500,
+                fuel_or_energy_cost=1800,
+                maintenance_cost=1200,
+                insurance_cost=1400,
+                total_cost_of_ownership=6900,
+                monthly_cost=288,
+                scenario_best=OwnershipScenario(label="best", total_cost=6200, monthly_cost=258),
+                scenario_base=OwnershipScenario(label="base", total_cost=6900, monthly_cost=288),
+                scenario_worst=OwnershipScenario(label="worst", total_cost=7800, monthly_cost=325),
+                summary="Costo stimato 24 mesi.",
+            ),
+        )
+
+
 @pytest.fixture(autouse=True)
 def _clear_dependency_overrides() -> None:
     app.dependency_overrides.clear()
@@ -113,6 +187,7 @@ def _clear_dependency_overrides() -> None:
 def _build_client() -> TestClient:
     app.dependency_overrides[get_provider_registry] = lambda: StubRegistry()
     app.dependency_overrides[get_search_orchestrator] = lambda: StubOrchestrator()
+    app.dependency_overrides[get_analysis_service] = lambda: StubAnalysisService()
     return TestClient(app)
 
 
@@ -128,6 +203,7 @@ def test_search_endpoint_contract() -> None:
     assert payload["providers_used"] == ["autoscout24"]
     assert payload["provider_errors"] == []
     assert payload["listings"][0]["reason_codes"] == ["PRICE_SIGNIFICANTLY_BELOW_MARKET"]
+    assert payload["listings"][0]["deal_summary"]["headline"] == "Affare interessante"
 
 
 def test_search_stream_emits_stable_events() -> None:
@@ -172,3 +248,21 @@ def test_providers_and_health_contract() -> None:
     assert "brands" in metadata_payload
     assert "models_by_brand" in metadata_payload
     assert "trims_by_brand_model" in metadata_payload
+
+    ownership_response = client.get("/api/metadata/ownership")
+    assert ownership_response.status_code == 200
+    ownership_payload = ownership_response.json()
+    assert ownership_payload["defaults"]["annual_km"] == 10000
+
+
+def test_listing_analysis_contract() -> None:
+    client = _build_client()
+    response = client.post(
+        "/api/listings/analyze",
+        json={"listing_id": "listing-1", "include": ["deal", "trust", "negotiation", "ownership"]},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["listing_id"] == "listing-1"
+    assert payload["deal_summary"]["headline"] == "Affare interessante"
+    assert payload["ownership_estimate"]["total_cost_of_ownership"] == 6900

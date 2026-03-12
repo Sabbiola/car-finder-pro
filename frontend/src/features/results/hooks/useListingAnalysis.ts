@@ -1,0 +1,59 @@
+import { useQuery } from "@tanstack/react-query";
+
+import type {
+  CarListing,
+  ListingAnalysis,
+  OwnershipProfile,
+} from "@/lib/api/listings";
+import { getRuntimeConfig } from "@/lib/runtimeConfig";
+import { analyzeListing, fetchOwnershipMetadata } from "@/services/api/listingAnalysis";
+
+interface UseListingAnalysisParams {
+  listingId?: string | null;
+  listing?: CarListing | null;
+  include?: Array<"deal" | "trust" | "negotiation" | "ownership">;
+  ownershipProfile?: OwnershipProfile;
+  enabled?: boolean;
+}
+
+export function useListingAnalysis({
+  listingId,
+  listing,
+  include = ["deal", "trust", "negotiation", "ownership"],
+  ownershipProfile,
+  enabled = true,
+}: UseListingAnalysisParams) {
+  const runtime = getRuntimeConfig();
+  const canFetch = runtime.backendMode === "fastapi" && !!runtime.apiBaseUrl && enabled;
+
+  return useQuery<ListingAnalysis | null>({
+    queryKey: ["listing-analysis", listingId || listing?.id || listing?.source_url || "inline", include, ownershipProfile],
+    enabled: canFetch && Boolean(listingId || listing),
+    queryFn: async () => {
+      if (!runtime.apiBaseUrl) return null;
+      return analyzeListing(runtime.apiBaseUrl, {
+        listing_id: listingId || undefined,
+        listing: listingId ? undefined : listing || undefined,
+        include,
+        ownership_profile: ownershipProfile,
+      });
+    },
+    staleTime: 10 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useOwnershipMetadata(enabled = true) {
+  const runtime = getRuntimeConfig();
+  const canFetch = runtime.backendMode === "fastapi" && !!runtime.apiBaseUrl && enabled;
+  return useQuery({
+    queryKey: ["ownership-metadata"],
+    enabled: canFetch,
+    queryFn: async () => {
+      if (!runtime.apiBaseUrl) return null;
+      return fetchOwnershipMetadata(runtime.apiBaseUrl);
+    },
+    staleTime: 60 * 60 * 1000,
+    retry: 1,
+  });
+}
