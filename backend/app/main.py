@@ -15,7 +15,11 @@ from app.core.settings import get_settings
 
 
 settings = get_settings()
-configure_logging(settings.log_level)
+configure_logging(
+    settings.log_level,
+    webhook_url=settings.observability_webhook_url,
+    webhook_timeout_seconds=settings.observability_webhook_timeout_seconds,
+)
 
 app = FastAPI(
     title=settings.app_name,

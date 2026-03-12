@@ -36,6 +36,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate required deploy secrets
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
+          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+          FASTAPI_HEALTHCHECK_URL: ${{ secrets.FASTAPI_HEALTHCHECK_URL }}
+        run: |
+          missing=0
+          for var in RAILWAY_TOKEN RAILWAY_PROJECT_ID RAILWAY_ENVIRONMENT_ID RAILWAY_SERVICE_ID FASTAPI_HEALTHCHECK_URL; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Missing required secret: $var"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -55,6 +74,5 @@ jobs:
           railway up --service $RAILWAY_SERVICE_ID --environment $RAILWAY_ENVIRONMENT_ID --detach
 
       - name: Healthcheck smoke
-        if: ${{ secrets.FASTAPI_HEALTHCHECK_URL != '' }}
         run: |
           curl --fail --show-error --silent "${{ secrets.FASTAPI_HEALTHCHECK_URL }}/healthz"

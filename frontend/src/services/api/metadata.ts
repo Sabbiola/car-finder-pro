@@ -5,6 +5,9 @@ export interface FilterMetadataResponse {
   body_styles?: string[];
   conditions?: string[];
   markets?: string[];
+  brands?: string[];
+  models_by_brand?: Record<string, string[]>;
+  trims_by_brand_model?: Record<string, Record<string, string[]>>;
   providers?: Array<{
     id: string;
     name: string;

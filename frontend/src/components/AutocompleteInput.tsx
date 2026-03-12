@@ -12,42 +12,14 @@ interface Suggestion {
   label: string;
 }
 
-function getSuggestions(query: string, selectedBrand: string): Suggestion[] {
-  if (!query && !selectedBrand) return [];
-  const q = query.toLowerCase().trim();
-
-  const results: Suggestion[] = [];
-
-  if (!selectedBrand || q) {
-    // Suggest brands
-    carBrands.forEach((brand) => {
-      if (brand.toLowerCase().includes(q)) {
-        results.push({ type: "brand", brand, label: brand });
-      }
-    });
-  }
-
-  // Suggest models
-  const brandsToSearch = selectedBrand ? [selectedBrand] : carBrands;
-  brandsToSearch.forEach((brand) => {
-    const models = brandModels[brand] || [];
-    models.forEach((model) => {
-      const full = `${brand} ${model}`.toLowerCase();
-      if (q && (model.toLowerCase().includes(q) || full.includes(q))) {
-        results.push({ type: "model", brand, model, label: `${brand} ${model}` });
-      }
-    });
-  });
-
-  return results.slice(0, 8);
-}
-
 interface Props {
   value: string;
   onChange: (value: string) => void;
   selectedBrand: string;
   onSelectBrand: (brand: string) => void;
   onSelectModel: (model: string) => void;
+  brands?: string[];
+  modelsByBrand?: Record<string, string[]>;
   placeholder?: string;
   className?: string;
 }
@@ -58,6 +30,8 @@ const AutocompleteInput = ({
   selectedBrand,
   onSelectBrand,
   onSelectModel,
+  brands,
+  modelsByBrand,
   placeholder,
   className,
 }: Props) => {
@@ -65,11 +39,15 @@ const AutocompleteInput = ({
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const availableBrands = brands?.length ? brands : carBrands;
+  const availableModelsByBrand = modelsByBrand && Object.keys(modelsByBrand).length ? modelsByBrand : brandModels;
 
   useEffect(() => {
-    setSuggestions(getSuggestions(value, selectedBrand));
+    setSuggestions(
+      getSuggestionsWithCatalog(value, selectedBrand, availableBrands, availableModelsByBrand),
+    );
     setHighlightIndex(-1);
-  }, [value, selectedBrand]);
+  }, [value, selectedBrand, availableBrands, availableModelsByBrand]);
 
   // Close on click outside
   useEffect(() => {
@@ -172,3 +150,36 @@ const AutocompleteInput = ({
 };
 
 export default AutocompleteInput;
+
+function getSuggestionsWithCatalog(
+  query: string,
+  selectedBrand: string,
+  brands: string[],
+  modelsByBrand: Record<string, string[]>,
+): Suggestion[] {
+  if (!query && !selectedBrand) return [];
+  const q = query.toLowerCase().trim();
+
+  const results: Suggestion[] = [];
+
+  if (!selectedBrand || q) {
+    for (const brand of brands) {
+      if (brand.toLowerCase().includes(q)) {
+        results.push({ type: "brand", brand, label: brand });
+      }
+    }
+  }
+
+  const brandsToSearch = selectedBrand ? [selectedBrand] : brands;
+  for (const brand of brandsToSearch) {
+    const models = modelsByBrand[brand] || [];
+    for (const model of models) {
+      const full = `${brand} ${model}`.toLowerCase();
+      if (q && (model.toLowerCase().includes(q) || full.includes(q))) {
+        results.push({ type: "model", brand, model, label: `${brand} ${model}` });
+      }
+    }
+  }
+
+  return results.slice(0, 8);
+}

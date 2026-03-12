@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Search,
   SlidersHorizontal,
@@ -97,6 +97,15 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
 
   const availableFuelTypes = metadata?.fuel_types?.length ? metadata.fuel_types : fuelTypes;
   const availableBodyTypes = metadata?.body_styles?.length ? metadata.body_styles : bodyTypes;
+  const availableBrands = metadata?.brands?.length ? metadata.brands : carBrands;
+  const availableModelsByBrand =
+    metadata?.models_by_brand && Object.keys(metadata.models_by_brand).length
+      ? metadata.models_by_brand
+      : brandModels;
+  const availableTrimsByBrandModel =
+    metadata?.trims_by_brand_model && Object.keys(metadata.trims_by_brand_model).length
+      ? metadata.trims_by_brand_model
+      : modelTrims;
   const availableSources = useMemo(() => {
     const fallbackOrder = Object.keys(sourceLabels);
     const metadataSources = metadata?.providers?.map((provider) => provider.id) || [];
@@ -109,6 +118,23 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
         label: sourceLabels[id as keyof typeof sourceLabels] || metadataLabel || id,
         configured: metadataProvider?.configured ?? true,
       };
+    });
+  }, [metadata]);
+
+  useEffect(() => {
+    const disabledProviderIds = new Set(
+      (metadata?.providers || [])
+        .filter((provider) => provider.configured === false)
+        .map((provider) => provider.id),
+    );
+    if (disabledProviderIds.size === 0) return;
+
+    setFilters((current) => {
+      const nextSources = current.sources.filter((source) => !disabledProviderIds.has(source));
+      if (nextSources.length === current.sources.length || nextSources.length === 0) {
+        return current;
+      }
+      return { ...current, sources: nextSources };
     });
   }, [metadata]);
 
@@ -219,7 +245,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
             <SelectValue placeholder="Marca" />
           </SelectTrigger>
           <SelectContent>
-            {carBrands.map((b) => (
+            {availableBrands.map((b) => (
               <SelectItem key={b} value={b}>
                 {b}
               </SelectItem>
@@ -239,7 +265,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
               <SelectValue placeholder="Modello" />
             </SelectTrigger>
             <SelectContent>
-              {(brandModels[filters.brand] || []).map((m) => (
+              {(availableModelsByBrand[filters.brand] || []).map((m) => (
                 <SelectItem key={m} value={m}>
                   {m}
                 </SelectItem>
@@ -256,6 +282,8 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
               update("model", "");
             }}
             onSelectModel={(v) => update("model", v)}
+            brands={availableBrands}
+            modelsByBrand={availableModelsByBrand}
             placeholder="Cerca marca o modello"
             className="lg:min-w-[220px] lg:flex-1"
           />
@@ -273,7 +301,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
               />
             </SelectTrigger>
             <SelectContent>
-              {(modelTrims[filters.brand]?.[filters.model] || []).map((t) => (
+              {(availableTrimsByBrandModel[filters.brand]?.[filters.model] || []).map((t) => (
                 <SelectItem key={t} value={t}>
                   {t}
                 </SelectItem>

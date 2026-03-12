@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from app.core.settings import get_settings
 from app.providers.autoscout24 import AutoScout24Provider
 from app.providers.base.base_provider import BaseProvider
 from app.providers.base.models import ProviderHealth, ProviderInfo
@@ -19,11 +20,17 @@ class ProviderRuntimeStats:
 
 class ProviderRegistry:
     def __init__(self) -> None:
+        settings = get_settings()
+        disabled = set(settings.disabled_providers)
         self._providers: dict[str, BaseProvider] = {
             "autoscout24": AutoScout24Provider(),
             "subito": SubitoProvider(),
             "ebay": EbayProvider(),
         }
+        for provider_id in disabled:
+            provider = self._providers.get(provider_id)
+            if provider is not None:
+                provider.info.enabled = False
         self._stats: dict[str, ProviderRuntimeStats] = {
             provider_id: ProviderRuntimeStats() for provider_id in self._providers
         }

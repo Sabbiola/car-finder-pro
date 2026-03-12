@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -76,8 +77,10 @@ class EbayClient:
         }
 
         timeout = httpx.Timeout(self.settings.request_timeout_seconds)
+        attempts = max(self.settings.provider_retry_attempts, 1)
+        backoff_ms = max(self.settings.provider_retry_backoff_ms, 0)
         last_error: Exception | None = None
-        for attempt in range(1, 4):
+        for attempt in range(1, attempts + 1):
             try:
                 async with httpx.AsyncClient(timeout=timeout) as client:
                     response = await client.get(
@@ -91,6 +94,9 @@ class EbayClient:
                 return response.json()
             except Exception as exc:  # noqa: BLE001
                 last_error = exc
-                if attempt == 3:
+                if attempt >= attempts:
                     break
-        raise RuntimeError(f"eBay search failed after retries: {last_error}") from last_error
+                sleep_seconds = (backoff_ms * attempt) / 1000
+                if sleep_seconds > 0:
+                    await asyncio.sleep(sleep_seconds)
+        raise RuntimeError(f"eBay search failed after {attempts} attempts: {last_error}") from last_error

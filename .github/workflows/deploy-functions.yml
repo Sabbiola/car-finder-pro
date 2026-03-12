@@ -22,18 +22,37 @@ jobs:
       - name: Typecheck edge functions
         run: |
           deno check supabase/functions/scrape-listings/index.ts
+          deno check supabase/functions/scrape-listings/proxy_runtime.ts
           deno check supabase/functions/scrape-detail/index.ts
           deno check supabase/functions/ai-search/index.ts
           deno check supabase/functions/firecrawl-scrape/index.ts
 
       - name: Proxy contract checks
-        run: deno test supabase/functions/_shared/proxy_contract.test.ts
+        run: |
+          deno test supabase/functions/_shared/proxy_contract.test.ts
+          deno test supabase/functions/scrape-listings/proxy_runtime.test.ts
 
   deploy:
     runs-on: ubuntu-latest
     needs: typecheck
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate required deploy secrets
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: |
+          missing=0
+          for var in SUPABASE_ACCESS_TOKEN SUPABASE_PROJECT_ID; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Missing required secret: $var"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
 
       - uses: supabase/setup-cli@v1
         with:
@@ -45,5 +64,10 @@ jobs:
           supabase functions deploy scrape-detail --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
           supabase functions deploy ai-search --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
           supabase functions deploy firecrawl-scrape --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy smoke
+        run: supabase functions list --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

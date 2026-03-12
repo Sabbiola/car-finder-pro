@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
-import { toLegacyProxyResponse } from "../_shared/proxy_contract.ts";
+import { executeFastApiProxy, resolveProxyRuntime } from "./proxy_runtime.ts";
 
 interface ParsedListing {
   title: string;
@@ -1231,56 +1231,25 @@ Deno.serve(async (req) => {
 
   try {
     const { filters } = await req.json();
-    const fastApiSearchUrl = Deno.env.get("FASTAPI_SEARCH_URL");
-    const proxyMode = Deno.env.get("FASTAPI_PROXY_MODE") || "primary_with_fallback";
-    const forceLegacyOnly = req.headers.get("x-cf-legacy-only") === "1";
+    const runtime = resolveProxyRuntime(req);
+    let legacyResponseSource: "legacy" | "hybrid" = "legacy";
+    const proxyResult = await executeFastApiProxy({
+      runtime,
+      filters: (filters || {}) as Record<string, unknown>,
+      corsHeaders,
+    });
 
-    if (fastApiSearchUrl && !forceLegacyOnly && proxyMode !== "legacy_only") {
-      const fastApiPayload = {
-        query: `${filters?.brand || ""} ${filters?.model || ""}`.trim() || undefined,
-        brand: filters?.brand || undefined,
-        model: filters?.model || undefined,
-        trim: filters?.trim || undefined,
-        location: filters?.location || undefined,
-        year_min: filters?.yearMin ? parseInt(filters.yearMin) : undefined,
-        year_max: filters?.yearMax ? parseInt(filters.yearMax) : undefined,
-        price_min: filters?.priceMin ? parseInt(filters.priceMin) : undefined,
-        price_max: filters?.priceMax ? parseInt(filters.priceMax) : undefined,
-        mileage_max: filters?.kmMax ? parseInt(filters.kmMax) : undefined,
-        fuel_types: filters?.fuel ? [filters.fuel] : undefined,
-        body_styles: filters?.bodyType ? [filters.bodyType] : undefined,
-        private_only: filters?.sellerType === "private",
-        mode: "fast",
-        sources: filters?.sources?.length ? filters.sources : undefined,
-      };
-
-      try {
-        const fastApiResponse = await fetch(fastApiSearchUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(fastApiPayload),
-        });
-
-        if (!fastApiResponse.ok) {
-          throw new Error(`FastAPI error ${fastApiResponse.status}: ${(await fastApiResponse.text()).slice(0, 180)}`);
-        }
-
-        const fastApiData = await fastApiResponse.json();
-        return new Response(JSON.stringify(toLegacyProxyResponse(fastApiData)), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      } catch (proxyError) {
-        console.error("[scrape-listings] FastAPI proxy failure:", proxyError);
-        if (proxyMode === "fastapi_only") {
-          return new Response(
-            JSON.stringify({
-              success: false,
-              error: proxyError instanceof Error ? proxyError.message : "FastAPI proxy failed",
-            }),
-            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-          );
-        }
-      }
+    if (proxyResult.kind === "success" || proxyResult.kind === "error") {
+      console.log(`[scrape-listings] mode=${runtime.proxyMode} source=${proxyResult.source}`);
+      return proxyResult.response;
+    }
+    if (proxyResult.kind === "fallback") {
+      legacyResponseSource = "hybrid";
+      console.warn(
+        `[scrape-listings] mode=${runtime.proxyMode} source=${proxyResult.source} error="${proxyResult.error}"`,
+      );
+    } else if (runtime.proxyMode === "legacy_only" || runtime.forceLegacyOnly) {
+      console.log("[scrape-listings] mode=legacy_only source=legacy");
     }
 
     const apiKey = Deno.env.get("SCRAPINGBEE_API_KEY");
@@ -1593,7 +1562,7 @@ Deno.serve(async (req) => {
       console.log(`Saved: ${upsertable.length} upserted, ${insertOnly.length} inserted`);
     }
 
-    return new Response(JSON.stringify({ success: true, count: unique.length, source: "legacy" }), {
+    return new Response(JSON.stringify({ success: true, count: unique.length, source: legacyResponseSource }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

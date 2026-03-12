@@ -169,3 +169,6 @@ def test_providers_and_health_contract() -> None:
     metadata_payload = metadata_response.json()
     assert "fuel_types" in metadata_payload
     assert "providers" in metadata_payload
+    assert "brands" in metadata_payload
+    assert "models_by_brand" in metadata_payload
+    assert "trims_by_brand_model" in metadata_payload

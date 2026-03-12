@@ -1,6 +1,7 @@
 import pytest
 
 from app.core.provider_registry import ProviderRegistry, ProviderRuntimeStats
+from app.core.settings import get_settings
 from app.models.search import SearchRequest
 from app.models.vehicle import VehicleListing
 from app.providers.base.base_provider import BaseProvider
@@ -53,3 +54,18 @@ async def test_provider_registry_health_accumulates_runtime_metrics() -> None:
     assert recovered.total_calls == 3
     assert recovered.failed_calls == 1
     assert recovered.last_error is None
+
+
+def test_provider_registry_disables_providers_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DISABLED_PROVIDERS", "autoscout24, ebay")
+    get_settings.cache_clear()
+    try:
+        registry = ProviderRegistry()
+        autoscout24 = registry.get("autoscout24")
+        ebay = registry.get("ebay")
+        subito = registry.get("subito")
+        assert autoscout24 is not None and autoscout24.info.enabled is False
+        assert ebay is not None and ebay.info.enabled is False
+        assert subito is not None and subito.info.enabled is True
+    finally:
+        get_settings.cache_clear()

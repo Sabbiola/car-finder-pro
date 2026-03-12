@@ -105,42 +105,34 @@ Deploy via workflow GitHub Actions o CLI Supabase.
 
 ## Variabili ambiente
 
-### Frontend (`frontend/.env`)
+### Frontend
 
 ```env
-VITE_SUPABASE_URL=
-VITE_SUPABASE_PUBLISHABLE_KEY=
-VITE_SUPABASE_PROJECT_ID=
-VITE_BACKEND_MODE=supabase
-VITE_API_BASE_URL=http://localhost:8000
+# usa i profili versionati:
+# - frontend/.env.local.example
+# - frontend/.env.staging.example
+# - frontend/.env.production.example
 ```
 
-### Backend (`backend/.env`)
+### Backend
 
 ```env
-ENV=development
-LOG_LEVEL=info
-CORS_ORIGINS=http://localhost:5173,http://localhost:8080
-REQUEST_TIMEOUT_SECONDS=20
-MAX_PROVIDER_CONCURRENCY=4
-PROVIDER_TIMEOUT_SECONDS=30
-SCRAPINGBEE_API_KEY=
-LEGACY_SCRAPE_LISTINGS_URL=
-FASTAPI_PROXY_MODE=primary_with_fallback
-EBAY_CLIENT_ID=
-EBAY_CLIENT_SECRET=
-EBAY_MARKETPLACE_ID=EBAY_IT
-TEST_STUB_MODE=false
+# usa i profili versionati:
+# - backend/.env.local.example
+# - backend/.env.staging.example
+# - backend/.env.production.example
 ```
 
-### Infra/Edge (root `.env`)
+### Infra/Edge
 
 ```env
-ALLOWED_ORIGINS=http://localhost:5173,http://localhost:8080
-SCRAPINGBEE_API_KEY=
-FASTAPI_SEARCH_URL=http://localhost:8000/api/search
-FASTAPI_PROXY_MODE=primary_with_fallback
+# usa i profili versionati:
+# - .env.edge.local.example
+# - .env.edge.staging.example
+# - .env.edge.production.example
 ```
+
+Dettaglio completo: [`docs/runtime_env_profiles.md`](docs/runtime_env_profiles.md)
 
 ## CI/CD
 
@@ -153,6 +145,9 @@ Workflow principali:
   - deploy Supabase Edge Functions
 - `.github/workflows/deploy-fastapi.yml`
   - test backend + deploy Railway
+  - secret checks obbligatori + healthcheck smoke
+
+Checklist release/cutover: [`docs/production_readiness_checklist.md`](docs/production_readiness_checklist.md)
 
 ## Roadmap prodotto
 
