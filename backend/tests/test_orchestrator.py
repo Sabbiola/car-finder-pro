@@ -152,7 +152,7 @@ async def test_stream_search_emits_provider_not_configured_for_requested_source(
 
 
 @pytest.mark.asyncio
-async def test_run_search_reports_unsupported_filters_for_selected_sources() -> None:
+async def test_run_search_excludes_provider_for_unsupported_active_filter() -> None:
     registry = ProviderRegistry()
     registry._providers = {  # type: ignore[attr-defined]
         "subito": FakeProvider("subito", results=[]),
@@ -164,5 +164,50 @@ async def test_run_search_reports_unsupported_filters_for_selected_sources() -> 
         SearchRequest(brand="BMW", body_styles=["SUV"], sources=["subito"])
     )
 
-    assert any(detail.code == "unsupported_filter" for detail in response.provider_error_details)
-    assert any("Unsupported filters for selected sources" in error for error in response.provider_errors)
+    assert any(
+        detail.code == "provider_excluded_unsupported_filter"
+        and detail.provider == "subito"
+        for detail in response.provider_error_details
+    )
+    assert any(detail.code == "no_provider_eligible_for_filters" for detail in response.provider_error_details)
+
+
+@pytest.mark.asyncio
+async def test_run_search_applies_extended_post_filters() -> None:
+    listing = _listing("autoscout24", "BMW 320d", "https://example.com/colored", 22000).model_copy(
+        update={
+            "color": "Nero",
+            "doors": 4,
+            "emission_class": "Euro 6",
+            "seller_type": "dealer",
+            "is_new": False,
+        }
+    )
+    registry = ProviderRegistry()
+    registry._providers = {  # type: ignore[attr-defined]
+        "autoscout24": FakeProvider("autoscout24", results=[listing]),
+    }
+    registry._stats = {"autoscout24": ProviderRuntimeStats()}  # type: ignore[attr-defined]
+    orchestrator = SearchOrchestrator(registry=registry)
+
+    matching = await orchestrator.run_search(
+        SearchRequest(
+            brand="BMW",
+            color="nero",
+            doors=4,
+            emission_class="Euro6",
+            seller_type="dealer",
+            is_new=False,
+        )
+    )
+    non_matching = await orchestrator.run_search(
+        SearchRequest(
+            brand="BMW",
+            color="Bianco",
+            doors=2,
+            seller_type="private",
+        )
+    )
+
+    assert matching.total_results == 1
+    assert non_matching.total_results == 0

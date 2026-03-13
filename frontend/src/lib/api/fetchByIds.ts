@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { CarListing } from "@/lib/api/listings";
+import { getRuntimeConfig } from "@/lib/runtimeConfig";
+import { fetchListingsBatch } from "@/services/api/userData";
 
 /**
  * Recupera i listing da Supabase per un array di IDs.
@@ -7,6 +9,10 @@ import type { CarListing } from "@/lib/api/listings";
  */
 export async function fetchListingsByIds(ids: string[]): Promise<CarListing[]> {
   if (!ids.length) return [];
+  const config = getRuntimeConfig();
+  if (config.backendMode === "fastapi" && config.apiBaseUrl) {
+    return fetchListingsBatch(ids);
+  }
 
   const { data, error } = await supabase.from("car_listings").select("*").in("id", ids);
 

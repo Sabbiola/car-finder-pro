@@ -6,6 +6,7 @@ from app.models.vehicle import VehicleListing
 
 
 SearchMode = Literal["fast", "full"]
+SellerType = Literal["all", "private", "dealer"]
 SearchFilterKey = Literal[
     "query",
     "brand",
@@ -21,6 +22,12 @@ SearchFilterKey = Literal[
     "body_styles",
     "fuel_types",
     "transmission",
+    "is_new",
+    "color",
+    "doors",
+    "emission_class",
+    "seller_type",
+    # Legacy alias kept for additive compatibility.
     "private_only",
 ]
 
@@ -39,6 +46,11 @@ CANONICAL_SEARCH_FILTERS: tuple[SearchFilterKey, ...] = (
     "body_styles",
     "fuel_types",
     "transmission",
+    "is_new",
+    "color",
+    "doors",
+    "emission_class",
+    "seller_type",
     "private_only",
 )
 
@@ -47,6 +59,12 @@ BACKEND_POST_FILTERS: tuple[SearchFilterKey, ...] = (
     "trim",
     "mileage_min",
     "transmission",
+    "is_new",
+    "color",
+    "doors",
+    "emission_class",
+    "seller_type",
+    # Backward compatibility for older clients.
     "private_only",
 )
 
@@ -75,10 +93,25 @@ class SearchRequest(BaseModel):
     body_styles: list[str] = Field(default_factory=list)
     fuel_types: list[str] = Field(default_factory=list)
     transmission: str | None = None
+    is_new: bool | None = None
+    color: str | None = None
+    doors: int | None = Field(default=None, ge=1, le=7)
+    emission_class: str | None = None
     condition: str | None = None
+    seller_type: SellerType = "all"
     private_only: bool = False
     mode: SearchMode = "fast"
     sources: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def normalize_seller_flags(self) -> "SearchRequest":
+        if self.private_only and self.seller_type == "dealer":
+            raise ValueError("private_only cannot be combined with seller_type=dealer.")
+        if self.private_only and self.seller_type == "all":
+            self.seller_type = "private"
+        if self.seller_type == "private":
+            self.private_only = True
+        return self
 
     @model_validator(mode="after")
     def has_meaningful_filter(self) -> "SearchRequest":
@@ -95,6 +128,11 @@ class SearchRequest(BaseModel):
                 self.mileage_min,
                 self.mileage_max,
                 self.transmission,
+                self.is_new is not None,
+                self.color,
+                self.doors is not None,
+                self.emission_class,
+                self.seller_type != "all",
                 self.year_min,
                 self.year_max,
                 self.sources,
@@ -102,6 +140,12 @@ class SearchRequest(BaseModel):
         ):
             return self
         raise ValueError("At least one meaningful filter is required.")
+
+    @property
+    def normalized_seller_type(self) -> SellerType:
+        if self.private_only:
+            return "private"
+        return self.seller_type
 
     def active_filter_keys(self) -> set[SearchFilterKey]:
         active: set[SearchFilterKey] = set()
@@ -133,6 +177,16 @@ class SearchRequest(BaseModel):
             active.add("fuel_types")
         if self.transmission:
             active.add("transmission")
+        if self.is_new is not None:
+            active.add("is_new")
+        if self.color:
+            active.add("color")
+        if self.doors is not None:
+            active.add("doors")
+        if self.emission_class:
+            active.add("emission_class")
+        if self.seller_type != "all":
+            active.add("seller_type")
         if self.private_only:
             active.add("private_only")
         return active

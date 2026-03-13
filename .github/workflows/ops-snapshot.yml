@@ -1,0 +1,18 @@
+name: Ops Snapshot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/10 * * * *"
+
+jobs:
+  snapshot:
+    if: ${{ secrets.FASTAPI_OPS_BASE_URL != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull metrics snapshot
+        env:
+          FASTAPI_OPS_BASE_URL: ${{ secrets.FASTAPI_OPS_BASE_URL }}
+        run: |
+          curl --fail --show-error --silent "${FASTAPI_OPS_BASE_URL}/api/ops/metrics" > /dev/null
+          curl --fail --show-error --silent "${FASTAPI_OPS_BASE_URL}/api/ops/alerts" > /dev/null

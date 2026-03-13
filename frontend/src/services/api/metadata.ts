@@ -23,6 +23,8 @@ export interface FilterMetadataResponse {
     canonical_filters: string[];
     backend_post_filters: string[];
     provider_filter_union: string[];
+    provider_filter_intersection?: string[];
+    provider_filter_semantics?: string;
   };
 }
 

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.core.dependencies import get_provider_registry
+from app.core.observability import log_event
 from app.core.metrics import get_runtime_metrics
 from app.core.provider_registry import ProviderRegistry
 
@@ -12,6 +13,12 @@ router = APIRouter()
 async def ops_metrics(registry: ProviderRegistry = Depends(get_provider_registry)) -> dict[str, object]:
     runtime = get_runtime_metrics().snapshot()
     provider_health = [item.model_dump(mode="json") for item in await registry.health()]
+    log_event(
+        "ops_metrics_snapshot",
+        search_sync=runtime.get("search", {}).get("sync") if isinstance(runtime.get("search"), dict) else {},
+        search_stream=runtime.get("search", {}).get("stream") if isinstance(runtime.get("search"), dict) else {},
+        provider_count=len(provider_health),
+    )
     return {
         "runtime": runtime,
         "providers": provider_health,
@@ -23,6 +30,7 @@ async def ops_alerts(
     registry: ProviderRegistry = Depends(get_provider_registry),
     p95_threshold_ms: int = 5000,
     error_rate_threshold: float = 0.02,
+    stream_completion_threshold: float = 0.98,
 ) -> dict[str, object]:
     runtime = get_runtime_metrics().snapshot()
     provider_health = [item.model_dump(mode="json") for item in await registry.health()]
@@ -80,10 +88,32 @@ async def ops_alerts(
                 }
             )
 
+    stream_completion = runtime.get("stream_completion", {})
+    if isinstance(stream_completion, dict):
+        completion_rate = stream_completion.get("completion_rate")
+        if isinstance(completion_rate, (int, float)) and completion_rate < stream_completion_threshold:
+            alerts.append(
+                {
+                    "code": "stream_completion_low",
+                    "severity": "warning",
+                    "metric": "stream_completion.completion_rate",
+                    "value": round(float(completion_rate), 4),
+                    "threshold": stream_completion_threshold,
+                }
+            )
+
+    log_event(
+        "ops_alerts_snapshot",
+        alert_count=len(alerts),
+        p95_threshold_ms=p95_threshold_ms,
+        error_rate_threshold=error_rate_threshold,
+    )
+
     return {
         "alerts": alerts,
         "thresholds": {
             "p95_threshold_ms": p95_threshold_ms,
             "error_rate_threshold": error_rate_threshold,
+            "stream_completion_threshold": stream_completion_threshold,
         },
     }

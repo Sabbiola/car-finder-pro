@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useSavedSearches } from "@/hooks/useSavedSearches";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchListingsByIds } from "@/lib/api/fetchByIds";
 import type { CarListing } from "@/lib/api/listings";
 import { getRuntimeConfig } from "@/lib/runtimeConfig";
 import { toCardListing } from "@/lib/toCardListing";
@@ -41,6 +42,7 @@ interface AlertRow {
   is_active: boolean;
   notified_at: string | null;
   created_at: string;
+  notification_status?: string;
   car_listings: {
     title: string;
     price: number;
@@ -91,6 +93,7 @@ export default function Profile() {
               is_active: entry.alert.is_active,
               notified_at: entry.alert.notified_at || null,
               created_at: entry.alert.created_at,
+              notification_status: entry.notification_status,
               car_listings: entry.alert.listing
                 ? {
                     title: entry.alert.listing.title || "",
@@ -125,13 +128,11 @@ export default function Profile() {
       return;
     }
     setFavLoading(true);
-    sb.from("car_listings")
-      .select("*")
-      .in("id", favorites)
-      .then(({ data }: { data: CarListing[] | null }) => {
+    fetchListingsByIds(favorites)
+      .then((data) => {
         setFavListings(data || []);
-        setFavLoading(false);
-      });
+      })
+      .finally(() => setFavLoading(false));
   }, [activeTab, favorites, user]);
 
   if (loading) {
@@ -301,7 +302,15 @@ export default function Profile() {
                       </span>
                     </div>
                     <div className="mt-1.5">
-                      {alert.notified_at ? (
+                      {alert.notification_status === "failed" ? (
+                        <Badge variant="destructive" className="text-[10px]">
+                          Fallito
+                        </Badge>
+                      ) : alert.notification_status === "retrying" ? (
+                        <Badge variant="secondary" className="text-[10px]">
+                          Retry in corso
+                        </Badge>
+                      ) : alert.notified_at ? (
                         <Badge variant="secondary" className="text-[10px]">
                           Notificato
                         </Badge>

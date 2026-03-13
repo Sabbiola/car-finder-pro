@@ -3,6 +3,7 @@ from __future__ import annotations
 from statistics import median
 from typing import Any
 
+from app.core.metrics import get_runtime_metrics
 from app.models.analysis import ConfidenceLevel
 from app.models.vehicle import VehicleListing
 from app.services.supabase_market_repository import SupabaseMarketRepository
@@ -54,43 +55,75 @@ class ComparablesService:
         listing: VehicleListing,
         *,
         local_candidates: list[VehicleListing],
+        cache: dict[str, dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
+        cache_key = self._cache_key(listing)
+        if cache is not None and cache_key:
+            cached = cache.get(cache_key)
+            if cached:
+                get_runtime_metrics().record_cache_event(hit=True)
+                return cached
+            get_runtime_metrics().record_cache_event(hit=False)
+
         local_prices = self._local_prices(listing, local_candidates)
         if len(local_prices) >= 3:
             benchmark = int(median(local_prices))
-            return {
+            result = {
                 "benchmark_price": benchmark,
                 "comparable_count": len(local_prices),
                 "confidence": self._confidence(len(local_prices)),
             }
+            if cache is not None and cache_key:
+                cache[cache_key] = result
+            return result
 
         remote_rows: list[dict[str, Any]] = []
-        if self.repository.is_configured() and listing.make and listing.model:
+        if (
+            self.repository.is_configured()
+            and listing.make
+            and listing.model
+            and listing.year is not None
+            and listing.mileage_value is not None
+        ):
             remote_rows = await self.repository.fetch_comparable_rows(
                 brand=listing.make,
                 model=listing.model,
-                year_min=listing.year - 1 if listing.year is not None else None,
-                year_max=listing.year + 1 if listing.year is not None else None,
-                km_min=max(0, listing.mileage_value - 25_000) if listing.mileage_value is not None else None,
-                km_max=listing.mileage_value + 25_000 if listing.mileage_value is not None else None,
+                year_min=listing.year - 1,
+                year_max=listing.year + 1,
+                km_min=max(0, listing.mileage_value - 25_000),
+                km_max=listing.mileage_value + 25_000,
                 limit=30,
             )
             if len(remote_rows) < 3:
                 remote_rows = await self.repository.fetch_comparable_rows(
                     brand=listing.make,
                     model=listing.model,
-                    year_min=listing.year - 2 if listing.year is not None else None,
-                    year_max=listing.year + 2 if listing.year is not None else None,
-                    km_min=max(0, listing.mileage_value - 50_000) if listing.mileage_value is not None else None,
-                    km_max=listing.mileage_value + 50_000 if listing.mileage_value is not None else None,
+                    year_min=listing.year - 2,
+                    year_max=listing.year + 2,
+                    km_min=max(0, listing.mileage_value - 50_000),
+                    km_max=listing.mileage_value + 50_000,
                     limit=50,
                 )
 
         remote_prices = [int(row.get("price") or 0) for row in remote_rows if int(row.get("price") or 0) > 0]
         combined = [*local_prices, *remote_prices]
         benchmark = int(median(combined)) if combined else listing.price_amount
-        return {
+        result = {
             "benchmark_price": benchmark,
             "comparable_count": len(combined),
             "confidence": self._confidence(len(combined)),
         }
+        if cache is not None and cache_key:
+            cache[cache_key] = result
+        return result
+
+    @staticmethod
+    def _cache_key(listing: VehicleListing) -> str | None:
+        make = (listing.make or "").strip().lower()
+        model = (listing.model or "").strip().lower()
+        if not make or not model:
+            return None
+        if listing.year is None or listing.mileage_value is None:
+            return None
+        km_bucket = max(0, listing.mileage_value // 25_000)
+        return f"{make}|{model}|{listing.year}|{km_bucket}"

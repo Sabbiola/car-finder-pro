@@ -147,6 +147,11 @@ interface FastApiVehicleListing {
   fuel_type?: string | null;
   transmission?: string | null;
   body_style?: string | null;
+  condition?: string | null;
+  is_new?: boolean | null;
+  color?: string | null;
+  doors?: number | null;
+  emission_class?: string | null;
   seller_type?: string | null;
   city?: string | null;
   region?: string | null;
@@ -193,6 +198,11 @@ export interface FastApiSearchRequest {
   body_styles?: string[];
   fuel_types?: string[];
   transmission?: string;
+  is_new?: boolean;
+  color?: string;
+  doors?: number;
+  emission_class?: string;
+  seller_type?: "all" | "private" | "dealer";
   condition?: string;
   private_only?: boolean;
   mode?: "fast" | "full";
@@ -254,6 +264,11 @@ export function buildFastApiRequest(filters: SearchFiltersState): FastApiSearchR
     body_styles: filters.bodyType ? [filters.bodyType] : undefined,
     fuel_types: filters.fuel ? [filters.fuel] : undefined,
     transmission: filters.transmission || undefined,
+    is_new: filters.isNew === null ? undefined : filters.isNew,
+    color: filters.color || undefined,
+    doors: parseMaybeNumber(filters.doors),
+    emission_class: filters.emissionClass || undefined,
+    seller_type: filters.sellerType,
     private_only: filters.sellerType === "private",
     mode: "fast",
     sources: normalizeSources(filters),
@@ -305,22 +320,22 @@ export function mapFastApiListing(item: FastApiVehicleListing): CarListing {
     fuel: item.fuel_type || null,
     transmission: item.transmission || null,
     power: null,
-    color: null,
-    doors: null,
+    color: item.color || null,
+    doors: item.doors ?? null,
     body_type: item.body_style || null,
     source: item.provider,
     source_url: item.url || null,
     image_url: item.images?.[0] || null,
     location: location || null,
-    is_new: false,
+    is_new: item.is_new ?? false,
     is_best_deal: score !== null ? score >= 75 : false,
     price_rating: priceRating,
     scraped_at: item.scraped_at || new Date().toISOString(),
     description: item.description || null,
-    emission_class: null,
+    emission_class: item.emission_class || null,
     version: null,
     seats: null,
-    condition: item.seller_type || null,
+    condition: item.seller_type || item.condition || null,
     detail_scraped: false,
     image_urls: item.images || null,
     extra_data: {
@@ -354,7 +369,18 @@ async function runFastApiSearch(filters: SearchFiltersState, apiBaseUrl: string)
     body: JSON.stringify(buildFastApiRequest(filters)),
   });
   if (!response.ok) {
-    throw new Error(`FastAPI search failed with status ${response.status}`);
+    let detailMessage = `FastAPI search failed with status ${response.status}`;
+    try {
+      const payload = (await response.json()) as FastApiSearchResponse;
+      if (payload.provider_error_details?.length) {
+        detailMessage = payload.provider_error_details
+          .map((item) => `${item.provider ? `${item.provider}: ` : ""}${item.code}`)
+          .join(" | ");
+      }
+    } catch {
+      // Keep generic HTTP error message when payload is not JSON.
+    }
+    throw new Error(detailMessage);
   }
   const payload = (await response.json()) as FastApiSearchResponse;
   return (payload.listings || []).map(mapFastApiListing);
@@ -444,7 +470,13 @@ function applyInMemoryFilters(listings: CarListing[], filters: SearchFiltersStat
     if (filters.kmMax && listing.km > Number(filters.kmMax)) return false;
     if (filters.yearMin && listing.year < Number(filters.yearMin)) return false;
     if (filters.yearMax && listing.year > Number(filters.yearMax)) return false;
+    if (filters.isNew !== null && listing.is_new !== filters.isNew) return false;
+    if (filters.color && listing.color !== filters.color) return false;
+    if (filters.doors && Number(listing.doors || 0) !== Number(filters.doors)) return false;
     if (filters.bodyType && listing.body_type !== filters.bodyType) return false;
+    if (filters.emissionClass && listing.emission_class !== filters.emissionClass) return false;
+    if (filters.sellerType === "private" && listing.condition !== "private") return false;
+    if (filters.sellerType === "dealer" && listing.condition !== "dealer") return false;
     if (filters.sources?.length && !filters.sources.includes(listing.source)) return false;
     return true;
   });

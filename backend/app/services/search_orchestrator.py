@@ -40,7 +40,48 @@ class SearchOrchestrator:
         return detail.message
 
     @staticmethod
+    def _normalize_emission_class(value: str | None) -> str:
+        return (value or "").strip().lower().replace(" ", "")
+
+    @staticmethod
+    def _listing_is_new(listing: VehicleListing) -> bool | None:
+        if listing.is_new is not None:
+            return listing.is_new
+        condition = (listing.condition or "").strip().lower()
+        if condition in {"new", "nuovo", "nuova"}:
+            return True
+        if condition in {"used", "usato", "usata"}:
+            return False
+        return None
+
+    @staticmethod
     def _passes_post_filters(listing: VehicleListing, request: SearchRequest) -> bool:
+        requested_seller_type = request.normalized_seller_type
+        if requested_seller_type != "all":
+            listing_seller_type = (listing.seller_type or "").strip().lower()
+            if listing_seller_type != requested_seller_type:
+                return False
+
+        if request.is_new is not None:
+            listing_is_new = SearchOrchestrator._listing_is_new(listing)
+            if listing_is_new is None or listing_is_new != request.is_new:
+                return False
+
+        if request.color:
+            listing_color = (listing.color or "").strip().lower()
+            if listing_color != request.color.strip().lower():
+                return False
+
+        if request.doors is not None:
+            if listing.doors is None or listing.doors != request.doors:
+                return False
+
+        if request.emission_class:
+            listing_emission = SearchOrchestrator._normalize_emission_class(listing.emission_class)
+            requested_emission = SearchOrchestrator._normalize_emission_class(request.emission_class)
+            if listing_emission != requested_emission:
+                return False
+
         if request.private_only and (listing.seller_type or "").strip().lower() != "private":
             return False
 
@@ -65,27 +106,60 @@ class SearchOrchestrator:
             return listings
         return [listing for listing in listings if self._passes_post_filters(listing, request)]
 
-    def _unsupported_filter_errors(self, request: SearchRequest, selected) -> list[ProviderErrorDetail]:
+    def _eligible_providers_for_filters(
+        self,
+        request: SearchRequest,
+        selected,
+    ) -> tuple[list, list[ProviderErrorDetail]]:
         active_filters = request.active_filter_keys()
         if not active_filters or not selected:
-            return []
+            return selected, []
 
-        supported_union = set(BACKEND_POST_FILTERS)
+        provider_required_filters = active_filters - set(BACKEND_POST_FILTERS)
+        if not provider_required_filters:
+            return selected, []
+
+        eligible = []
+        excluded_errors: list[ProviderErrorDetail] = []
         for provider in selected:
-            supported_union.update(provider.info.supports_filters)
+            missing = sorted(provider_required_filters - set(provider.info.supports_filters))
+            if not missing:
+                eligible.append(provider)
+                continue
+            excluded_errors.append(
+                ProviderErrorDetail(
+                    provider=provider.info.id,
+                    code="provider_excluded_unsupported_filter",
+                    message=f"Excluded by active filters: {', '.join(missing)}",
+                    retryable=False,
+                )
+            )
+        return eligible, excluded_errors
 
-        unsupported = sorted(active_filters - supported_union)
-        if not unsupported:
-            return []
-
-        return [
-            ProviderErrorDetail(
+    @staticmethod
+    def _no_provider_error_detail(request: SearchRequest, had_selected_providers: bool) -> ProviderErrorDetail:
+        if had_selected_providers:
+            active = sorted(
+                {
+                    filter_key
+                    for filter_key in request.active_filter_keys()
+                    if filter_key not in BACKEND_POST_FILTERS
+                }
+            )
+            suffix = f" for active filters: {', '.join(active)}" if active else ""
+            return ProviderErrorDetail(
                 provider=None,
-                code="unsupported_filter",
-                message=f"Unsupported filters for selected sources: {', '.join(unsupported)}",
+                code="no_provider_eligible_for_filters",
+                message=f"No eligible providers{suffix}",
                 retryable=False,
             )
-        ]
+
+        return ProviderErrorDetail(
+            provider=None,
+            code="no_provider",
+            message="No eligible providers for this request",
+            retryable=False,
+        )
 
     async def _run_provider(
         self, provider, request: SearchRequest
@@ -174,17 +248,11 @@ class SearchOrchestrator:
     async def run_search(self, request: SearchRequest) -> SearchResponse:
         search_started = perf_counter()
         selected = select_providers(request, self.registry)
-        provider_error_details = self._requested_provider_config_errors(request) + self._unsupported_filter_errors(
-            request, selected
-        )
-        if not selected:
+        eligible, compatibility_errors = self._eligible_providers_for_filters(request, selected)
+        provider_error_details = self._requested_provider_config_errors(request) + compatibility_errors
+        if not eligible:
             provider_error_details.append(
-                ProviderErrorDetail(
-                    provider=None,
-                    code="no_provider",
-                    message="No eligible providers for this request",
-                    retryable=False,
-                )
+                self._no_provider_error_detail(request, had_selected_providers=bool(selected))
             )
             get_runtime_metrics().record_search(mode="sync", duration_ms=0, had_errors=True)
             return SearchResponse(
@@ -195,7 +263,7 @@ class SearchOrchestrator:
                 provider_error_details=provider_error_details,
             )
 
-        log_event("search_started", mode="sync", provider_count=len(selected))
+        log_event("search_started", mode="sync", provider_count=len(eligible))
         collected: list[VehicleListing] = []
         semaphore = asyncio.Semaphore(self.settings.max_provider_concurrency)
 
@@ -203,7 +271,7 @@ class SearchOrchestrator:
             async with semaphore:
                 return await self._run_provider(provider, request)
 
-        tasks = [asyncio.create_task(guarded(provider)) for provider in selected]
+        tasks = [asyncio.create_task(guarded(provider)) for provider in eligible]
         for task in asyncio.as_completed(tasks):
             _provider_id, normalized, error_detail = await task
             if error_detail:
@@ -211,10 +279,15 @@ class SearchOrchestrator:
                 continue
             collected.extend(normalized)
 
+        analysis_started = perf_counter()
         deduped = deduplicate_listings(collected)
         ranked = apply_basic_scoring(deduped)
         ranked = self._post_filter_listings(ranked, request)
+        search_stage_ms = int((perf_counter() - analysis_started) * 1000)
+        analysis_phase_started = perf_counter()
         ranked = await self.analysis_service.enrich_search_results(ranked)
+        analysis_ms = int((perf_counter() - analysis_phase_started) * 1000)
+        get_runtime_metrics().record_analysis_breakdown(search_ms=search_stage_ms, analysis_ms=analysis_ms)
         log_event(
             "search_completed",
             mode="sync",
@@ -230,7 +303,7 @@ class SearchOrchestrator:
         return SearchResponse(
             total_results=len(ranked),
             listings=ranked,
-            providers_used=[provider.info.id for provider in selected],
+            providers_used=[provider.info.id for provider in eligible],
             provider_errors=[self._format_provider_error(detail) for detail in provider_error_details],
             provider_error_details=provider_error_details,
         )
@@ -238,10 +311,10 @@ class SearchOrchestrator:
     async def stream_search(self, request: SearchRequest) -> AsyncIterator[dict]:
         started_at = datetime.now(timezone.utc)
         started_perf = perf_counter()
+        get_runtime_metrics().record_stream_started()
         selected = select_providers(request, self.registry)
-        provider_errors = self._requested_provider_config_errors(request) + self._unsupported_filter_errors(
-            request, selected
-        )
+        eligible, compatibility_errors = self._eligible_providers_for_filters(request, selected)
+        provider_errors = self._requested_provider_config_errors(request) + compatibility_errors
         provider_error_count = len(provider_errors)
 
         for error_detail in provider_errors:
@@ -252,13 +325,16 @@ class SearchOrchestrator:
                 retryable=error_detail.retryable,
             ).model_dump(mode="json")
 
-        if not selected:
+        if not eligible:
+            no_provider_error = self._no_provider_error_detail(request, had_selected_providers=bool(selected))
+            provider_errors.append(no_provider_error)
             get_runtime_metrics().record_search(mode="stream", duration_ms=0, had_errors=True)
+            get_runtime_metrics().record_stream_completed()
             yield ErrorEvent(
-                provider=None,
-                code="no_provider",
-                message="No eligible providers for this request",
-                retryable=False,
+                provider=no_provider_error.provider,
+                code=no_provider_error.code,
+                message=no_provider_error.message,
+                retryable=no_provider_error.retryable,
             ).model_dump(mode="json")
             yield CompleteEvent(
                 total_results=0,
@@ -268,19 +344,19 @@ class SearchOrchestrator:
             ).model_dump(mode="json")
             return
 
-        log_event("search_started", mode="stream", provider_count=len(selected))
+        log_event("search_started", mode="stream", provider_count=len(eligible))
         provider_summary: dict[str, int] = defaultdict(int)
         collected: list[VehicleListing] = []
         semaphore = asyncio.Semaphore(self.settings.max_provider_concurrency)
 
-        for provider in selected:
+        for provider in eligible:
             yield ProgressEvent(provider=provider.info.id, status="started").model_dump(mode="json")
 
         async def guarded(provider):
             async with semaphore:
                 return await self._run_provider(provider, request)
 
-        result_tasks = [asyncio.create_task(guarded(provider)) for provider in selected]
+        result_tasks = [asyncio.create_task(guarded(provider)) for provider in eligible]
         for done in asyncio.as_completed(result_tasks):
             provider_id, normalized, error_detail = await done
             try:
@@ -335,6 +411,7 @@ class SearchOrchestrator:
             duration_ms=int((perf_counter() - started_perf) * 1000),
             had_errors=provider_error_count > 0,
         )
+        get_runtime_metrics().record_stream_completed()
         yield CompleteEvent(
             total_results=len(final),
             provider_summary=dict(provider_summary),

@@ -10,7 +10,13 @@ class TrustService:
     def __init__(self, repository: SupabaseMarketRepository) -> None:
         self.repository = repository
 
-    async def build_summary(self, listing: VehicleListing) -> TrustSummary:
+    async def build_summary(
+        self,
+        listing: VehicleListing,
+        *,
+        image_reuse_count_hint: int | None = None,
+        seller_stats_hint: dict | None = None,
+    ) -> TrustSummary:
         flags: list[str] = []
         trust_score = 60.0
         completeness_parts = [
@@ -52,11 +58,13 @@ class TrustService:
             trust_score -= 4
 
         image_reuse_count = 0
-        if self.repository.is_configured() and listing.listing_hash:
+        if image_reuse_count_hint is not None:
+            image_reuse_count = image_reuse_count_hint
+        elif self.repository.is_configured() and listing.listing_hash:
             image_reuse_count = await self.repository.fetch_image_reuse_count(listing.listing_hash)
-            if image_reuse_count > 0:
-                flags.append("immagini riutilizzate")
-                trust_score -= min(15, image_reuse_count * 4)
+        if image_reuse_count > 0:
+            flags.append("immagini riutilizzate")
+            trust_score -= min(15, image_reuse_count * 4)
 
         seller_profile = SellerProfile(
             seller_type_inferred=listing.seller_type,
@@ -66,17 +74,24 @@ class TrustService:
             notes=[],
         )
 
-        if self.repository.is_configured():
+        if seller_stats_hint is not None:
+            stats = seller_stats_hint
+        elif self.repository.is_configured() and any(
+            [listing.seller_external_id, listing.seller_phone_hash, listing.seller_url]
+        ):
             stats = await self.repository.fetch_seller_fingerprint_stats(
                 seller_external_id=listing.seller_external_id,
                 seller_phone_hash=listing.seller_phone_hash,
                 seller_url=listing.seller_url,
             )
-            if listing.seller_type == "private" and stats.get("dealer_count", 0) >= 2:
-                flags.append("profilo privato con segnali da rivenditore")
-                seller_profile.notes.append("storico seller coerente con dealer")
-                seller_profile.confidence = "medium"
-                trust_score -= 15
+        else:
+            stats = {"listing_count": 0, "private_count": 0, "dealer_count": 0}
+
+        if listing.seller_type == "private" and stats.get("dealer_count", 0) >= 2:
+            flags.append("profilo privato con segnali da rivenditore")
+            seller_profile.notes.append("storico seller coerente con dealer")
+            seller_profile.confidence = "medium"
+            trust_score -= 15
 
         risk_level = "low"
         if trust_score < 45:

@@ -163,8 +163,10 @@ const SearchResults = () => {
                 }
               } else if (event.event === "error") {
                 const formatted =
-                  event.code === "unsupported_filter"
-                    ? `Filtro non supportato: ${event.message}`
+                  event.code === "provider_excluded_unsupported_filter"
+                    ? `${event.provider}: escluso per filtri non supportati`
+                    : event.code === "no_provider_eligible_for_filters"
+                      ? "Nessun provider eleggibile per i filtri attivi"
                     : `${event.provider ? `${event.provider}: ` : ""}${event.message}`;
                 streamErrorsLocal.push(formatted);
                 setStreamErrors((prev) => [...prev, formatted]);

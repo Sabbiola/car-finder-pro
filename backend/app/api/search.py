@@ -1,7 +1,8 @@
 import json
+from typing import Union
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.core.dependencies import get_search_orchestrator
 from app.models.search import SearchRequest, SearchResponse
@@ -15,8 +16,15 @@ router = APIRouter()
 async def search(
     request: SearchRequest,
     orchestrator: SearchOrchestrator = Depends(get_search_orchestrator),
-) -> SearchResponse:
-    return await orchestrator.run_search(request)
+) -> Union[SearchResponse, JSONResponse]:
+    response = await orchestrator.run_search(request)
+    has_no_eligible = any(
+        detail.code in {"no_provider_eligible_for_filters", "no_provider"}
+        for detail in response.provider_error_details
+    )
+    if has_no_eligible:
+        return JSONResponse(status_code=422, content=response.model_dump(mode="json"))
+    return response
 
 
 @router.post("/search/stream")

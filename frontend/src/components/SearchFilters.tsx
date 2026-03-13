@@ -86,6 +86,68 @@ interface Props {
   initialFilters?: SearchFiltersState;
 }
 
+function pruneUnsupportedFilters(
+  current: SearchFiltersState,
+  supportedFilterKeys: Set<string> | null,
+): SearchFiltersState {
+  if (!supportedFilterKeys) return current;
+  const next = { ...current };
+  const maybeReset = (filterKey: string, reset: () => void) => {
+    if (!supportedFilterKeys.has(filterKey)) reset();
+  };
+
+  maybeReset("trim", () => {
+    next.trim = "";
+  });
+  maybeReset("location", () => {
+    next.location = "";
+  });
+  maybeReset("year_min", () => {
+    next.yearMin = "";
+  });
+  maybeReset("year_max", () => {
+    next.yearMax = "";
+  });
+  maybeReset("price_min", () => {
+    next.priceMin = "";
+  });
+  maybeReset("price_max", () => {
+    next.priceMax = "";
+  });
+  maybeReset("mileage_min", () => {
+    next.kmMin = "";
+  });
+  maybeReset("mileage_max", () => {
+    next.kmMax = "";
+  });
+  maybeReset("fuel_types", () => {
+    next.fuel = "";
+  });
+  maybeReset("body_styles", () => {
+    next.bodyType = "";
+  });
+  maybeReset("transmission", () => {
+    next.transmission = "";
+  });
+  maybeReset("is_new", () => {
+    next.isNew = null;
+  });
+  maybeReset("color", () => {
+    next.color = "";
+  });
+  maybeReset("doors", () => {
+    next.doors = "";
+  });
+  maybeReset("emission_class", () => {
+    next.emissionClass = "";
+  });
+  maybeReset("seller_type", () => {
+    next.sellerType = "all";
+  });
+
+  return next;
+}
+
 const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => {
   const [filters, setFilters] = useState<SearchFiltersState>(initialFilters ?? defaultFilters);
   const [showAdvanced, setShowAdvanced] = useState(!compact);
@@ -126,13 +188,24 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
     if (!contract) return null;
     const selectedSourceIds = new Set(filters.sources);
     const selectedProviders = (metadata?.providers || []).filter((provider) =>
-      selectedSourceIds.has(provider.id),
+      selectedSourceIds.has(provider.id) && provider.enabled !== false && provider.configured !== false,
     );
-    const supported = new Set<string>(contract.backend_post_filters || []);
-    for (const provider of selectedProviders) {
-      for (const filterKey of provider.supports_filters || []) {
-        supported.add(filterKey);
+    if (selectedProviders.length === 0) {
+      return new Set<string>(contract.backend_post_filters || []);
+    }
+    const firstProvider = selectedProviders[0];
+    const intersection = new Set<string>(firstProvider.supports_filters || []);
+    for (const provider of selectedProviders.slice(1)) {
+      const current = new Set(provider.supports_filters || []);
+      for (const key of [...intersection]) {
+        if (!current.has(key)) {
+          intersection.delete(key);
+        }
       }
+    }
+    const supported = new Set<string>(intersection);
+    for (const filterKey of contract.backend_post_filters || []) {
+      supported.add(filterKey);
     }
     return supported;
   }, [metadata, filters.sources]);
@@ -154,7 +227,11 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
       { key: "fuel_types", label: "alimentazione", active: Boolean(filters.fuel) },
       { key: "body_styles", label: "carrozzeria", active: Boolean(filters.bodyType) },
       { key: "transmission", label: "cambio", active: Boolean(filters.transmission) },
-      { key: "private_only", label: "solo privati", active: filters.sellerType === "private" },
+      { key: "is_new", label: "condizione", active: filters.isNew !== null },
+      { key: "color", label: "colore", active: Boolean(filters.color) },
+      { key: "doors", label: "porte", active: Boolean(filters.doors) },
+      { key: "emission_class", label: "classe euro", active: Boolean(filters.emissionClass) },
+      { key: "seller_type", label: "venditore", active: filters.sellerType !== "all" },
     ];
     return activeFilters
       .filter((item) => item.active && !selectedProviderCapabilitySet.has(item.key))
@@ -219,7 +296,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
   };
 
   const handleSearch = () => {
-    const nextFilters = normalizeFilters(filters);
+    const nextFilters = pruneUnsupportedFilters(normalizeFilters(filters), selectedProviderCapabilitySet);
     setFilters(nextFilters);
 
     if (onSearch) {
@@ -252,6 +329,8 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
     filters.sellerType !== "all" ||
     filters.emissionClass
   );
+
+  const isFilterSupported = (key: string) => selectedProviderCapabilitySet?.has(key) ?? true;
 
   const defaultSaveName =
     filters.brand && filters.model
@@ -387,6 +466,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
             <button
               key={label}
               type="button"
+              disabled={!isFilterSupported("is_new")}
               onClick={() => update("isNew", value)}
               className={`px-3 py-2 transition-colors ${
                 filters.isNew === value
@@ -411,6 +491,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
             <button
               key={value}
               type="button"
+              disabled={!isFilterSupported("seller_type")}
               onClick={() => update("sellerType", value)}
               className={`px-3 py-2 transition-colors ${
                 filters.sellerType === value
@@ -463,6 +544,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                   type="number"
                   placeholder="2018"
                   value={filters.yearMin}
+                  disabled={!isFilterSupported("year_min")}
                   min={1900}
                   max={new Date().getFullYear() + 1}
                   onChange={(e) => update("yearMin", e.target.value)}
@@ -475,6 +557,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                   type="number"
                   placeholder="2024"
                   value={filters.yearMax}
+                  disabled={!isFilterSupported("year_max")}
                   min={1900}
                   max={new Date().getFullYear() + 1}
                   onChange={(e) => update("yearMax", e.target.value)}
@@ -487,6 +570,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                   type="number"
                   placeholder="5.000"
                   value={filters.priceMin}
+                  disabled={!isFilterSupported("price_min")}
                   min={0}
                   onChange={(e) => update("priceMin", e.target.value)}
                   className="bg-background"
@@ -498,6 +582,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                   type="number"
                   placeholder="50.000"
                   value={filters.priceMax}
+                  disabled={!isFilterSupported("price_max")}
                   min={0}
                   onChange={(e) => update("priceMax", e.target.value)}
                   className="bg-background"
@@ -509,6 +594,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                   type="number"
                   placeholder="0"
                   value={filters.kmMin}
+                  disabled={!isFilterSupported("mileage_min")}
                   min={0}
                   onChange={(e) => update("kmMin", e.target.value)}
                   className="bg-background"
@@ -520,6 +606,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                   type="number"
                   placeholder="100.000"
                   value={filters.kmMax}
+                  disabled={!isFilterSupported("mileage_max")}
                   min={0}
                   onChange={(e) => update("kmMax", e.target.value)}
                   className="bg-background"
@@ -529,6 +616,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                 <Label className="text-xs text-muted-foreground">Alimentazione</Label>
                 <Select
                   value={filters.fuel || "_all"}
+                  disabled={!isFilterSupported("fuel_types")}
                   onValueChange={(v) => update("fuel", v === "_all" ? "" : v)}
                 >
                   <SelectTrigger className="bg-background">
@@ -548,6 +636,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                 <Label className="text-xs text-muted-foreground">Cambio</Label>
                 <Select
                   value={filters.transmission || "_all"}
+                  disabled={!isFilterSupported("transmission")}
                   onValueChange={(v) => update("transmission", v === "_all" ? "" : v)}
                 >
                   <SelectTrigger className="bg-background">
@@ -567,6 +656,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                 <Label className="text-xs text-muted-foreground">Colore</Label>
                 <Select
                   value={filters.color || "_all"}
+                  disabled={!isFilterSupported("color")}
                   onValueChange={(v) => update("color", v === "_all" ? "" : v)}
                 >
                   <SelectTrigger className="bg-background">
@@ -586,6 +676,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                 <Label className="text-xs text-muted-foreground">N Porte</Label>
                 <Select
                   value={filters.doors || "_all"}
+                  disabled={!isFilterSupported("doors")}
                   onValueChange={(v) => update("doors", v === "_all" ? "" : v)}
                 >
                   <SelectTrigger className="bg-background">
@@ -605,6 +696,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                 <Label className="text-xs text-muted-foreground">Carrozzeria</Label>
                 <Select
                   value={filters.bodyType || "_all"}
+                  disabled={!isFilterSupported("body_styles")}
                   onValueChange={(v) => update("bodyType", v === "_all" ? "" : v)}
                 >
                   <SelectTrigger className="bg-background">
@@ -624,6 +716,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                 <Label className="text-xs text-muted-foreground">Classe Euro</Label>
                 <Select
                   value={filters.emissionClass || "_all"}
+                  disabled={!isFilterSupported("emission_class")}
                   onValueChange={(v) => update("emissionClass", v === "_all" ? "" : v)}
                 >
                   <SelectTrigger className="bg-background">
@@ -644,6 +737,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                 <Input
                   placeholder="Es. Milano, Lombardia"
                   value={filters.location}
+                  disabled={!isFilterSupported("location")}
                   onChange={(e) => update("location", e.target.value)}
                   className="bg-background"
                 />

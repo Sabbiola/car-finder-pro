@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -20,11 +21,17 @@ class PriceAlertRecord(BaseModel):
     user_id: str | None = None
     client_id: str | None = None
     listing: AlertListingSummary | None = None
+    delivery_status: str | None = None
+    last_delivery_error: str | None = None
+    last_delivery_attempt_at: datetime | None = None
+    retry_count: int = 0
 
     @property
     def notification_status(self) -> str:
         if self.notified_at is not None:
             return "notified"
+        if self.delivery_status in {"retrying", "failed"}:
+            return self.delivery_status
         if self.is_active:
             return "active"
         return "inactive"
@@ -66,6 +73,10 @@ class PriceAlertListResponse(BaseModel):
 class ProcessPriceAlertsRequest(BaseModel):
     dry_run: bool = False
     limit: int = Field(default=200, ge=1, le=1000)
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=128)
+
+
+DeliveryAttemptStatus = Literal["success", "retrying", "failed", "skipped", "triggered_dry_run"]
 
 
 class ProcessedPriceAlert(BaseModel):
@@ -74,11 +85,18 @@ class ProcessedPriceAlert(BaseModel):
     target_price: int
     current_price: int | None = None
     status: str
+    delivery_status: DeliveryAttemptStatus | None = None
+    delivery_channel: str | None = None
+    attempt_number: int = 0
+    max_attempts: int = 3
     reason: str | None = None
     notified_at: datetime | None = None
+    next_retry_at: datetime | None = None
 
 
 class ProcessPriceAlertsResponse(BaseModel):
+    run_id: str
+    idempotent_replay: bool = False
     scanned: int
     triggered: int
     notified: int

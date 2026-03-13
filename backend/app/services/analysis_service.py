@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from datetime import datetime, timedelta, timezone
-from typing import Iterable
+from time import perf_counter
+from typing import Any, Iterable
 
+from app.core.metrics import get_runtime_metrics
+from app.core.settings import get_settings
 from app.models.analysis_request import AnalyzeListingRequest
 from app.models.analysis import ListingAnalysis, OwnershipEstimate, OwnershipProfile
 from app.models.vehicle import VehicleListing
@@ -18,6 +22,8 @@ from app.services.trust_service import TrustService
 class AnalysisService:
     def __init__(self, repository: SupabaseMarketRepository) -> None:
         self.repository = repository
+        settings = get_settings()
+        self.analysis_max_concurrency = max(1, settings.analysis_max_concurrency)
         self.comparables = ComparablesService(repository)
         self.deal_explainer = DealExplainer()
         self.trust_service = TrustService(repository)
@@ -58,6 +64,30 @@ class AnalysisService:
             return _parse_datetime(persisted_row.get("created_at")) or _parse_datetime(persisted_row.get("scraped_at"))
         return None
 
+    async def _build_enrichment_context(self, listings: list[VehicleListing]) -> dict[str, Any]:
+        context: dict[str, Any] = {
+            "comparables_cache": {},
+            "image_reuse_by_hash": {},
+            "seller_stats_by_key": {},
+        }
+        if not self.repository.is_configured() or not listings:
+            return context
+
+        listing_hashes: list[str] = []
+        seller_inputs: list[tuple[str | None, str | None, str | None]] = []
+        for listing in listings:
+            listing_hash = listing.listing_hash or self.build_listing_hash(listing)
+            listing.listing_hash = listing_hash
+            if listing_hash:
+                listing_hashes.append(listing_hash)
+            seller_inputs.append((listing.seller_external_id, listing.seller_phone_hash, listing.seller_url))
+
+        if listing_hashes:
+            context["image_reuse_by_hash"] = await self.repository.fetch_image_reuse_counts(listing_hashes)
+        if seller_inputs:
+            context["seller_stats_by_key"] = await self.repository.fetch_seller_fingerprint_stats_bulk(seller_inputs)
+        return context
+
     async def analyze_listing(
         self,
         listing: VehicleListing,
@@ -66,6 +96,7 @@ class AnalysisService:
         local_candidates: list[VehicleListing] | None = None,
         ownership_profile: OwnershipProfile | None = None,
         use_snapshot: bool = False,
+        context: dict[str, Any] | None = None,
     ) -> ListingAnalysis:
         include_set = set(include)
         local_candidates = local_candidates or []
@@ -94,7 +125,12 @@ class AnalysisService:
         ownership_estimate: OwnershipEstimate | None = None
 
         if "deal" in include_set or "negotiation" in include_set:
-            metrics = await self.comparables.build_metrics(listing, local_candidates=local_candidates)
+            comparables_cache = context.get("comparables_cache") if context else None
+            metrics = await self.comparables.build_metrics(
+                listing,
+                local_candidates=local_candidates,
+                cache=comparables_cache if isinstance(comparables_cache, dict) else None,
+            )
             deal_summary = self.deal_explainer.build_summary(
                 listing,
                 benchmark_price=metrics["benchmark_price"],
@@ -106,7 +142,26 @@ class AnalysisService:
             listing.deal_summary = deal_summary
 
         if "trust" in include_set or "negotiation" in include_set:
-            trust_summary = await self.trust_service.build_summary(listing)
+            image_reuse_count_hint = None
+            seller_stats_hint = None
+            if context and listing_hash:
+                image_reuse_by_hash = context.get("image_reuse_by_hash")
+                if isinstance(image_reuse_by_hash, dict):
+                    image_reuse_count_hint = image_reuse_by_hash.get(listing_hash)
+                seller_stats_by_key = context.get("seller_stats_by_key")
+                seller_key = self.repository.seller_stats_key(
+                    seller_external_id=listing.seller_external_id,
+                    seller_phone_hash=listing.seller_phone_hash,
+                    seller_url=listing.seller_url,
+                )
+                if seller_key and isinstance(seller_stats_by_key, dict):
+                    seller_stats_hint = seller_stats_by_key.get(seller_key)
+
+            trust_summary = await self.trust_service.build_summary(
+                listing,
+                image_reuse_count_hint=image_reuse_count_hint,
+                seller_stats_hint=seller_stats_hint,
+            )
             listing.trust_summary = trust_summary
 
         if "negotiation" in include_set:
@@ -142,16 +197,28 @@ class AnalysisService:
         return analysis
 
     async def enrich_search_results(self, listings: list[VehicleListing]) -> list[VehicleListing]:
-        enriched: list[VehicleListing] = []
-        for listing in listings:
-            await self.analyze_listing(
-                listing,
-                include=["deal", "trust", "negotiation"],
-                local_candidates=listings,
-                use_snapshot=False,
-            )
-            enriched.append(listing)
-        return enriched
+        if not listings:
+            return listings
+        context = await self._build_enrichment_context(listings)
+        semaphore = asyncio.Semaphore(self.analysis_max_concurrency)
+
+        async def enrich_one(listing: VehicleListing) -> VehicleListing:
+            async with semaphore:
+                started = perf_counter()
+                await self.analyze_listing(
+                    listing,
+                    include=["deal", "trust", "negotiation"],
+                    local_candidates=listings,
+                    use_snapshot=False,
+                    context=context,
+                )
+                get_runtime_metrics().record_analysis_breakdown(
+                    search_ms=0,
+                    analysis_ms=int((perf_counter() - started) * 1000),
+                )
+                return listing
+
+        return await asyncio.gather(*(enrich_one(listing) for listing in listings))
 
     async def analyze_request(self, request: AnalyzeListingRequest) -> ListingAnalysis:
         listing = request.listing

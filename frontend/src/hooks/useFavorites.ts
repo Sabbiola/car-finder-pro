@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { getRuntimeConfig } from "@/lib/runtimeConfig";
+import {
+  addUserFavorite,
+  listUserFavorites,
+  removeUserFavorite,
+} from "@/services/api/userData";
 
 const LS_KEY = "car-finder-favorites";
 
@@ -14,12 +20,20 @@ function readFromStorage(): string[] {
 
 export function useFavorites() {
   const { user } = useAuth();
+  const runtimeConfig = getRuntimeConfig();
+  const useBackendApi = runtimeConfig.backendMode === "fastapi" && !!runtimeConfig.apiBaseUrl;
   const [favorites, setFavorites] = useState<string[]>(readFromStorage);
 
   // Load from Supabase when logged in, localStorage otherwise
   useEffect(() => {
     if (!user) {
       setFavorites(readFromStorage());
+      return;
+    }
+    if (useBackendApi) {
+      listUserFavorites(user.id)
+        .then((ids) => setFavorites(ids))
+        .catch(() => setFavorites([]));
       return;
     }
     supabase
@@ -29,7 +43,7 @@ export function useFavorites() {
       .then(({ data }) => {
         if (data) setFavorites(data.map((r: { listing_id: string }) => r.listing_id));
       });
-  }, [user]);
+  }, [user, useBackendApi]);
 
   // Listen for localStorage changes when anonymous
   useEffect(() => {
@@ -45,6 +59,13 @@ export function useFavorites() {
     async (id: string) => {
       if (user) {
         const isFav = favorites.includes(id);
+        if (useBackendApi) {
+          const next = isFav
+            ? await removeUserFavorite(user.id, id)
+            : await addUserFavorite(user.id, id);
+          setFavorites(next);
+          return;
+        }
         if (isFav) {
           await supabase
             .from("user_favorites")
@@ -64,7 +85,7 @@ export function useFavorites() {
         });
       }
     },
-    [user, favorites],
+    [user, favorites, useBackendApi],
   );
 
   const isFavorite = useCallback((id: string) => favorites.includes(id), [favorites]);

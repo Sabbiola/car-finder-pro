@@ -20,11 +20,13 @@ from app.services.supabase_market_repository import SupabaseMarketRepository
 router = APIRouter()
 
 
-def _map_alert_row(row: dict) -> PriceAlertRecord:
+def _map_alert_row(row: dict, latest_attempt: dict | None = None) -> PriceAlertRecord:
     listing_rel = row.get("car_listings")
     if isinstance(listing_rel, list):
         listing_rel = listing_rel[0] if listing_rel else None
     listing = AlertListingSummary.model_validate(listing_rel) if isinstance(listing_rel, dict) else None
+    latest_status = str((latest_attempt or {}).get("status") or "") or None
+    retry_count = int((latest_attempt or {}).get("attempt_number") or 0)
     return PriceAlertRecord(
         id=str(row["id"]),
         listing_id=str(row["listing_id"]),
@@ -35,6 +37,10 @@ def _map_alert_row(row: dict) -> PriceAlertRecord:
         user_id=row.get("user_id"),
         client_id=row.get("client_id"),
         listing=listing,
+        delivery_status=latest_status,
+        last_delivery_error=(latest_attempt or {}).get("error_message"),
+        last_delivery_attempt_at=(latest_attempt or {}).get("created_at"),
+        retry_count=retry_count,
     )
 
 
@@ -57,7 +63,8 @@ async def list_alerts(
         client_id=client_id,
         active_only=active_only,
     )
-    records = [_map_alert_row(row) for row in rows]
+    latest_attempts = await repository.fetch_latest_delivery_attempts([str(row.get("id") or "") for row in rows])
+    records = [_map_alert_row(row, latest_attempts.get(str(row.get("id") or ""))) for row in rows]
     return PriceAlertListResponse(alerts=[_to_response(record) for record in records])
 
 
@@ -73,7 +80,8 @@ async def create_alert(
         client_id=request.client_id,
     )
     if existing:
-        record = _map_alert_row(existing)
+        latest_attempts = await repository.fetch_latest_delivery_attempts([str(existing.get("id") or "")])
+        record = _map_alert_row(existing, latest_attempts.get(str(existing.get("id") or "")))
         return _to_response(record)
 
     created = await repository.create_price_alert(
@@ -85,7 +93,8 @@ async def create_alert(
     if created is None:
         raise HTTPException(status_code=500, detail="Unable to create alert.")
 
-    record = _map_alert_row(created)
+    latest_attempts = await repository.fetch_latest_delivery_attempts([str(created.get("id") or "")])
+    record = _map_alert_row(created, latest_attempts.get(str(created.get("id") or "")))
     log_event(
         "price_alert_created",
         alert_id=record.id,
@@ -109,7 +118,8 @@ async def deactivate_alert(
     if row is None:
         raise HTTPException(status_code=404, detail="Alert not found.")
 
-    record = _map_alert_row(row)
+    latest_attempts = await repository.fetch_latest_delivery_attempts([str(row.get("id") or "")])
+    record = _map_alert_row(row, latest_attempts.get(str(row.get("id") or "")))
     log_event(
         "price_alert_deactivated",
         alert_id=record.id,
@@ -131,7 +141,11 @@ async def process_alerts(
         raise HTTPException(status_code=401, detail="Invalid alerts processor token.")
 
     processor = PriceAlertProcessor(repository=repository)
-    result = await processor.process(dry_run=request.dry_run, limit=request.limit)
+    result = await processor.process(
+        dry_run=request.dry_run,
+        limit=request.limit,
+        idempotency_key=request.idempotency_key,
+    )
     log_event(
         "price_alert_process_completed",
         scanned=result.scanned,

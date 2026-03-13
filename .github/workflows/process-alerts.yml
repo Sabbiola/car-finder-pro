@@ -1,0 +1,23 @@
+name: Process Price Alerts
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+jobs:
+  process-alerts:
+    if: ${{ secrets.ALERTS_PROCESS_URL != '' && secrets.ALERTS_PROCESSOR_TOKEN != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invoke alerts processor
+        env:
+          ALERTS_PROCESS_URL: ${{ secrets.ALERTS_PROCESS_URL }}
+          ALERTS_PROCESSOR_TOKEN: ${{ secrets.ALERTS_PROCESSOR_TOKEN }}
+        run: |
+          RUN_KEY="gha-$(date +%s)"
+          curl --fail --show-error --silent \
+            -X POST "${ALERTS_PROCESS_URL}" \
+            -H "Content-Type: application/json" \
+            -H "x-alerts-token: ${ALERTS_PROCESSOR_TOKEN}" \
+            --data "{\"dry_run\":false,\"limit\":200,\"idempotency_key\":\"${RUN_KEY}\"}"

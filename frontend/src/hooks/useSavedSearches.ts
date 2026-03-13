@@ -2,6 +2,12 @@ import { useState, useEffect } from "react";
 import type { SearchFiltersState } from "@/components/SearchFilters";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { getRuntimeConfig } from "@/lib/runtimeConfig";
+import {
+  createUserSavedSearch,
+  deleteUserSavedSearch,
+  listUserSavedSearches,
+} from "@/services/api/userData";
 
 export interface SavedSearch {
   id: string;
@@ -22,12 +28,29 @@ function readFromStorage(): SavedSearch[] {
 
 export function useSavedSearches() {
   const { user } = useAuth();
+  const runtimeConfig = getRuntimeConfig();
+  const useBackendApi = runtimeConfig.backendMode === "fastapi" && !!runtimeConfig.apiBaseUrl;
   const [searches, setSearches] = useState<SavedSearch[]>(readFromStorage);
 
   // Load from Supabase when logged in
   useEffect(() => {
     if (!user) {
       setSearches(readFromStorage());
+      return;
+    }
+    if (useBackendApi) {
+      listUserSavedSearches(user.id)
+        .then((data) =>
+          setSearches(
+            data.map((r) => ({
+              id: r.id,
+              name: r.name,
+              filters: r.filters as SearchFiltersState,
+              createdAt: r.created_at,
+            })),
+          ),
+        )
+        .catch(() => setSearches([]));
       return;
     }
     supabase
@@ -48,10 +71,21 @@ export function useSavedSearches() {
           );
         }
       });
-  }, [user]);
+  }, [user, useBackendApi]);
 
   const save = async (name: string, filters: SearchFiltersState) => {
     if (user) {
+      if (useBackendApi) {
+        const data = await createUserSavedSearch(user.id, name, filters);
+        const entry: SavedSearch = {
+          id: data.id,
+          name: data.name,
+          filters: data.filters as SearchFiltersState,
+          createdAt: data.created_at,
+        };
+        setSearches((prev) => [entry, ...prev].slice(0, 20));
+        return;
+      }
       const { data } = await supabase
         .from("user_saved_searches")
         .insert({ user_id: user.id, name, filters })
@@ -81,6 +115,11 @@ export function useSavedSearches() {
 
   const remove = async (id: string) => {
     if (user) {
+      if (useBackendApi) {
+        await deleteUserSavedSearch(user.id, id);
+        setSearches((prev) => prev.filter((s) => s.id !== id));
+        return;
+      }
       await supabase.from("user_saved_searches").delete().eq("id", id).eq("user_id", user.id);
       setSearches((prev) => prev.filter((s) => s.id !== id));
     } else {

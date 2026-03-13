@@ -18,11 +18,15 @@ export interface AlertRecord {
   user_id?: string | null;
   client_id?: string | null;
   listing?: AlertListingSummary | null;
+  delivery_status?: string | null;
+  last_delivery_error?: string | null;
+  last_delivery_attempt_at?: string | null;
+  retry_count?: number;
 }
 
 export interface AlertResponse {
   alert: AlertRecord;
-  notification_status: "active" | "inactive" | "notified";
+  notification_status: "active" | "inactive" | "notified" | "retrying" | "failed";
 }
 
 export interface AlertListResponse {

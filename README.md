@@ -58,15 +58,19 @@ Il progetto e in modalita ibrida:
   - query params:
     - `include_analysis=true|false`
     - `include=deal&include=trust&include=negotiation&include=ownership`
+- `POST /api/listings/batch`
+- `GET/POST/DELETE /api/user/favorites`
+- `GET/POST/DELETE /api/user/saved-searches`
+- `POST /api/alerts/process`
+  - supporta `idempotency_key` + retry metadata nel payload di risposta
 
 ## Transizione FastAPI
 
 Durante la release di transizione:
 - `supabase/functions/scrape-listings` fa da proxy verso FastAPI
-- se FastAPI fallisce, il proxy puo fare fallback legacy (configurabile)
-- provider core migrati: `autoscout24`, `subito`
-- provider esteso: `ebay` (`official_api`, abilitato via credenziali env)
-- provider non migrati restano su path legacy
+- target runtime: `fastapi_only` per ricerca primaria
+- provider migrati su backend FastAPI: `autoscout24`, `subito`, `ebay`, `automobile`, `brumbrum`
+- fallback legacy non e piu happy path di default
 
 Env flag principali edge:
 - `FASTAPI_SEARCH_URL`
@@ -150,6 +154,12 @@ Workflow principali:
 - `.github/workflows/deploy-fastapi.yml`
   - test backend + deploy Railway
   - secret checks obbligatori + healthcheck smoke
+- `.github/workflows/perf-load.yml`
+  - load test k6 su `/api/search` e `/api/search/stream`
+- `.github/workflows/process-alerts.yml`
+  - scheduler per `POST /api/alerts/process` con token e idempotency key
+- `.github/workflows/ops-snapshot.yml`
+  - polling periodico di `/api/ops/metrics` e `/api/ops/alerts` (telemetria verso sink esterno)
 
 Checklist release/cutover: [`docs/production_readiness_checklist.md`](docs/production_readiness_checklist.md)
 

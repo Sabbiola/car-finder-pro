@@ -1,0 +1,21 @@
+name: Perf Load
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 1"
+
+jobs:
+  k6-load:
+    if: ${{ secrets.FASTAPI_STAGING_BASE_URL != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Run search load test
+        env:
+          FASTAPI_BASE_URL: ${{ secrets.FASTAPI_STAGING_BASE_URL }}
+        run: k6 run backend/perf/search-load.js

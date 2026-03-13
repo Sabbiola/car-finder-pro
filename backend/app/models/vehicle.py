@@ -24,6 +24,11 @@ class VehicleListing(BaseModel):
     fuel_type: str | None = None
     transmission: str | None = None
     body_style: str | None = None
+    condition: str | None = None
+    is_new: bool | None = None
+    color: str | None = None
+    doors: int | None = None
+    emission_class: str | None = None
     seller_type: str | None = None
     seller_name: str | None = None
     seller_external_id: str | None = None

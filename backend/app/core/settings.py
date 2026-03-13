@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     provider_timeout_seconds: int = 30
     provider_retry_attempts: int = 3
     provider_retry_backoff_ms: int = 250
+    analysis_max_concurrency: int = 8
     disabled_providers: list[str] = Field(default_factory=list)
     scrapingbee_api_key: str | None = None
     ebay_client_id: str | None = None
@@ -27,6 +28,11 @@ class Settings(BaseSettings):
     observability_webhook_url: str | None = None
     observability_webhook_timeout_seconds: int = 2
     alerts_processor_token: str | None = None
+    alerts_retry_max_attempts: int = 3
+    alerts_retry_base_seconds: int = 300
+    resend_api_key: str | None = None
+    resend_from_email: str | None = None
+    resend_base_url: str = "https://api.resend.com"
     supabase_url: str | None = None
     supabase_service_role_key: str | None = None
     supabase_anon_key: str | None = None

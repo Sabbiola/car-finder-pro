@@ -13,6 +13,7 @@ from app.api.metadata import router as metadata_router
 from app.api.ops import router as ops_router
 from app.api.providers import router as providers_router
 from app.api.search import router as search_router
+from app.api.user import router as user_router
 from app.core.observability import configure_logging, log_event
 from app.core.request_context import set_request_id
 from app.core.settings import get_settings
@@ -43,6 +44,7 @@ app.add_middleware(
 app.include_router(search_router, prefix="/api", tags=["search"])
 app.include_router(analysis_router, prefix="/api", tags=["analysis"])
 app.include_router(listings_router, prefix="/api", tags=["listings"])
+app.include_router(user_router, prefix="/api", tags=["user"])
 app.include_router(alerts_router, prefix="/api", tags=["alerts"])
 app.include_router(providers_router, prefix="/api", tags=["providers"])
 app.include_router(health_router, prefix="/api", tags=["health"])

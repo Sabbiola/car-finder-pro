@@ -14,7 +14,7 @@ from app.core.settings import get_settings
 from app.models.analysis import DealSummary, ListingAnalysis, NegotiationSummary, OwnershipEstimate, OwnershipScenario, TrustSummary
 from app.models.analysis_request import AnalyzeListingRequest
 from app.main import app
-from app.models.search import SearchResponse
+from app.models.search import ProviderErrorDetail, SearchResponse
 from app.models.vehicle import VehicleListing
 from app.providers.base.models import ProviderHealth, ProviderInfo
 
@@ -137,6 +137,41 @@ class StubOrchestrator:
         }
 
 
+class NoEligibleOrchestrator:
+    async def run_search(self, _request) -> SearchResponse:
+        return SearchResponse(
+            total_results=0,
+            listings=[],
+            providers_used=[],
+            provider_errors=["No eligible providers for active filters: body_styles"],
+            provider_error_details=[
+                ProviderErrorDetail(
+                    provider=None,
+                    code="no_provider_eligible_for_filters",
+                    message="No eligible providers for active filters: body_styles",
+                    retryable=False,
+                )
+            ],
+        )
+
+    async def stream_search(self, _request) -> AsyncIterator[dict]:
+        yield {
+            "event": "error",
+            "provider": None,
+            "code": "no_provider_eligible_for_filters",
+            "message": "No eligible providers for active filters: body_styles",
+            "retryable": False,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        yield {
+            "event": "complete",
+            "total_results": 0,
+            "provider_summary": {},
+            "duration_ms": 0,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+
 class StubAnalysisService:
     @staticmethod
     def _analysis_payload(listing_id: str | None = "listing-1") -> ListingAnalysis:
@@ -192,6 +227,7 @@ class StubAnalysisService:
 
 class StubMarketRepository:
     def __init__(self) -> None:
+        now_iso = datetime.now(timezone.utc).isoformat()
         self._alerts = [
             {
                 "id": "alert-1",
@@ -199,7 +235,7 @@ class StubMarketRepository:
                 "target_price": 26000,
                 "is_active": True,
                 "notified_at": None,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": now_iso,
                 "user_id": "user-1",
                 "client_id": None,
                 "car_listings": {
@@ -208,6 +244,17 @@ class StubMarketRepository:
                     "image_url": "https://images.example.com/a.jpg",
                     "source_url": "https://example.com/a",
                 },
+            }
+        ]
+        self._delivery_attempts: list[dict] = []
+        self._favorites = [{"id": "fav-1", "user_id": "user-1", "listing_id": "listing-1", "created_at": now_iso}]
+        self._saved_searches = [
+            {
+                "id": "search-1",
+                "user_id": "user-1",
+                "name": "BMW Milano",
+                "filters": {"brand": "BMW", "model": "320d"},
+                "created_at": now_iso,
             }
         ]
 
@@ -241,6 +288,14 @@ class StubMarketRepository:
         if source_url != "https://example.com/a":
             return None
         return await self.fetch_listing_row_by_id("listing-1")
+
+    async def fetch_listing_rows_by_ids(self, listing_ids: list[str]):
+        rows = []
+        for listing_id in listing_ids:
+            row = await self.fetch_listing_row_by_id(listing_id)
+            if row:
+                rows.append(row)
+        return rows
 
     async def fetch_brand_model_rows(self, *, brand: str, model: str, order_by: str = "price.asc", limit: int = 20):
         if brand != "BMW" or model != "320d":
@@ -413,6 +468,50 @@ class StubMarketRepository:
             rows.append(row)
         return rows[:limit]
 
+    async def fetch_latest_delivery_attempts(self, alert_ids: list[str]):
+        latest: dict[str, dict] = {}
+        for attempt in sorted(self._delivery_attempts, key=lambda item: item["created_at"], reverse=True):
+            alert_id = attempt.get("alert_id")
+            if alert_id in alert_ids and alert_id not in latest:
+                latest[alert_id] = attempt
+        return latest
+
+    async def count_delivery_attempts_by_run(self, run_id: str) -> int:
+        return sum(1 for item in self._delivery_attempts if item.get("idempotency_key") == run_id)
+
+    async def create_alert_delivery_attempt(
+        self,
+        *,
+        alert_id: str,
+        attempt_number: int,
+        status: str,
+        channel: str | None,
+        error_message: str | None,
+        next_retry_at: datetime | None,
+        delivered_at: datetime | None,
+        idempotency_key: str,
+        meta: dict | None = None,
+    ):
+        self._delivery_attempts.append(
+            {
+                "alert_id": alert_id,
+                "attempt_number": attempt_number,
+                "status": status,
+                "channel": channel,
+                "error_message": error_message,
+                "next_retry_at": next_retry_at.isoformat() if next_retry_at else None,
+                "delivered_at": delivered_at.isoformat() if delivered_at else None,
+                "idempotency_key": idempotency_key,
+                "meta": meta or {},
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+
+    async def fetch_user_email(self, user_id: str):
+        if user_id == "user-1":
+            return "user@example.com"
+        return None
+
     async def mark_price_alert_notified(self, *, alert_id: str, notified_at: datetime) -> bool:
         for row in self._alerts:
             if row.get("id") != alert_id:
@@ -423,6 +522,55 @@ class StubMarketRepository:
             row["notified_at"] = notified_at.isoformat()
             return True
         return False
+
+    async def fetch_user_favorite_rows(self, *, user_id: str):
+        return [item for item in self._favorites if item["user_id"] == user_id]
+
+    async def add_user_favorite(self, *, user_id: str, listing_id: str):
+        existing = [item for item in self._favorites if item["user_id"] == user_id and item["listing_id"] == listing_id]
+        if existing:
+            return existing[0]
+        row = {
+            "id": f"fav-{len(self._favorites) + 1}",
+            "user_id": user_id,
+            "listing_id": listing_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._favorites.append(row)
+        return row
+
+    async def remove_user_favorite(self, *, user_id: str, listing_id: str):
+        before = len(self._favorites)
+        self._favorites = [
+            item
+            for item in self._favorites
+            if not (item["user_id"] == user_id and item["listing_id"] == listing_id)
+        ]
+        return len(self._favorites) != before
+
+    async def fetch_user_saved_search_rows(self, *, user_id: str, limit: int = 20):
+        rows = [item for item in self._saved_searches if item["user_id"] == user_id]
+        return rows[:limit]
+
+    async def create_user_saved_search(self, *, user_id: str, name: str, filters: dict):
+        row = {
+            "id": f"search-{len(self._saved_searches) + 1}",
+            "user_id": user_id,
+            "name": name,
+            "filters": filters,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._saved_searches.append(row)
+        return row
+
+    async def delete_user_saved_search(self, *, user_id: str, search_id: str):
+        before = len(self._saved_searches)
+        self._saved_searches = [
+            item
+            for item in self._saved_searches
+            if not (item["user_id"] == user_id and item["id"] == search_id)
+        ]
+        return len(self._saved_searches) != before
 
 
 @pytest.fixture(autouse=True)
@@ -455,6 +603,20 @@ def test_search_endpoint_contract() -> None:
     assert payload["provider_error_details"] == []
     assert payload["listings"][0]["reason_codes"] == ["PRICE_SIGNIFICANTLY_BELOW_MARKET"]
     assert payload["listings"][0]["deal_summary"]["headline"] == "Affare interessante"
+
+
+def test_search_endpoint_returns_422_when_no_provider_eligible() -> None:
+    market_repository = StubMarketRepository()
+    app.dependency_overrides[get_provider_registry] = lambda: StubRegistry()
+    app.dependency_overrides[get_search_orchestrator] = lambda: NoEligibleOrchestrator()
+    app.dependency_overrides[get_analysis_service] = lambda: StubAnalysisService()
+    app.dependency_overrides[get_market_repository] = lambda: market_repository
+    client = TestClient(app)
+
+    response = client.post("/api/search", json={"brand": "BMW", "body_styles": ["SUV"]})
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["provider_error_details"][0]["code"] == "no_provider_eligible_for_filters"
 
 
 def test_search_stream_emits_stable_events() -> None:
@@ -498,6 +660,7 @@ def test_providers_and_health_contract() -> None:
     assert "providers" in metadata_payload
     assert metadata_payload["search_contract"]["version"] == "v1"
     assert "canonical_filters" in metadata_payload["search_contract"]
+    assert metadata_payload["search_contract"]["provider_filter_semantics"] == "strict_all_active_non_post_filters"
     assert "brands" in metadata_payload
     assert "models_by_brand" in metadata_payload
     assert "trims_by_brand_model" in metadata_payload
@@ -592,15 +755,73 @@ def test_ops_alerts_contract() -> None:
     assert "thresholds" in payload
 
 
+def test_user_data_contract() -> None:
+    client = _build_client()
+
+    favorites = client.get("/api/user/favorites?user_id=user-1")
+    assert favorites.status_code == 200
+    assert favorites.json()["favorites"][0]["listing_id"] == "listing-1"
+
+    add_favorite = client.post("/api/user/favorites", json={"user_id": "user-1", "listing_id": "listing-2"})
+    assert add_favorite.status_code == 200
+
+    remove_favorite = client.request(
+        "DELETE",
+        "/api/user/favorites/listing-2",
+        json={"user_id": "user-1"},
+    )
+    assert remove_favorite.status_code == 200
+
+    saved = client.get("/api/user/saved-searches?user_id=user-1")
+    assert saved.status_code == 200
+    assert saved.json()["saved_searches"][0]["id"] == "search-1"
+
+    create_saved = client.post(
+        "/api/user/saved-searches",
+        json={"user_id": "user-1", "name": "Nuova ricerca", "filters": {"brand": "BMW"}},
+    )
+    assert create_saved.status_code == 200
+    created_id = create_saved.json()["id"]
+
+    delete_saved = client.request(
+        "DELETE",
+        f"/api/user/saved-searches/{created_id}",
+        json={"user_id": "user-1"},
+    )
+    assert delete_saved.status_code == 200
+    assert delete_saved.json()["deleted"] is True
+
+    listings_batch = client.post("/api/listings/batch", json={"ids": ["listing-1"]})
+    assert listings_batch.status_code == 200
+    assert listings_batch.json()["listings"][0]["id"] == "listing-1"
+
+
 def test_alerts_process_contract() -> None:
     client = _build_client()
     response = client.post("/api/alerts/process", json={"dry_run": False, "limit": 50})
     assert response.status_code == 200
     payload = response.json()
+    assert payload["run_id"]
     assert payload["scanned"] >= 1
     assert payload["triggered"] >= 1
     assert payload["notified"] >= 1
     assert isinstance(payload["items"], list)
+
+
+def test_alerts_process_idempotency_key_replay() -> None:
+    client = _build_client()
+    first = client.post(
+        "/api/alerts/process",
+        json={"dry_run": True, "limit": 10, "idempotency_key": "alerts-run-1"},
+    )
+    assert first.status_code == 200
+    second = client.post(
+        "/api/alerts/process",
+        json={"dry_run": True, "limit": 10, "idempotency_key": "alerts-run-1"},
+    )
+    assert second.status_code == 200
+    payload = second.json()
+    assert payload["idempotent_replay"] is True
 
 
 def test_alerts_process_requires_token_when_configured(monkeypatch: pytest.MonkeyPatch) -> None:

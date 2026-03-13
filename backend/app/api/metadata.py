@@ -22,6 +22,14 @@ def filters_metadata(registry: ProviderRegistry = Depends(get_provider_registry)
             for filter_key in (provider.get("supports_filters") or [])
         }
     )
+    enabled_provider_filters = [
+        set(provider.get("supports_filters") or [])
+        for provider in providers
+        if provider.get("enabled", True) and provider.get("configured", True)
+    ]
+    provider_filter_intersection = sorted(
+        set.intersection(*enabled_provider_filters) if enabled_provider_filters else set()
+    )
     return {
         "fuel_types": FUEL_TYPES,
         "body_styles": BODY_STYLES,
@@ -36,6 +44,8 @@ def filters_metadata(registry: ProviderRegistry = Depends(get_provider_registry)
             "canonical_filters": list(CANONICAL_SEARCH_FILTERS),
             "backend_post_filters": list(BACKEND_POST_FILTERS),
             "provider_filter_union": provider_filter_union,
+            "provider_filter_intersection": provider_filter_intersection,
+            "provider_filter_semantics": "strict_all_active_non_post_filters",
         },
     }
 

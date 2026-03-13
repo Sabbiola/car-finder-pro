@@ -7,6 +7,7 @@ import httpx
 
 from app.core.request_context import get_request_id
 from app.core.settings import get_settings
+from app.core.metrics import get_runtime_metrics
 from app.models.vehicle import VehicleListing
 
 
@@ -76,7 +77,40 @@ class SupabaseMarketRepository:
                 json=json_payload,
                 headers=headers,
             )
+        get_runtime_metrics().record_repository_call()
         response.raise_for_status()
+        if not response.content:
+            return None
+        return response.json()
+
+    async def _auth_request(
+        self,
+        method: str,
+        path: str,
+    ) -> Any:
+        write_key = self._write_key()
+        if not self.settings.supabase_url or not write_key:
+            return None
+        headers = {
+            "apikey": write_key,
+            "Authorization": f"Bearer {write_key}",
+            "Content-Type": "application/json",
+        }
+        request_id = get_request_id()
+        if request_id:
+            headers["x-request-id"] = request_id
+
+        timeout = httpx.Timeout(self.settings.request_timeout_seconds)
+        base_url = self.settings.supabase_url.rstrip("/")
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.request(
+                method,
+                f"{base_url}{path}",
+                headers=headers,
+            )
+        get_runtime_metrics().record_repository_call()
+        if response.status_code >= 400:
+            return None
         if not response.content:
             return None
         return response.json()
@@ -87,6 +121,9 @@ class SupabaseMarketRepository:
         primary_image = row.get("image_url")
         images = [item for item in [primary_image, *image_urls] if item]
         extra_data = row.get("extra_data") or {}
+        seller_type_from_row = row.get("seller_type")
+        if not seller_type_from_row and row.get("condition") in {"private", "dealer"}:
+            seller_type_from_row = row.get("condition")
 
         return VehicleListing(
             id=row.get("id"),
@@ -105,7 +142,12 @@ class SupabaseMarketRepository:
             fuel_type=row.get("fuel"),
             transmission=row.get("transmission"),
             body_style=row.get("body_type"),
-            seller_type=extra_data.get("seller_type") or row.get("condition"),
+            condition=row.get("condition"),
+            is_new=row.get("is_new"),
+            color=row.get("color"),
+            doors=row.get("doors"),
+            emission_class=row.get("emission_class"),
+            seller_type=extra_data.get("seller_type") or seller_type_from_row,
             seller_name=extra_data.get("seller_name"),
             seller_external_id=extra_data.get("seller_external_id"),
             seller_url=extra_data.get("seller_url"),
@@ -141,6 +183,107 @@ class SupabaseMarketRepository:
         if not payload:
             return None
         return payload[0]
+
+    async def fetch_listing_rows_by_ids(self, listing_ids: list[str]) -> list[dict[str, Any]]:
+        cleaned = [item for item in dict.fromkeys(listing_ids) if item]
+        if not cleaned:
+            return []
+        selector = ",".join(cleaned)
+        payload = await self._request(
+            "GET",
+            "car_listings",
+            params={
+                "id": f"in.({selector})",
+                "select": "*",
+                "limit": str(min(500, len(cleaned))),
+            },
+        )
+        return list(payload or [])
+
+    async def fetch_user_favorite_rows(self, *, user_id: str) -> list[dict[str, Any]]:
+        payload = await self._request(
+            "GET",
+            "user_favorites",
+            params={
+                "user_id": f"eq.{user_id}",
+                "select": "id,listing_id,created_at",
+                "order": "created_at.desc",
+                "limit": "500",
+            },
+            write=True,
+        )
+        return list(payload or [])
+
+    async def add_user_favorite(self, *, user_id: str, listing_id: str) -> dict[str, Any] | None:
+        payload = await self._request(
+            "POST",
+            "user_favorites",
+            params={"on_conflict": "user_id,listing_id"},
+            json_payload=[{"user_id": user_id, "listing_id": listing_id}],
+            write=True,
+            extra_headers={"Prefer": "resolution=merge-duplicates,return=representation"},
+        )
+        if not payload:
+            return None
+        return payload[0]
+
+    async def remove_user_favorite(self, *, user_id: str, listing_id: str) -> bool:
+        payload = await self._request(
+            "DELETE",
+            "user_favorites",
+            params={
+                "user_id": f"eq.{user_id}",
+                "listing_id": f"eq.{listing_id}",
+            },
+            write=True,
+            extra_headers={"Prefer": "return=representation"},
+        )
+        return bool(payload)
+
+    async def fetch_user_saved_search_rows(self, *, user_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        payload = await self._request(
+            "GET",
+            "user_saved_searches",
+            params={
+                "user_id": f"eq.{user_id}",
+                "select": "id,name,filters,created_at",
+                "order": "created_at.desc",
+                "limit": str(limit),
+            },
+            write=True,
+        )
+        return list(payload or [])
+
+    async def create_user_saved_search(
+        self,
+        *,
+        user_id: str,
+        name: str,
+        filters: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        payload = await self._request(
+            "POST",
+            "user_saved_searches",
+            json_payload=[{"user_id": user_id, "name": name, "filters": filters}],
+            write=True,
+            extra_headers={"Prefer": "return=representation"},
+        )
+        if not payload:
+            return None
+        return payload[0]
+
+    async def delete_user_saved_search(self, *, user_id: str, search_id: str) -> bool:
+        payload = await self._request(
+            "DELETE",
+            "user_saved_searches",
+            params={
+                "id": f"eq.{search_id}",
+                "user_id": f"eq.{user_id}",
+            },
+            write=True,
+            extra_headers={"Prefer": "return=representation"},
+        )
+        return bool(payload)
 
     async def fetch_comparable_rows(
         self,
@@ -273,6 +416,76 @@ class SupabaseMarketRepository:
             total += max(0, len(matches or []) - 1)
         return total
 
+    async def fetch_image_reuse_counts(self, listing_hashes: list[str]) -> dict[str, int]:
+        cleaned = sorted({item for item in listing_hashes if item})
+        if not cleaned:
+            return {}
+
+        hash_selector = ",".join(cleaned)
+        fingerprints_rows = await self._request(
+            "GET",
+            "listing_image_fingerprints",
+            params={
+                "listing_hash": f"in.({hash_selector})",
+                "select": "listing_hash,fingerprint_hash",
+                "limit": "5000",
+            },
+        )
+        rows = list(fingerprints_rows or [])
+        if not rows:
+            return {listing_hash: 0 for listing_hash in cleaned}
+
+        fingerprints_by_listing: dict[str, set[str]] = {}
+        all_fingerprints: set[str] = set()
+        for row in rows:
+            listing_hash = str(row.get("listing_hash") or "")
+            fingerprint_hash = str(row.get("fingerprint_hash") or "")
+            if not listing_hash or not fingerprint_hash:
+                continue
+            fingerprints_by_listing.setdefault(listing_hash, set()).add(fingerprint_hash)
+            all_fingerprints.add(fingerprint_hash)
+
+        if not all_fingerprints:
+            return {listing_hash: 0 for listing_hash in cleaned}
+
+        fingerprint_selector = ",".join(sorted(all_fingerprints))
+        matches_rows = await self._request(
+            "GET",
+            "listing_image_fingerprints",
+            params={
+                "fingerprint_hash": f"in.({fingerprint_selector})",
+                "select": "fingerprint_hash",
+                "limit": "10000",
+            },
+        )
+        counts_by_fingerprint: dict[str, int] = {}
+        for row in list(matches_rows or []):
+            fingerprint_hash = str(row.get("fingerprint_hash") or "")
+            if not fingerprint_hash:
+                continue
+            counts_by_fingerprint[fingerprint_hash] = counts_by_fingerprint.get(fingerprint_hash, 0) + 1
+
+        result: dict[str, int] = {}
+        for listing_hash in cleaned:
+            listing_fingerprints = fingerprints_by_listing.get(listing_hash, set())
+            reuse_count = 0
+            for fingerprint in listing_fingerprints:
+                reuse_count += max(0, counts_by_fingerprint.get(fingerprint, 0) - 1)
+            result[listing_hash] = reuse_count
+        return result
+
+    @staticmethod
+    def seller_stats_key(
+        *,
+        seller_external_id: str | None,
+        seller_phone_hash: str | None,
+        seller_url: str | None,
+    ) -> str | None:
+        values = [seller_external_id or "", seller_phone_hash or "", seller_url or ""]
+        if not any(values):
+            return None
+        return "|".join(values)
+
     async def fetch_seller_fingerprint_stats(
         self,
         *,
@@ -297,6 +510,52 @@ class SupabaseMarketRepository:
             "private_count": sum(1 for row in matched if row.get("seller_type") == "private"),
             "dealer_count": sum(1 for row in matched if row.get("seller_type") == "dealer"),
         }
+
+    async def fetch_seller_fingerprint_stats_bulk(
+        self,
+        seller_inputs: list[tuple[str | None, str | None, str | None]],
+    ) -> dict[str, dict[str, Any]]:
+        keys = [
+            self.seller_stats_key(
+                seller_external_id=seller_external_id,
+                seller_phone_hash=seller_phone_hash,
+                seller_url=seller_url,
+            )
+            for seller_external_id, seller_phone_hash, seller_url in seller_inputs
+        ]
+        requested_keys = [key for key in keys if key]
+        if not requested_keys:
+            return {}
+
+        payload = await self._request(
+            "GET",
+            "seller_fingerprints",
+            params={
+                "select": "seller_external_id,seller_phone_hash,seller_url,seller_type",
+                "limit": "2000",
+            },
+        )
+        rows = list(payload or [])
+
+        result: dict[str, dict[str, Any]] = {}
+        for key in requested_keys:
+            seller_external_id, seller_phone_hash, seller_url = key.split("|")
+            selected_values = {item for item in [seller_external_id, seller_phone_hash, seller_url] if item}
+            if not selected_values:
+                continue
+            matched = [
+                row
+                for row in rows
+                if row.get("seller_external_id") in selected_values
+                or row.get("seller_phone_hash") in selected_values
+                or row.get("seller_url") in selected_values
+            ]
+            result[key] = {
+                "listing_count": len(matched),
+                "private_count": sum(1 for row in matched if row.get("seller_type") == "private"),
+                "dealer_count": sum(1 for row in matched if row.get("seller_type") == "dealer"),
+            }
+        return result
 
     async def fetch_price_alert_rows(
         self,
@@ -444,6 +703,102 @@ class SupabaseMarketRepository:
             },
         )
         return list(payload or [])
+
+    async def fetch_latest_delivery_attempts(
+        self,
+        alert_ids: list[str],
+    ) -> dict[str, dict[str, Any]]:
+        cleaned = sorted({item for item in alert_ids if item})
+        if not cleaned:
+            return {}
+        selector = ",".join(cleaned)
+        try:
+            payload = await self._request(
+                "GET",
+                "alert_delivery_attempts",
+                params={
+                    "alert_id": f"in.({selector})",
+                    "select": "alert_id,attempt_number,status,error_message,created_at,next_retry_at,idempotency_key,delivered_at",
+                    "order": "created_at.desc",
+                    "limit": str(max(200, len(cleaned) * 5)),
+                },
+            )
+        except httpx.HTTPStatusError:
+            return {}
+        latest: dict[str, dict[str, Any]] = {}
+        for row in list(payload or []):
+            alert_id = str(row.get("alert_id") or "")
+            if not alert_id or alert_id in latest:
+                continue
+            latest[alert_id] = row
+        return latest
+
+    async def count_delivery_attempts_by_run(self, run_id: str) -> int:
+        if not run_id:
+            return 0
+        try:
+            payload = await self._request(
+                "GET",
+                "alert_delivery_attempts",
+                params={
+                    "idempotency_key": f"eq.{run_id}",
+                    "select": "id",
+                    "limit": "1",
+                },
+            )
+        except httpx.HTTPStatusError:
+            return 0
+        return len(payload or [])
+
+    async def create_alert_delivery_attempt(
+        self,
+        *,
+        alert_id: str,
+        attempt_number: int,
+        status: str,
+        channel: str | None,
+        error_message: str | None,
+        next_retry_at: datetime | None,
+        delivered_at: datetime | None,
+        idempotency_key: str,
+        meta: dict[str, Any] | None = None,
+    ) -> None:
+        if not self._write_key():
+            return
+        row = {
+            "alert_id": alert_id,
+            "attempt_number": attempt_number,
+            "status": status,
+            "channel": channel,
+            "error_message": error_message,
+            "next_retry_at": next_retry_at.astimezone(timezone.utc).isoformat() if next_retry_at else None,
+            "delivered_at": delivered_at.astimezone(timezone.utc).isoformat() if delivered_at else None,
+            "idempotency_key": idempotency_key,
+            "meta": meta or {},
+        }
+        try:
+            await self._request(
+                "POST",
+                "alert_delivery_attempts",
+                json_payload=[row],
+                write=True,
+                extra_headers={"Prefer": "return=minimal"},
+            )
+        except httpx.HTTPStatusError:
+            return
+
+    async def fetch_user_email(self, user_id: str) -> str | None:
+        if not user_id:
+            return None
+        payload = await self._auth_request("GET", f"/auth/v1/admin/users/{user_id}")
+        if not isinstance(payload, dict):
+            return None
+        user_obj = payload.get("user")
+        if isinstance(user_obj, dict):
+            email = user_obj.get("email")
+            return str(email) if email else None
+        email = payload.get("email")
+        return str(email) if email else None
 
     async def mark_price_alert_notified(
         self,
