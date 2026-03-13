@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     provider_retry_attempts: int = 3
     provider_retry_backoff_ms: int = 250
     analysis_max_concurrency: int = 8
-    disabled_providers: list[str] = Field(default_factory=list)
+    disabled_providers: str = ""
     scrapingbee_api_key: str | None = None
     ebay_client_id: str | None = None
     ebay_client_secret: str | None = None
@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     negotiation_llm_enabled: bool = False
     legacy_scrape_listings_url: str | None = None
     fastapi_proxy_mode: str = "primary_with_fallback"
+    ops_token: str | None = None
     test_stub_mode: bool = False
 
     @field_validator("cors_origins", mode="before")
@@ -51,14 +52,11 @@ class Settings(BaseSettings):
             return [str(item).strip() for item in value if str(item).strip()]
         return ["http://localhost:8080", "http://localhost:5173"]
 
-    @field_validator("disabled_providers", mode="before")
-    @classmethod
-    def parse_disabled_providers(cls, value: object) -> list[str]:
-        if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
-        if isinstance(value, list):
-            return [str(item).strip() for item in value if str(item).strip()]
-        return []
+    @property
+    def disabled_provider_list(self) -> list[str]:
+        if not self.disabled_providers:
+            return []
+        return [item.strip() for item in self.disabled_providers.split(",") if item.strip()]
 
 
 @lru_cache(maxsize=1)

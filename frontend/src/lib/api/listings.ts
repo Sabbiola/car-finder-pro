@@ -248,7 +248,10 @@ function splitSources(filters: SearchFiltersState): { coreSources: string[]; leg
   return { coreSources: core, legacySources: legacy };
 }
 
-export function buildFastApiRequest(filters: SearchFiltersState): FastApiSearchRequest {
+export function buildFastApiRequest(
+  filters: SearchFiltersState,
+  options?: { mode?: "fast" | "full" },
+): FastApiSearchRequest {
   return {
     query: undefined,
     brand: filters.brand || undefined,
@@ -270,7 +273,7 @@ export function buildFastApiRequest(filters: SearchFiltersState): FastApiSearchR
     emission_class: filters.emissionClass || undefined,
     seller_type: filters.sellerType,
     private_only: filters.sellerType === "private",
-    mode: "fast",
+    mode: options?.mode ?? "fast",
     sources: normalizeSources(filters),
   };
 }

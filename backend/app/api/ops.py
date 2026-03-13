@@ -1,16 +1,28 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.core.dependencies import get_provider_registry
 from app.core.observability import log_event
 from app.core.metrics import get_runtime_metrics
 from app.core.provider_registry import ProviderRegistry
+from app.core.settings import get_settings
 
 
 router = APIRouter()
 
 
+def _verify_ops_token(x_ops_token: str | None = Header(default=None)) -> None:
+    """Require a valid ops token when OPS_TOKEN env var is configured."""
+    settings = get_settings()
+    required_token = getattr(settings, "ops_token", None)
+    if required_token and x_ops_token != required_token:
+        raise HTTPException(status_code=403, detail="Invalid or missing ops token")
+
+
 @router.get("/ops/metrics")
-async def ops_metrics(registry: ProviderRegistry = Depends(get_provider_registry)) -> dict[str, object]:
+async def ops_metrics(
+    registry: ProviderRegistry = Depends(get_provider_registry),
+    _auth: None = Depends(_verify_ops_token),
+) -> dict[str, object]:
     runtime = get_runtime_metrics().snapshot()
     provider_health = [item.model_dump(mode="json") for item in await registry.health()]
     log_event(
@@ -28,6 +40,7 @@ async def ops_metrics(registry: ProviderRegistry = Depends(get_provider_registry
 @router.get("/ops/alerts")
 async def ops_alerts(
     registry: ProviderRegistry = Depends(get_provider_registry),
+    _auth: None = Depends(_verify_ops_token),
     p95_threshold_ms: int = 5000,
     error_rate_threshold: float = 0.02,
     stream_completion_threshold: float = 0.98,

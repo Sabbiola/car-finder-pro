@@ -23,7 +23,7 @@ class ProviderRuntimeStats:
 class ProviderRegistry:
     def __init__(self) -> None:
         settings = get_settings()
-        disabled = set(settings.disabled_providers)
+        disabled = set(settings.disabled_provider_list)
         self._providers: dict[str, BaseProvider] = {
             "autoscout24": AutoScout24Provider(),
             "subito": SubitoProvider(),

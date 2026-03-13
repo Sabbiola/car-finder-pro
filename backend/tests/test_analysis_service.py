@@ -35,6 +35,18 @@ class FakeRepository:
     async def upsert_analysis_snapshot(self, **_kwargs):
         return None
 
+    @staticmethod
+    def seller_stats_key(
+        *,
+        seller_external_id: str | None = None,
+        seller_phone_hash: str | None = None,
+        seller_url: str | None = None,
+    ) -> str | None:
+        values = [seller_external_id or "", seller_phone_hash or "", seller_url or ""]
+        if not any(values):
+            return None
+        return "|".join(values)
+
 
 def _listing() -> VehicleListing:
     return VehicleListing(

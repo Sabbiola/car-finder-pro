@@ -61,7 +61,9 @@ function findBestIndex(values: (number | null)[], mode: "min" | "max"): number |
 const Confronta = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const ids = (searchParams.get("ids") || "").split(",").filter(Boolean);
+  const idsParam = searchParams.get("ids") || "";
+  const ids = idsParam.split(",").filter(Boolean);
+  const idsKey = ids.join(",");
   const [cars, setCars] = useState<CarListing[]>([]);
   const [analysesById, setAnalysesById] = useState<Record<string, ListingAnalysis>>({});
   const [loading, setLoading] = useState(true);
@@ -82,7 +84,8 @@ const Confronta = () => {
       .then(setCars)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [ids.join(",")]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey]);
 
   useEffect(() => {
     const runtime = getRuntimeConfig();

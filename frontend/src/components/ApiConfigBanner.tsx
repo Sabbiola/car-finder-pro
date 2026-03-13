@@ -16,12 +16,12 @@ import {
 } from "@/lib/runtimeConfig";
 
 const ApiConfigBanner = () => {
-  if (!import.meta.env.DEV) return null;
-
   const initial = getRuntimeConfig();
   const [mode, setMode] = useState<BackendMode>(initial.backendMode);
   const [baseUrl, setBaseUrl] = useState(initial.apiBaseUrl || "");
   const [saved, setSaved] = useState(false);
+
+  if (!import.meta.env.DEV) return null;
 
   const save = () => {
     setRuntimeBackendMode(mode);

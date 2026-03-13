@@ -9,6 +9,7 @@ import type { CarListing } from "@/lib/api/listings";
 
 const Preferiti = () => {
   const { favorites } = useFavorites();
+  const favoritesKey = favorites.join(",");
   const [listings, setListings] = useState<CarListing[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -24,7 +25,8 @@ const Preferiti = () => {
       .then(setListings)
       .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [favorites.join(",")]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [favoritesKey]);
 
   return (
     <div className="min-h-screen bg-background">
