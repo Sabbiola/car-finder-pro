@@ -69,3 +69,9 @@ def test_provider_registry_disables_providers_from_env(monkeypatch: pytest.Monke
         assert subito is not None and subito.info.enabled is True
     finally:
         get_settings.cache_clear()
+
+
+def test_provider_registry_includes_migrated_html_providers() -> None:
+    registry = ProviderRegistry()
+    assert registry.get("automobile") is not None
+    assert registry.get("brumbrum") is not None

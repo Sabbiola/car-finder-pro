@@ -1,6 +1,7 @@
 import type { SearchFiltersState } from "@/components/SearchFilters";
 import type { SearchStreamEvent } from "@/features/search/types";
 import { supabase } from "@/integrations/supabase/client";
+import { createRequestId } from "@/lib/requestId";
 import { getRuntimeConfig, type RuntimeConfig } from "@/lib/runtimeConfig";
 import { streamSearch } from "@/services/api/searchStream";
 
@@ -169,6 +170,12 @@ interface FastApiSearchResponse {
   listings: FastApiVehicleListing[];
   providers_used?: string[];
   provider_errors?: string[];
+  provider_error_details?: Array<{
+    provider?: string | null;
+    code: string;
+    message: string;
+    retryable?: boolean;
+  }>;
 }
 
 export interface FastApiSearchRequest {
@@ -181,17 +188,25 @@ export interface FastApiSearchRequest {
   year_max?: number;
   price_min?: number;
   price_max?: number;
+  mileage_min?: number;
   mileage_max?: number;
   body_styles?: string[];
   fuel_types?: string[];
+  transmission?: string;
   condition?: string;
   private_only?: boolean;
   mode?: "fast" | "full";
   sources?: string[];
 }
 
-export const FASTAPI_CORE_SOURCES = ["autoscout24", "subito", "ebay"] as const;
-const LEGACY_ONLY_SOURCES = ["automobile", "brumbrum"];
+export const FASTAPI_CORE_SOURCES = [
+  "autoscout24",
+  "subito",
+  "ebay",
+  "automobile",
+  "brumbrum",
+] as const;
+const LEGACY_ONLY_SOURCES: string[] = [];
 
 const mergedCacheByQuery = new Map<string, CarListing[]>();
 
@@ -219,14 +234,13 @@ function normalizeSources(filters: SearchFiltersState): string[] {
 function splitSources(filters: SearchFiltersState): { coreSources: string[]; legacySources: string[] } {
   const selected = normalizeSources(filters);
   const core = selected.filter((s) => FASTAPI_CORE_SOURCES.includes(s as (typeof FASTAPI_CORE_SOURCES)[number]));
-  const legacy = selected.filter((s) => LEGACY_ONLY_SOURCES.includes(s));
+  const legacy = selected.filter((s) => !core.includes(s) || LEGACY_ONLY_SOURCES.includes(s));
   return { coreSources: core, legacySources: legacy };
 }
 
 export function buildFastApiRequest(filters: SearchFiltersState): FastApiSearchRequest {
-  const query = [filters.brand, filters.model, filters.trim].filter(Boolean).join(" ").trim();
   return {
-    query: query || undefined,
+    query: undefined,
     brand: filters.brand || undefined,
     model: filters.model || undefined,
     trim: filters.trim || undefined,
@@ -235,13 +249,39 @@ export function buildFastApiRequest(filters: SearchFiltersState): FastApiSearchR
     year_max: parseMaybeNumber(filters.yearMax),
     price_min: parseMaybeNumber(filters.priceMin),
     price_max: parseMaybeNumber(filters.priceMax),
+    mileage_min: parseMaybeNumber(filters.kmMin),
     mileage_max: parseMaybeNumber(filters.kmMax),
     body_styles: filters.bodyType ? [filters.bodyType] : undefined,
     fuel_types: filters.fuel ? [filters.fuel] : undefined,
+    transmission: filters.transmission || undefined,
     private_only: filters.sellerType === "private",
     mode: "fast",
     sources: normalizeSources(filters),
   };
+}
+
+export function buildListingIdentityKey(
+  listing: Pick<CarListing, "source_url" | "source" | "title" | "price" | "year">,
+): string {
+  return listing.source_url || `${listing.source}|${listing.title}|${listing.price}|${listing.year}`;
+}
+
+export function reconcileListingsByResultKeys(
+  listings: CarListing[],
+  finalResultKeys: string[],
+): CarListing[] {
+  if (!finalResultKeys.length) return listings;
+  const byKey = new Map<string, CarListing>();
+  for (const listing of listings) {
+    const key = buildListingIdentityKey(listing);
+    if (!byKey.has(key)) byKey.set(key, listing);
+  }
+  const reconciled: CarListing[] = [];
+  for (const key of finalResultKeys) {
+    const listing = byKey.get(key);
+    if (listing) reconciled.push(listing);
+  }
+  return reconciled;
 }
 
 export function mapFastApiListing(item: FastApiVehicleListing): CarListing {
@@ -304,9 +344,13 @@ export function mapFastApiListing(item: FastApiVehicleListing): CarListing {
 }
 
 async function runFastApiSearch(filters: SearchFiltersState, apiBaseUrl: string): Promise<CarListing[]> {
+  const requestId = createRequestId("search-sync");
   const response = await fetch(`${apiBaseUrl}/api/search`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-request-id": requestId,
+    },
     body: JSON.stringify(buildFastApiRequest(filters)),
   });
   if (!response.ok) {
@@ -340,7 +384,7 @@ function mergeListings(...chunks: CarListing[][]): CarListing[] {
   const map = new Map<string, CarListing>();
   for (const chunk of chunks) {
     for (const listing of chunk) {
-      const key = listing.source_url || `${listing.source}|${listing.title}|${listing.price}|${listing.year}`;
+      const key = buildListingIdentityKey(listing);
       if (!map.has(key)) map.set(key, listing);
     }
   }
@@ -421,24 +465,20 @@ export async function scrapeListings(filters: SearchFiltersState) {
   const chunks: CarListing[][] = [];
   const providerErrors: string[] = [];
 
-  if (coreSources.length) {
-    try {
-      chunks.push(await runFastApiSearch(withSources(filters, coreSources), runtimeConfig.apiBaseUrl));
-    } catch (error) {
-      providerErrors.push(error instanceof Error ? error.message : "FastAPI search failed");
-    }
+  if (!coreSources.length) {
+    throw new Error("No FastAPI providers selected");
   }
 
-  if (legacySources.length || !coreSources.length) {
-    try {
-      await scrapeLegacy(withSources(filters, legacySources.length ? legacySources : normalizeSources(filters)));
-      const legacyResults = await fetchLegacyListings(
-        withSources(filters, legacySources.length ? legacySources : normalizeSources(filters)),
-      );
-      chunks.push(legacyResults);
-    } catch (error) {
-      providerErrors.push(error instanceof Error ? error.message : "Legacy search failed");
-    }
+  if (legacySources.length) {
+    providerErrors.push(
+      `Ignored non-migrated sources in fastapi mode: ${legacySources.join(", ")}`,
+    );
+  }
+
+  try {
+    chunks.push(await runFastApiSearch(withSources(filters, coreSources), runtimeConfig.apiBaseUrl));
+  } catch (error) {
+    providerErrors.push(error instanceof Error ? error.message : "FastAPI search failed");
   }
 
   const mergedCache = mergeListings(...chunks);
@@ -450,7 +490,7 @@ export async function scrapeListings(filters: SearchFiltersState) {
   return {
     success: true,
     count: mergedCache.length,
-    source: coreSources.length && legacySources.length ? "hybrid" : coreSources.length ? "fastapi" : "legacy",
+    source: "fastapi",
     provider_errors: providerErrors,
   };
 }

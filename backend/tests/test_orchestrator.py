@@ -115,6 +115,8 @@ async def test_run_search_adds_provider_not_configured_error_for_requested_sourc
     assert response.providers_used == []
     assert "ebay: provider_not_configured" in response.provider_errors
     assert "No eligible providers for this request" in response.provider_errors
+    assert any(detail.code == "provider_not_configured" for detail in response.provider_error_details)
+    assert any(detail.code == "no_provider" for detail in response.provider_error_details)
 
 
 @pytest.mark.asyncio
@@ -129,6 +131,7 @@ async def test_stream_search_emits_error_and_complete() -> None:
     assert "result" in event_names
     assert "error" in event_names
     assert event_names[-1] == "complete"
+    assert "final_result_keys" in events[-1]
 
 
 @pytest.mark.asyncio
@@ -146,3 +149,20 @@ async def test_stream_search_emits_provider_not_configured_for_requested_source(
     assert events[1]["event"] == "error"
     assert events[1]["code"] == "no_provider"
     assert events[-1]["event"] == "complete"
+
+
+@pytest.mark.asyncio
+async def test_run_search_reports_unsupported_filters_for_selected_sources() -> None:
+    registry = ProviderRegistry()
+    registry._providers = {  # type: ignore[attr-defined]
+        "subito": FakeProvider("subito", results=[]),
+    }
+    registry._stats = {"subito": ProviderRuntimeStats()}  # type: ignore[attr-defined]
+    orchestrator = SearchOrchestrator(registry=registry)
+
+    response = await orchestrator.run_search(
+        SearchRequest(brand="BMW", body_styles=["SUV"], sources=["subito"])
+    )
+
+    assert any(detail.code == "unsupported_filter" for detail in response.provider_error_details)
+    assert any("Unsupported filters for selected sources" in error for error in response.provider_errors)

@@ -1,22 +1,38 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { User, Bell, Bookmark, Heart, LogOut, Trash2, Search, Calendar, Euro } from "lucide-react";
+import { Bell, Bookmark, Calendar, Heart, LogOut, Search, Trash2, User } from "lucide-react";
+
 import Header from "@/components/Header";
 import CarCard from "@/components/CarCard";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { SearchFiltersState } from "@/components/SearchFilters";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useSavedSearches } from "@/hooks/useSavedSearches";
 import { supabase } from "@/integrations/supabase/client";
 import type { CarListing } from "@/lib/api/listings";
+import { getRuntimeConfig } from "@/lib/runtimeConfig";
 import { toCardListing } from "@/lib/toCardListing";
-import type { SearchFiltersState } from "@/components/SearchFilters";
+import { deactivateAlertApi, listAlertsApi } from "@/services/api/alerts";
 
-// Cast to any to bypass missing table types (price_alerts, user_favorites etc.)
+// Cast to any to bypass incomplete generated table types.
 const sb = supabase as any;
+
+const CLIENT_ID_KEY = "car-finder-client-id";
+
+function getClientId(): string {
+  const existing = localStorage.getItem(CLIENT_ID_KEY);
+  if (existing) return existing;
+  const generated =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `client-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  localStorage.setItem(CLIENT_ID_KEY, generated);
+  return generated;
+}
 
 interface AlertRow {
   id: string;
@@ -36,18 +52,23 @@ function filtersLabel(filters: SearchFiltersState): string {
   const parts: string[] = [];
   if (filters.brand) parts.push(filters.brand);
   if (filters.model) parts.push(filters.model);
-  if (filters.yearMin || filters.yearMax)
-    parts.push(`${filters.yearMin || ""}–${filters.yearMax || ""}`);
-  if (filters.priceMax) parts.push(`max €${Number(filters.priceMax).toLocaleString("it-IT")}`);
+  if (filters.yearMin || filters.yearMax) {
+    parts.push(`${filters.yearMin || ""}-${filters.yearMax || ""}`);
+  }
+  if (filters.priceMax) {
+    parts.push(`max EUR ${Number(filters.priceMax).toLocaleString("it-IT")}`);
+  }
   if (filters.fuel) parts.push(filters.fuel);
-  return parts.length ? parts.join(" · ") : "Tutti i filtri";
+  return parts.length ? parts.join(" | ") : "Tutti i filtri";
 }
 
 export default function Profile() {
   const { user, signOut, loading } = useAuth();
+  const runtime = getRuntimeConfig();
   const navigate = useNavigate();
   const { favorites } = useFavorites();
   const { searches, remove: removeSearch } = useSavedSearches();
+  const isFastApiMode = runtime.backendMode === "fastapi" && !!runtime.apiBaseUrl;
 
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(false);
@@ -55,26 +76,51 @@ export default function Profile() {
   const [favLoading, setFavLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("info");
 
-  // Load alerts when tab is active — must be before any early return
   useEffect(() => {
     if (activeTab !== "alerts" || !user) return;
     setAlertsLoading(true);
-    sb.from("price_alerts")
-      .select(
-        "id, listing_id, target_price, is_active, notified_at, created_at, car_listings(title, price, image_url)",
-      )
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .then(({ data }: { data: AlertRow[] | null }) => {
-        setAlerts(data || []);
-        setAlertsLoading(false);
-      });
-  }, [activeTab, user]);
+    const load = async () => {
+      try {
+        if (isFastApiMode) {
+          const response = await listAlertsApi({ userId: user.id });
+          setAlerts(
+            response.alerts.map((entry) => ({
+              id: entry.alert.id,
+              listing_id: entry.alert.listing_id,
+              target_price: entry.alert.target_price,
+              is_active: entry.alert.is_active,
+              notified_at: entry.alert.notified_at || null,
+              created_at: entry.alert.created_at,
+              car_listings: entry.alert.listing
+                ? {
+                    title: entry.alert.listing.title || "",
+                    price: entry.alert.listing.price || 0,
+                    image_url: entry.alert.listing.image_url || null,
+                  }
+                : null,
+            })),
+          );
+          return;
+        }
 
-  // Load favorite listings when tab is active — must be before any early return
+        const { data } = await sb
+          .from("price_alerts")
+          .select(
+            "id, listing_id, target_price, is_active, notified_at, created_at, car_listings(title, price, image_url)",
+          )
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+        setAlerts((data as AlertRow[] | null) || []);
+      } finally {
+        setAlertsLoading(false);
+      }
+    };
+    void load();
+  }, [activeTab, isFastApiMode, user]);
+
   useEffect(() => {
     if (activeTab !== "favorites" || !user) return;
-    if (favorites.length === 0) {
+    if (!favorites.length) {
       setFavListings([]);
       return;
     }
@@ -88,17 +134,17 @@ export default function Profile() {
       });
   }, [activeTab, favorites, user]);
 
-  // Auth guard — after all hooks
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
         <div className="container py-20 flex items-center justify-center">
-          <p className="text-muted-foreground text-sm">Caricamento…</p>
+          <p className="text-muted-foreground text-sm">Caricamento...</p>
         </div>
       </div>
     );
   }
+
   if (!user) return <Navigate to="/" replace />;
 
   const initials = user.email ? user.email.slice(0, 2).toUpperCase() : "U";
@@ -109,34 +155,37 @@ export default function Profile() {
   });
 
   const deleteAlert = async (id: string) => {
-    await sb.from("price_alerts").delete().eq("id", id);
-    setAlerts((prev) => prev.filter((a) => a.id !== id));
+    if (isFastApiMode) {
+      await deactivateAlertApi(id, { userId: user.id, clientId: getClientId() });
+    } else {
+      await sb.from("price_alerts").delete().eq("id", id);
+    }
+    setAlerts((prev) => prev.filter((item) => item.id !== id));
   };
 
-  function buildSearchParams(filters: SearchFiltersState): string {
+  const runSearch = (filters: SearchFiltersState) => {
     const params = new URLSearchParams();
-    Object.entries(filters).forEach(([k, v]) => {
-      if (k === "isNew") {
-        if (v === true) params.set("isNew", "true");
-        else if (v === false) params.set("isNew", "false");
-      } else if (Array.isArray(v)) {
-        if ((v as string[]).length) params.set(k, (v as string[]).join(","));
-      } else if (v !== "" && v !== null && v !== undefined) {
-        params.set(k, String(v));
+    Object.entries(filters).forEach(([key, value]) => {
+      if (key === "isNew") {
+        if (value === true) params.set("isNew", "true");
+        else if (value === false) params.set("isNew", "false");
+        return;
+      }
+      if (Array.isArray(value)) {
+        if (value.length) params.set(key, value.join(","));
+        return;
+      }
+      if (value !== "" && value !== null && value !== undefined) {
+        params.set(key, String(value));
       }
     });
-    return params.toString();
-  }
-
-  const runSearch = (filters: SearchFiltersState) => {
-    navigate(`/risultati?${buildSearchParams(filters)}`);
+    navigate(`/risultati?${params.toString()}`);
   };
 
   return (
     <div className="min-h-screen bg-background">
       <Header />
       <div className="container py-8 max-w-4xl">
-        {/* Page title */}
         <div className="flex items-center gap-3 border-b border-border pb-4 mb-8 animate-brutal-in">
           <User className="h-5 w-5" />
           <h1 className="text-xl font-bold">Il mio profilo</h1>
@@ -167,7 +216,6 @@ export default function Profile() {
             </TabsTrigger>
           </TabsList>
 
-          {/* ── INFO TAB ── */}
           <TabsContent value="info">
             <div className="rounded-2xl border border-border/60 bg-card p-8 space-y-6 max-w-md">
               <div className="flex items-center gap-4">
@@ -195,7 +243,7 @@ export default function Profile() {
                   <p className="text-xs text-muted-foreground mt-0.5">Ricerche</p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-foreground">{alerts.length || "–"}</p>
+                  <p className="text-2xl font-bold text-foreground">{alerts.length || "-"}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">Alert</p>
                 </div>
               </div>
@@ -213,20 +261,15 @@ export default function Profile() {
             </div>
           </TabsContent>
 
-          {/* ── ALERTS TAB ── */}
           <TabsContent value="alerts">
             <div className="space-y-3">
               {alertsLoading && (
-                <p className="text-sm text-muted-foreground py-8 text-center">Caricamento alert…</p>
+                <p className="text-sm text-muted-foreground py-8 text-center">Caricamento alert...</p>
               )}
               {!alertsLoading && alerts.length === 0 && (
                 <div className="rounded-2xl border border-border/60 bg-card p-8 text-center">
                   <Bell className="h-8 w-8 mx-auto mb-3 text-muted-foreground/50" />
                   <p className="text-sm text-muted-foreground">Nessun alert attivo.</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Apri un annuncio e clicca sull&apos;icona campanella per impostare un alert
-                    prezzo.
-                  </p>
                 </div>
               )}
               {alerts.map((alert) => (
@@ -242,21 +285,18 @@ export default function Profile() {
                     />
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {alert.car_listings?.title || "Auto"}
-                    </p>
+                    <p className="text-sm font-medium truncate">{alert.car_listings?.title || "Auto"}</p>
                     <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Euro className="h-3 w-3" />
+                      <span>
                         Attuale:{" "}
                         <strong className="text-foreground">
-                          €{(alert.car_listings?.price || 0).toLocaleString("it-IT")}
+                          EUR {(alert.car_listings?.price || 0).toLocaleString("it-IT")}
                         </strong>
                       </span>
                       <span>
                         Target:{" "}
                         <strong className="text-violet-600">
-                          €{alert.target_price.toLocaleString("it-IT")}
+                          EUR {alert.target_price.toLocaleString("it-IT")}
                         </strong>
                       </span>
                     </div>
@@ -266,9 +306,7 @@ export default function Profile() {
                           Notificato
                         </Badge>
                       ) : (
-                        <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-0">
-                          Attivo
-                        </Badge>
+                        <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-0">Attivo</Badge>
                       )}
                     </div>
                   </div>
@@ -276,7 +314,7 @@ export default function Profile() {
                     variant="ghost"
                     size="icon"
                     className="rounded-xl h-9 w-9 flex-shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={() => deleteAlert(alert.id)}
+                    onClick={() => void deleteAlert(alert.id)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -285,16 +323,12 @@ export default function Profile() {
             </div>
           </TabsContent>
 
-          {/* ── SAVED SEARCHES TAB ── */}
           <TabsContent value="searches">
             <div className="space-y-3">
-              {searches.length === 0 && (
+              {!searches.length && (
                 <div className="rounded-2xl border border-border/60 bg-card p-8 text-center">
                   <Bookmark className="h-8 w-8 mx-auto mb-3 text-muted-foreground/50" />
                   <p className="text-sm text-muted-foreground">Nessuna ricerca salvata.</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Usa il filtro di ricerca e clicca &quot;Salva ricerca&quot; per salvarla qui.
-                  </p>
                 </div>
               )}
               {searches.map((search) => (
@@ -336,21 +370,15 @@ export default function Profile() {
             </div>
           </TabsContent>
 
-          {/* ── FAVORITES TAB ── */}
           <TabsContent value="favorites">
-            {favorites.length === 0 && (
+            {!favorites.length && (
               <div className="rounded-2xl border border-border/60 bg-card p-8 text-center">
                 <Heart className="h-8 w-8 mx-auto mb-3 text-muted-foreground/50" />
                 <p className="text-sm text-muted-foreground">Nessun preferito salvato.</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Clicca sul cuore di un annuncio per aggiungerlo.
-                </p>
               </div>
             )}
             {favLoading && (
-              <p className="text-sm text-muted-foreground py-8 text-center">
-                Caricamento preferiti…
-              </p>
+              <p className="text-sm text-muted-foreground py-8 text-center">Caricamento preferiti...</p>
             )}
             {!favLoading && favListings.length > 0 && (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">

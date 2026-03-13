@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 
+from app.core.request_context import get_request_id
 from app.core.settings import get_settings
 from app.models.vehicle import VehicleListing
 
@@ -39,11 +40,15 @@ class SupabaseMarketRepository:
         key = self._write_key() if write else self._read_key()
         if not self.settings.supabase_url or not key:
             return None
-        return {
+        headers = {
             "apikey": key,
             "Authorization": f"Bearer {key}",
             "Content-Type": "application/json",
         }
+        request_id = get_request_id()
+        if request_id:
+            headers["x-request-id"] = request_id
+        return headers
 
     async def _request(
         self,
@@ -169,6 +174,27 @@ class SupabaseMarketRepository:
         payload = await self._request("GET", "car_listings", params=params)
         return list(payload or [])
 
+    async def fetch_brand_model_rows(
+        self,
+        *,
+        brand: str,
+        model: str,
+        order_by: str = "price.asc",
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        payload = await self._request(
+            "GET",
+            "car_listings",
+            params={
+                "select": "*",
+                "brand": f"eq.{brand}",
+                "model": f"eq.{model}",
+                "order": order_by,
+                "limit": str(limit),
+            },
+        )
+        return list(payload or [])
+
     async def fetch_price_history(self, listing_id: str, limit: int = 30) -> list[dict[str, Any]]:
         payload = await self._request(
             "GET",
@@ -271,3 +297,173 @@ class SupabaseMarketRepository:
             "private_count": sum(1 for row in matched if row.get("seller_type") == "private"),
             "dealer_count": sum(1 for row in matched if row.get("seller_type") == "dealer"),
         }
+
+    async def fetch_price_alert_rows(
+        self,
+        *,
+        user_id: str | None = None,
+        client_id: str | None = None,
+        active_only: bool = False,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        if not user_id and not client_id:
+            return []
+        params: dict[str, str] = {
+            "select": "id,listing_id,target_price,is_active,notified_at,created_at,user_id,client_id,car_listings(title,price,image_url,source_url)",
+            "order": "created_at.desc",
+            "limit": str(limit),
+        }
+        if user_id:
+            params["user_id"] = f"eq.{user_id}"
+        if client_id and not user_id:
+            params["client_id"] = f"eq.{client_id}"
+        if active_only:
+            params["is_active"] = "eq.true"
+
+        payload = await self._request("GET", "price_alerts", params=params)
+        return list(payload or [])
+
+    async def find_matching_price_alert(
+        self,
+        *,
+        listing_id: str,
+        target_price: int,
+        user_id: str | None = None,
+        client_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        if not user_id and not client_id:
+            return None
+        params: dict[str, str] = {
+            "select": "id,listing_id,target_price,is_active,notified_at,created_at,user_id,client_id,car_listings(title,price,image_url,source_url)",
+            "listing_id": f"eq.{listing_id}",
+            "target_price": f"eq.{target_price}",
+            "is_active": "eq.true",
+            "limit": "1",
+        }
+        if user_id:
+            params["user_id"] = f"eq.{user_id}"
+        elif client_id:
+            params["client_id"] = f"eq.{client_id}"
+
+        payload = await self._request("GET", "price_alerts", params=params)
+        if not payload:
+            return None
+        return payload[0]
+
+    async def create_price_alert(
+        self,
+        *,
+        listing_id: str,
+        target_price: int,
+        user_id: str | None = None,
+        client_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        row = {
+            "listing_id": listing_id,
+            "target_price": target_price,
+            "is_active": True,
+            "user_id": user_id,
+            "client_id": client_id,
+        }
+        payload = await self._request(
+            "POST",
+            "price_alerts",
+            json_payload=[row],
+            write=True,
+            extra_headers={"Prefer": "return=representation"},
+        )
+        if not payload:
+            return None
+        created = payload[0]
+        created_id = created.get("id")
+        if not created_id:
+            return created
+        complete = await self._request(
+            "GET",
+            "price_alerts",
+            params={
+                "id": f"eq.{created_id}",
+                "select": "id,listing_id,target_price,is_active,notified_at,created_at,user_id,client_id,car_listings(title,price,image_url,source_url)",
+                "limit": "1",
+            },
+        )
+        if complete:
+            return complete[0]
+        return created
+
+    async def deactivate_price_alert(
+        self,
+        *,
+        alert_id: str,
+        user_id: str | None = None,
+        client_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        params: dict[str, str] = {"id": f"eq.{alert_id}"}
+        if user_id:
+            params["user_id"] = f"eq.{user_id}"
+        elif client_id:
+            params["client_id"] = f"eq.{client_id}"
+
+        payload = await self._request(
+            "PATCH",
+            "price_alerts",
+            params=params,
+            json_payload={"is_active": False},
+            write=True,
+            extra_headers={"Prefer": "return=representation"},
+        )
+        if not payload:
+            return None
+        row = payload[0]
+        row_id = row.get("id")
+        if not row_id:
+            return row
+        complete = await self._request(
+            "GET",
+            "price_alerts",
+            params={
+                "id": f"eq.{row_id}",
+                "select": "id,listing_id,target_price,is_active,notified_at,created_at,user_id,client_id,car_listings(title,price,image_url,source_url)",
+                "limit": "1",
+            },
+        )
+        if complete:
+            return complete[0]
+        return row
+
+    async def fetch_due_price_alert_rows(self, *, limit: int = 200) -> list[dict[str, Any]]:
+        payload = await self._request(
+            "GET",
+            "price_alerts",
+            params={
+                "select": "id,listing_id,target_price,is_active,notified_at,created_at,user_id,client_id,car_listings(price,title,image_url,source_url)",
+                "is_active": "eq.true",
+                "notified_at": "is.null",
+                "order": "created_at.asc",
+                "limit": str(limit),
+            },
+        )
+        return list(payload or [])
+
+    async def mark_price_alert_notified(
+        self,
+        *,
+        alert_id: str,
+        notified_at: datetime,
+    ) -> bool:
+        payload = await self._request(
+            "PATCH",
+            "price_alerts",
+            params={
+                "id": f"eq.{alert_id}",
+                "is_active": "eq.true",
+                "notified_at": "is.null",
+            },
+            json_payload={
+                "is_active": False,
+                "notified_at": notified_at.astimezone(timezone.utc).isoformat(),
+            },
+            write=True,
+            extra_headers={"Prefer": "return=representation"},
+        )
+        return bool(payload)

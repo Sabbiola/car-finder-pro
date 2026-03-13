@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     ebay_marketplace_id: str = "EBAY_IT"
     observability_webhook_url: str | None = None
     observability_webhook_timeout_seconds: int = 2
+    alerts_processor_token: str | None = None
     supabase_url: str | None = None
     supabase_service_role_key: str | None = None
     supabase_anon_key: str | None = None

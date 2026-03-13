@@ -3,6 +3,7 @@ from urllib.parse import urlencode
 
 import httpx
 
+from app.core.request_context import get_request_id
 from app.core.settings import get_settings
 
 
@@ -30,8 +31,10 @@ async def fetch_markdown(url: str, wait_ms: int = 7000, premium_proxy: bool = Fa
     last_error: Exception | None = None
     for attempt in range(1, attempts + 1):
         try:
+            request_id = get_request_id()
+            headers = {"x-request-id": request_id} if request_id else None
             async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.get(endpoint)
+                response = await client.get(endpoint, headers=headers)
             if response.status_code >= 500:
                 raise RuntimeError(f"ScrapingBee transient error {response.status_code}")
             response.raise_for_status()

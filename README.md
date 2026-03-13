@@ -48,12 +48,16 @@ Il progetto e in modalita ibrida:
 ## Backend APIs
 
 - `POST /api/search`
-  - response: `total_results`, `listings`, `providers_used`, `provider_errors`
+  - response: `total_results`, `listings`, `providers_used`, `provider_errors`, `provider_error_details`
 - `POST /api/search/stream`
   - SSE con eventi stabili: `progress`, `result`, `complete`, `error`
 - `GET /api/providers`
 - `GET /api/providers/health`
 - `GET /api/filters/metadata`
+- `GET /api/listings/{listing_id}`
+  - query params:
+    - `include_analysis=true|false`
+    - `include=deal&include=trust&include=negotiation&include=ownership`
 
 ## Transizione FastAPI
 

@@ -5,14 +5,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 
+from app.api.alerts import router as alerts_router
 from app.api.analysis import router as analysis_router
 from app.api.health import router as health_router
+from app.api.listings import router as listings_router
 from app.api.metadata import router as metadata_router
+from app.api.ops import router as ops_router
 from app.api.providers import router as providers_router
 from app.api.search import router as search_router
 from app.core.observability import configure_logging, log_event
 from app.core.request_context import set_request_id
 from app.core.settings import get_settings
+from app.core.metrics import get_runtime_metrics
 
 
 settings = get_settings()
@@ -38,9 +42,12 @@ app.add_middleware(
 
 app.include_router(search_router, prefix="/api", tags=["search"])
 app.include_router(analysis_router, prefix="/api", tags=["analysis"])
+app.include_router(listings_router, prefix="/api", tags=["listings"])
+app.include_router(alerts_router, prefix="/api", tags=["alerts"])
 app.include_router(providers_router, prefix="/api", tags=["providers"])
 app.include_router(health_router, prefix="/api", tags=["health"])
 app.include_router(metadata_router, prefix="/api", tags=["metadata"])
+app.include_router(ops_router, prefix="/api", tags=["ops"])
 
 
 @app.middleware("http")
@@ -60,6 +67,11 @@ async def request_id_middleware(request: Request, call_next):
         log_event(
             "http_request_completed",
             method=request.method,
+            path=str(request.url.path),
+            status_code=status_code,
+            duration_ms=duration_ms,
+        )
+        get_runtime_metrics().record_http(
             path=str(request.url.path),
             status_code=status_code,
             duration_ms=duration_ms,

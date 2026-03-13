@@ -1,4 +1,5 @@
 import type { SearchStreamEvent } from "@/features/search/types";
+import { createRequestId } from "@/lib/requestId";
 
 export interface StreamSearchParams<TPayload = unknown, TListing = unknown> {
   baseUrl: string;
@@ -40,9 +41,13 @@ export async function streamSearch<TPayload = unknown, TListing = unknown>({
   onEvent,
 }: StreamSearchParams<TPayload, TListing>): Promise<void> {
   const endpoint = `${baseUrl.replace(/\/+$/, "")}/api/search/stream`;
+  const requestId = createRequestId("search-stream");
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-request-id": requestId,
+    },
     body: JSON.stringify(payload),
     signal,
   });

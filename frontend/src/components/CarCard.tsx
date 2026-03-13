@@ -1,9 +1,10 @@
 import { ExternalLink, Award, MapPin } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { sourceLabels, sourceColors } from "@/lib/mock-data";
 import { useNavigate } from "react-router-dom";
-import FavoriteButton from "@/components/FavoriteButton";
+
 import CompareButton from "@/components/CompareButton";
+import FavoriteButton from "@/components/FavoriteButton";
+import { Badge } from "@/components/ui/badge";
+import { sourceColors, sourceLabels } from "@/lib/mock-data";
 import { priceRatingConfig } from "@/lib/rating-config";
 import type { CardListing } from "@/lib/toCardListing";
 
@@ -17,13 +18,26 @@ const CarCard = ({ listing, showCompare }: Props) => {
   const navigate = useNavigate();
   const rating = priceRatingConfig[listing.priceRating || "normal"];
   const isBest = listing.priceRating === "best";
+  const sourceUrl = listing.url && listing.url !== "#" ? listing.url : null;
+  const detailUrl = sourceUrl
+    ? `/auto/${listing.id}?source_url=${encodeURIComponent(sourceUrl)}`
+    : `/auto/${listing.id}`;
 
   return (
     <div
       className="cursor-pointer group rounded-2xl border border-border bg-card hover:shadow-xl hover:-translate-y-1 transition-all duration-200 overflow-hidden"
-      onClick={() => navigate(`/auto/${listing.id}`)}
+      onClick={() =>
+        navigate(detailUrl, {
+          state: {
+            listingRef: {
+              listingId: listing.id,
+              sourceUrl,
+            },
+            listingSnapshot: listing,
+          },
+        })
+      }
     >
-      {/* Image */}
       <div className="relative aspect-[16/10] overflow-hidden">
         <img
           src={listing.imageUrl}
@@ -36,7 +50,6 @@ const CarCard = ({ listing, showCompare }: Props) => {
               "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600&q=80";
           }}
         />
-        {/* Source badge(s) */}
         <div className="absolute top-2 left-2 flex flex-wrap gap-1 max-w-[70%]">
           {(listing.allSources || [listing.source]).map((src) => (
             <span
@@ -58,17 +71,15 @@ const CarCard = ({ listing, showCompare }: Props) => {
         </div>
       </div>
 
-      {/* Content */}
       <div className="p-4 space-y-3">
         <h3 className="text-sm font-semibold leading-tight line-clamp-2 text-foreground">
           {listing.title}
         </h3>
 
         <div className="text-2xl font-bold bg-gradient-to-r from-violet-600 to-indigo-500 bg-clip-text text-transparent">
-          €{listing.price.toLocaleString("it-IT")}
+          EUR {listing.price.toLocaleString("it-IT")}
         </div>
 
-        {/* Spec pills */}
         <div className="flex flex-wrap gap-1.5">
           <span className="text-[11px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
             {listing.year}
@@ -95,7 +106,6 @@ const CarCard = ({ listing, showCompare }: Props) => {
           </p>
         )}
 
-        {/* Bottom row */}
         <div className="flex items-center justify-between pt-2 border-t border-border/50 gap-2">
           <div className="flex items-center gap-2 flex-wrap">
             <Badge
@@ -110,7 +120,9 @@ const CarCard = ({ listing, showCompare }: Props) => {
             className="text-muted-foreground hover:text-accent transition-colors"
             onClick={(e) => {
               e.stopPropagation();
-              window.open(listing.url, "_blank");
+              if (listing.url && listing.url !== "#") {
+                window.open(listing.url, "_blank", "noopener,noreferrer");
+              }
             }}
           >
             <ExternalLink className="h-3.5 w-3.5" />

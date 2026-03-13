@@ -42,6 +42,7 @@ class EbayProvider(BaseProvider):
             "query",
             "brand",
             "model",
+            "trim",
             "price_min",
             "price_max",
         ],

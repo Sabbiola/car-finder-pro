@@ -18,7 +18,9 @@ import ListingResultCard from "@/features/results/components/ListingResultCard";
 import { useSearchParams } from "react-router-dom";
 import {
   FASTAPI_CORE_SOURCES,
+  buildListingIdentityKey,
   fetchListings,
+  reconcileListingsByResultKeys,
   scrapeListings,
   streamListings,
   type CarListing,
@@ -76,7 +78,7 @@ function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
 function mergeUniqueListings(left: CarListing[], right: CarListing[]): CarListing[] {
   const map = new Map<string, CarListing>();
   for (const listing of [...left, ...right]) {
-    const key = listing.source_url || `${listing.source}|${listing.title}|${listing.price}|${listing.year}`;
+    const key = buildListingIdentityKey(listing);
     if (!map.has(key)) map.set(key, listing);
   }
   return [...map.values()];
@@ -131,6 +133,16 @@ const SearchResults = () => {
         let streamedResults: CarListing[] = [];
         const streamErrorsLocal: string[] = [];
 
+        if (legacySources.length) {
+          const legacyWarning = `Fonti non migrate ignorate in fastapi mode: ${legacySources.join(", ")}`;
+          streamErrorsLocal.push(legacyWarning);
+          setStreamErrors((prev) => [...prev, legacyWarning]);
+        }
+
+        if (!coreSources.length) {
+          throw new Error("Nessun provider FastAPI selezionato.");
+        }
+
         if (coreSources.length) {
           await streamListings(
             { ...currentFilters, sources: coreSources },
@@ -144,25 +156,26 @@ const SearchResults = () => {
               } else if (event.event === "result") {
                 streamedResults = mergeUniqueListings(streamedResults, [event.listing]);
                 setListings(streamedResults);
+              } else if (event.event === "complete") {
+                if (event.final_result_keys?.length) {
+                  streamedResults = reconcileListingsByResultKeys(streamedResults, event.final_result_keys);
+                  setListings(streamedResults);
+                }
               } else if (event.event === "error") {
-                streamErrorsLocal.push(event.message);
-                setStreamErrors((prev) => [...prev, event.message]);
+                const formatted =
+                  event.code === "unsupported_filter"
+                    ? `Filtro non supportato: ${event.message}`
+                    : `${event.provider ? `${event.provider}: ` : ""}${event.message}`;
+                streamErrorsLocal.push(formatted);
+                setStreamErrors((prev) => [...prev, formatted]);
               }
             },
             streamController.signal,
           );
         }
-
-        let legacyResults: CarListing[] = [];
-        if (legacySources.length) {
-          const legacyFilters = { ...currentFilters, sources: legacySources };
-          await scrapeListings(legacyFilters);
-          if (isStaleRequest()) return;
-          legacyResults = await fetchListings(legacyFilters);
-        }
         if (isStaleRequest()) return;
 
-        const finalResults = mergeUniqueListings(streamedResults, legacyResults);
+        const finalResults = streamedResults;
         setListings(finalResults);
         setScraped(true);
         toast({

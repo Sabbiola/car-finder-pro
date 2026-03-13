@@ -1,48 +1,51 @@
-import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import {
   ArrowLeft,
-  ExternalLink,
-  Loader2,
+  Award,
+  Check,
   ChevronLeft,
   ChevronRight,
-  Award,
+  ExternalLink,
   FileText,
+  Loader2,
   MapPin,
   Share2,
-  Check,
 } from "lucide-react";
-import { Helmet } from "react-helmet-async";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import Header from "@/components/Header";
-import CarCard from "@/components/CarCard";
-import FavoriteButton from "@/components/FavoriteButton";
-import ListingInsightsPanel from "@/features/results/components/ListingInsightsPanel";
-import { useListingAnalysis } from "@/features/results/hooks/useListingAnalysis";
-import { sourceLabels, sourceColors } from "@/lib/mock-data";
-import { supabase } from "@/integrations/supabase/client";
-import type { CarListing } from "@/lib/api/listings";
-import { toCardListing } from "@/lib/toCardListing";
-import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
 import {
-  BarChart,
   Bar,
+  BarChart,
+  Cell,
+  Line,
+  LineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-  ReferenceLine,
-  LineChart,
-  Line,
 } from "recharts";
-import LoanCalculator from "@/components/LoanCalculator";
-import PriceAlertButton from "@/components/PriceAlertButton";
-import { priceRatingConfig as ratingConfig } from "@/lib/rating-config";
-import { FALLBACK_IMAGE } from "@/lib/constants";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
+
+import FavoriteButton from "@/components/FavoriteButton";
+import Header from "@/components/Header";
+import LoanCalculator from "@/components/LoanCalculator";
+import PriceAlertButton from "@/components/PriceAlertButton";
+import CarCard from "@/components/CarCard";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import ListingInsightsPanel from "@/features/results/components/ListingInsightsPanel";
+import { useListingAnalysis } from "@/features/results/hooks/useListingAnalysis";
+import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
+import { supabase } from "@/integrations/supabase/client";
+import { FALLBACK_IMAGE } from "@/lib/constants";
+import type { CarListing } from "@/lib/api/listings";
+import { sourceColors, sourceLabels } from "@/lib/mock-data";
+import { priceRatingConfig as ratingConfig } from "@/lib/rating-config";
+import { getRuntimeConfig } from "@/lib/runtimeConfig";
+import { toCardListing } from "@/lib/toCardListing";
+import { fetchListingDetailContext } from "@/services/api/listingDetail";
 
 interface ExtendedListing extends CarListing {
   description?: string | null;
@@ -55,16 +58,79 @@ interface ExtendedListing extends CarListing {
   extra_data?: Record<string, unknown> | null;
 }
 
+function snapshotToExtendedListing(
+  snapshot: Record<string, unknown> | null | undefined,
+  fallbackId: string,
+): ExtendedListing {
+  const getString = (key: string): string | null => {
+    const value = snapshot?.[key];
+    return typeof value === "string" ? value : null;
+  };
+  const getNumber = (key: string): number | null => {
+    const value = snapshot?.[key];
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+  };
+  const getBoolean = (key: string): boolean | null => {
+    const value = snapshot?.[key];
+    return typeof value === "boolean" ? value : null;
+  };
+
+  const imageUrl = getString("imageUrl");
+  return {
+    id: fallbackId,
+    title: getString("title") || "Annuncio",
+    brand: getString("brand") || "",
+    model: getString("model") || "",
+    trim: null,
+    year: getNumber("year") || new Date().getFullYear(),
+    price: getNumber("price") || 0,
+    km: getNumber("km") || 0,
+    fuel: getString("fuel"),
+    transmission: getString("transmission"),
+    power: null,
+    color: null,
+    doors: null,
+    body_type: getString("bodyType"),
+    source: getString("source") || "autoscout24",
+    source_url: getString("url"),
+    image_url: imageUrl,
+    location: getString("location"),
+    is_new: false,
+    is_best_deal: getBoolean("isBestDeal") || false,
+    price_rating: getString("priceRating"),
+    scraped_at: new Date().toISOString(),
+    description: null,
+    emission_class: null,
+    version: null,
+    seats: null,
+    condition: null,
+    detail_scraped: false,
+    image_urls: imageUrl ? [imageUrl] : null,
+    extra_data: null,
+  };
+}
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 const CarDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { addRecent } = useRecentlyViewed();
+
   const canGoBack = location.key !== "default";
+  const listingRef = (location.state as { listingRef?: { sourceUrl?: string | null } } | null)
+    ?.listingRef;
+  const listingSnapshot = (location.state as { listingSnapshot?: unknown } | null)?.listingSnapshot;
+  const sourceUrlFromQuery = searchParams.get("source_url");
+  const sourceUrlFromState = listingRef?.sourceUrl || sourceUrlFromQuery || null;
+
   const [car, setCar] = useState<ExtendedListing | null>(null);
   const [similar, setSimilar] = useState<CarListing[]>([]);
   const [allPrices, setAllPrices] = useState<CarListing[]>([]);
-  const [priceHistory, setPriceHistory] = useState<{ price: number; recorded_at: string }[]>([]);
+  const [priceHistory, setPriceHistory] = useState<Array<{ price: number; recorded_at: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
@@ -72,8 +138,13 @@ const CarDetail = () => {
   const [copied, setCopied] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  const analysisListingId = useMemo(
+    () => (car?.id && UUID_REGEX.test(car.id) ? car.id : undefined),
+    [car?.id],
+  );
   const analysisQuery = useListingAnalysis({
-    listingId: car?.id,
+    listingId: analysisListingId,
     listing: car,
     include: ["deal", "trust", "negotiation", "ownership"],
     enabled: !!car,
@@ -85,63 +156,88 @@ const CarDetail = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Clipboard not available (e.g. HTTP context)
+      // Clipboard can fail on non-secure contexts.
     }
   };
 
   const galleryImages = useMemo(() => {
     if (!car) return [];
-    const normalize = (u: string) => {
-      let url = u.startsWith("//") ? "https:" + u : u;
-      if (url.includes("images.sbito.it") && url.includes("rule=")) {
-        url = url.replace(/rule=[^&]+/, "rule=fullscreen-1x-auto");
+    const normalize = (raw: string) => {
+      let value = raw.startsWith("//") ? `https:${raw}` : raw;
+      if (value.includes("images.sbito.it") && value.includes("rule=")) {
+        value = value.replace(/rule=[^&]+/, "rule=fullscreen-1x-auto");
       }
-      if (url.includes("autoscout24.net/listing-images/")) {
-        url = url.replace(/\/\d+x\d+(\.\w+)$/, "/800x600$1");
+      if (value.includes("autoscout24.net/listing-images/")) {
+        value = value.replace(/\/\d+x\d+(\.\w+)$/, "/800x600$1");
       }
-      return url;
+      return value;
     };
     const main = normalize(car.image_url || "") || FALLBACK_IMAGE;
-    const extras = (car.image_urls ?? []).map(normalize).filter((u) => u && u !== main);
+    const extras = (car.image_urls || []).map(normalize).filter((url) => url && url !== main);
     return [main, ...extras];
   }, [car]);
 
   const prevImage = useCallback(() => {
-    setImgIndex((i) => (i - 1 + galleryImages.length) % galleryImages.length);
+    setImgIndex((index) => (index - 1 + galleryImages.length) % galleryImages.length);
   }, [galleryImages.length]);
 
   const nextImage = useCallback(() => {
-    setImgIndex((i) => (i + 1) % galleryImages.length);
+    setImgIndex((index) => (index + 1) % galleryImages.length);
   }, [galleryImages.length]);
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") prevImage();
-      if (e.key === "ArrowRight") nextImage();
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === "ArrowLeft") prevImage();
+      if (event.key === "ArrowRight") nextImage();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [prevImage, nextImage]);
+  }, [nextImage, prevImage]);
 
   useEffect(() => {
     if (!id) return;
 
     let cancelled = false;
-
     const fetchCar = async () => {
       setLoading(true);
+      setDetailLoading(true);
       setFetchError(null);
       setImgIndex(0);
+      setResolvedUrl(sourceUrlFromState);
 
       try {
-        const { data, error } = await supabase
-          .from("car_listings")
-          .select("*")
-          .eq("id", id)
-          .single();
+        const runtime = getRuntimeConfig();
+        if (runtime.backendMode === "fastapi" && runtime.apiBaseUrl) {
+          const detail = await fetchListingDetailContext(runtime.apiBaseUrl, {
+            listingId: id,
+            sourceUrl: sourceUrlFromState,
+            includeAnalysis: false,
+          });
+          if (cancelled) return;
 
+          const detailListing: ExtendedListing = {
+            ...detail.listing,
+            description: detail.listing.description || null,
+            emission_class: detail.listing.emission_class || null,
+            version: detail.listing.version || null,
+            seats: detail.listing.seats || null,
+            condition: detail.listing.condition || null,
+            detail_scraped: true,
+            image_urls: detail.listing.image_urls || null,
+            extra_data: detail.listing.extra_data || null,
+          };
+
+          setCar(detailListing);
+          addRecent(detailListing.id);
+          setSimilar(detail.similarListings);
+          setAllPrices(detail.priceSamples);
+          setPriceHistory(detail.priceHistory);
+          setResolvedUrl(detail.listing.source_url || sourceUrlFromState);
+          return;
+        }
+
+        const { data, error } = await supabase.from("car_listings").select("*").eq("id", id).single();
         if (cancelled) return;
-
         if (error || !data) {
           setFetchError("Auto non trovata o errore nel caricamento.");
           return;
@@ -175,94 +271,64 @@ const CarDetail = () => {
         ]);
 
         if (cancelled) return;
-
         setSimilar((similarRes.data as CarListing[]) || []);
         setAllPrices((pricesRes.data as CarListing[]) || []);
         setPriceHistory(historyRes.data || []);
 
-        // Determine source URL — fallback: construct from AutoScout24 image UUID
-        let scrapeUrl =
-          carData.source_url && carData.source_url !== "#" ? carData.source_url : null;
-        if (!scrapeUrl && carData.source === "autoscout24" && carData.image_url) {
+        let listingUrl = carData.source_url && carData.source_url !== "#" ? carData.source_url : null;
+        if (!listingUrl && carData.source === "autoscout24" && carData.image_url) {
           const idMatch = carData.image_url.match(/listing-images\/([a-f0-9-]{36})/);
           if (idMatch) {
             const slug = carData.title
               .toLowerCase()
               .replace(/[^a-z0-9]+/g, "-")
               .replace(/^-|-$/g, "");
-            scrapeUrl = `https://www.autoscout24.it/annunci/${slug}-${idMatch[1]}`;
-            // Fire-and-forget: persist resolved URL for future visits
-            supabase
-              .from("car_listings")
-              .update({ source_url: scrapeUrl })
-              .eq("id", carData.id)
-              .then(({ error: updateErr }) => {
-                if (updateErr)
-                  console.warn("[CarDetail] Failed to persist source_url:", updateErr.message);
-              });
+            listingUrl = `https://www.autoscout24.it/annunci/${slug}-${idMatch[1]}`;
           }
         }
-        if (scrapeUrl && !cancelled) setResolvedUrl(scrapeUrl);
-
-        if (!carData.detail_scraped && scrapeUrl) {
-          if (cancelled) return;
-          setDetailLoading(true);
-          try {
-            const { data: scrapeResult } = await supabase.functions.invoke("scrape-detail", {
-              body: { listingId: carData.id, sourceUrl: scrapeUrl },
-            });
-            if (cancelled) return;
-            if (scrapeResult?.success && !scrapeResult?.cached) {
-              const { data: updated, error: refreshErr } = await supabase
-                .from("car_listings")
-                .select("*")
-                .eq("id", id)
-                .single();
-              if (!cancelled) {
-                if (refreshErr) {
-                  console.warn("[CarDetail] Failed to refresh after scrape:", refreshErr.message);
-                } else if (updated) {
-                  setCar(updated as ExtendedListing);
-                }
-              }
-            }
-          } catch (err) {
-            if (!cancelled) console.error("[CarDetail] Detail scrape error:", err);
-          } finally {
-            if (!cancelled) setDetailLoading(false);
-          }
-        }
-      } catch (err) {
-        if (!cancelled) {
-          console.error("[CarDetail] Unexpected fetch error:", err);
+        if (listingUrl) setResolvedUrl(listingUrl);
+      } catch (error) {
+        if (cancelled) return;
+        console.error("[CarDetail] Unexpected fetch error:", error);
+        if (listingSnapshot) {
+          const fallback = snapshotToExtendedListing(listingSnapshot as Record<string, unknown>, id);
+          setCar(fallback);
+          addRecent(fallback.id);
+          setSimilar([]);
+          setAllPrices([]);
+          setPriceHistory([]);
+          setResolvedUrl(fallback.source_url || sourceUrlFromState);
+          setFetchError(null);
+        } else {
           setFetchError("Errore imprevisto nel caricamento dell'auto.");
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setDetailLoading(false);
+          setLoading(false);
+        }
       }
     };
 
-    fetchCar();
-
-    // Cleanup: prevent stale state updates if the user navigates away
+    void fetchCar();
     return () => {
       cancelled = true;
     };
-  }, [id, addRecent]);
+  }, [addRecent, id, listingSnapshot, sourceUrlFromState]);
 
   const chartData = useMemo(() => {
     if (!allPrices.length || !car) return [];
-    return allPrices.map((p) => ({
-      name: p.title.length > 20 ? p.title.slice(0, 20) + "…" : p.title,
-      price: p.price,
-      isCurrent: p.id === car.id,
-      rating: p.price_rating || "normal",
+    return allPrices.map((item) => ({
+      name: item.title.length > 20 ? `${item.title.slice(0, 20)}...` : item.title,
+      price: item.price,
+      isCurrent: item.id === car.id,
+      rating: item.price_rating || "normal",
     }));
   }, [allPrices, car]);
 
   const avgPrice = useMemo(() => {
     if (!allPrices.length) return 0;
-    return Math.round(allPrices.reduce((s, p) => s + p.price, 0) / allPrices.length);
+    return Math.round(allPrices.reduce((acc, item) => acc + item.price, 0) / allPrices.length);
   }, [allPrices]);
 
   if (loading) {
@@ -283,7 +349,7 @@ const CarDetail = () => {
         <div className="container py-16 text-center space-y-4">
           <p className="text-sm text-muted-foreground">{fetchError || "Auto non trovata"}</p>
           <Button variant="outline" onClick={() => navigate(-1)}>
-            ← Torna indietro
+            Torna indietro
           </Button>
         </div>
       </div>
@@ -291,6 +357,22 @@ const CarDetail = () => {
   }
 
   const listing = toCardListing(car);
+  const priceRating = listing.priceRating || "normal";
+  const ratingStyle = ratingConfig[priceRating];
+  const specs = [
+    { label: "Anno", value: listing.year },
+    { label: "Chilometri", value: `${listing.km.toLocaleString("it-IT")} km` },
+    { label: "Alimentazione", value: listing.fuel || "N/A" },
+    { label: "Cambio", value: listing.transmission || "N/A" },
+    { label: "Potenza", value: listing.power || "N/A" },
+    { label: "Carrozzeria", value: listing.bodyType || "N/A" },
+    ...(car.emission_class ? [{ label: "Emissioni", value: car.emission_class }] : []),
+    ...(car.condition ? [{ label: "Condizione", value: car.condition }] : []),
+    ...(car.version ? [{ label: "Versione", value: car.version }] : []),
+    ...(car.seats ? [{ label: "Posti", value: car.seats }] : []),
+    ...(car.doors ? [{ label: "Porte", value: car.doors }] : []),
+    ...(car.color ? [{ label: "Colore", value: car.color }] : []),
+  ];
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -311,40 +393,19 @@ const CarDetail = () => {
     image: galleryImages[0],
   };
 
-  const priceRating = listing.priceRating || "normal";
-  const ratingStyle = ratingConfig[priceRating];
-
-  const specs = [
-    { label: "Anno", value: listing.year },
-    { label: "Chilometri", value: `${listing.km.toLocaleString("it-IT")} km` },
-    { label: "Alimentazione", value: listing.fuel || "—" },
-    { label: "Cambio", value: listing.transmission || "—" },
-    { label: "Potenza", value: listing.power || "—" },
-    { label: "Carrozzeria", value: listing.bodyType || "—" },
-    ...(car.emission_class ? [{ label: "Emissioni", value: car.emission_class }] : []),
-    ...(car.condition ? [{ label: "Condizione", value: car.condition }] : []),
-    ...(car.version ? [{ label: "Versione", value: car.version }] : []),
-    ...(car.seats ? [{ label: "Posti", value: car.seats }] : []),
-    ...(car.doors ? [{ label: "Porte", value: car.doors }] : []),
-    ...(car.color ? [{ label: "Colore", value: car.color }] : []),
-  ];
-
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
-        <title>
-          {listing.title} — €{listing.price.toLocaleString("it-IT")} | AutoDeal Finder
-        </title>
+        <title>{`${listing.title} - EUR ${listing.price.toLocaleString("it-IT")} | AutoDeal Finder`}</title>
         <meta
           name="description"
-          content={`${listing.title} a €${listing.price.toLocaleString("it-IT")} — ${listing.year}, ${listing.km.toLocaleString("it-IT")} km, ${listing.fuel || ""} ${listing.transmission || ""}. ${listing.location || ""}`}
+          content={`${listing.title} a EUR ${listing.price.toLocaleString("it-IT")} - ${listing.year}, ${listing.km.toLocaleString("it-IT")} km, ${listing.fuel || ""} ${listing.transmission || ""}. ${listing.location || ""}`}
         />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
       </Helmet>
-      <Header />
 
+      <Header />
       <div className="container py-6 space-y-8">
-        {/* Back */}
         <button
           onClick={() => (canGoBack ? navigate(-1) : navigate("/"))}
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors animate-brutal-in"
@@ -352,10 +413,8 @@ const CarDetail = () => {
           <ArrowLeft className="h-4 w-4" /> Indietro
         </button>
 
-        {/* Main card */}
         <div className="rounded-2xl border border-border/60 shadow-sm overflow-hidden animate-brutal-up">
           <div className="grid lg:grid-cols-2">
-            {/* Image carousel */}
             <div className="relative aspect-[4/3] lg:aspect-auto overflow-hidden">
               <img
                 src={galleryImages[imgIndex]}
@@ -364,11 +423,10 @@ const CarDetail = () => {
                 loading="lazy"
                 referrerPolicy="no-referrer"
                 onClick={() => setLightboxOpen(true)}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = FALLBACK_IMAGE;
+                onError={(event) => {
+                  (event.target as HTMLImageElement).src = FALLBACK_IMAGE;
                 }}
               />
-              {/* Nav arrows */}
               {galleryImages.length > 1 && (
                 <>
                   <button
@@ -385,12 +443,11 @@ const CarDetail = () => {
                   >
                     <ChevronRight className="h-4 w-4" />
                   </button>
-                  <div className="absolute bottom-3 right-3 bg-black/50 text-white text-[10px] font-semibold px-2.5 py-1 rounded-full">
-                    {imgIndex + 1} / {galleryImages.length}
-                  </div>
                 </>
               )}
-              {/* Source badge */}
+              <div className="absolute bottom-3 right-3 bg-black/50 text-white text-[10px] font-semibold px-2.5 py-1 rounded-full">
+                {imgIndex + 1} / {galleryImages.length}
+              </div>
               <div
                 className={`absolute top-3 left-3 ${sourceColors[listing.source]} text-white text-[10px] font-semibold px-2.5 py-1 rounded-full shadow-sm`}
               >
@@ -410,7 +467,6 @@ const CarDetail = () => {
               slides={galleryImages.map((src) => ({ src }))}
             />
 
-            {/* Details panel */}
             <div className="p-6 lg:p-8 space-y-6 bg-card">
               <div className="space-y-1">
                 <div className="flex items-start justify-between gap-3">
@@ -425,11 +481,7 @@ const CarDetail = () => {
                     className="rounded-xl h-9 w-9 flex-shrink-0 mt-1"
                     aria-label="Condividi link annuncio"
                   >
-                    {copied ? (
-                      <Check className="h-4 w-4 text-emerald-500" />
-                    ) : (
-                      <Share2 className="h-4 w-4" />
-                    )}
+                    {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Share2 className="h-4 w-4" />}
                   </Button>
                 </div>
                 {listing.location && (
@@ -440,10 +492,9 @@ const CarDetail = () => {
                 )}
               </div>
 
-              {/* Price + rating */}
               <div className="flex items-end gap-3">
                 <span className="text-4xl font-extrabold bg-gradient-to-r from-violet-600 to-indigo-500 bg-clip-text text-transparent">
-                  €{listing.price.toLocaleString("it-IT")}
+                  EUR {listing.price.toLocaleString("it-IT")}
                 </span>
                 <Badge
                   variant="outline"
@@ -453,14 +504,13 @@ const CarDetail = () => {
                 </Badge>
               </div>
 
-              {/* Specs grid */}
               <div className="grid grid-cols-2 gap-2">
-                {specs.map((s) => (
-                  <div key={s.label} className="bg-muted/60 rounded-xl px-3 py-2.5">
+                {specs.map((item) => (
+                  <div key={item.label} className="bg-muted/60 rounded-xl px-3 py-2.5">
                     <div className="text-[10px] font-medium text-muted-foreground mb-0.5">
-                      {s.label}
+                      {item.label}
                     </div>
-                    <div className="text-sm font-bold">{s.value}</div>
+                    <div className="text-sm font-bold">{item.value}</div>
                   </div>
                 ))}
               </div>
@@ -468,7 +518,7 @@ const CarDetail = () => {
               {detailLoading && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/60 rounded-xl px-3 py-2.5">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Caricamento dettagli dall'annuncio...
+                  Caricamento dettagli...
                 </div>
               )}
 
@@ -483,40 +533,26 @@ const CarDetail = () => {
                 >
                   <ExternalLink className="h-4 w-4" /> Vai all'annuncio
                 </Button>
-                <PriceAlertButton
-                  listingId={listing.id}
-                  currentPrice={listing.price}
-                  title={listing.title}
-                />
+                <PriceAlertButton listingId={listing.id} currentPrice={listing.price} title={listing.title} />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Thumbnail strip */}
         {galleryImages.length > 1 && (
-          <div
-            className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin animate-brutal-up"
-            style={{ animationDelay: "50ms" }}
-          >
-            {galleryImages.map((url, i) => (
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin animate-brutal-up" style={{ animationDelay: "50ms" }}>
+            {galleryImages.map((url, index) => (
               <button
-                key={i}
-                onClick={() => setImgIndex(i)}
-                aria-label={`Foto ${i + 1}`}
+                key={index}
+                onClick={() => setImgIndex(index)}
+                aria-label={`Foto ${index + 1}`}
                 className={`flex-shrink-0 w-16 h-12 rounded-xl overflow-hidden transition-all ${
-                  i === imgIndex
+                  index === imgIndex
                     ? "ring-2 ring-violet-500 scale-105 shadow-md"
                     : "opacity-60 hover:opacity-100 border border-border"
                 }`}
               >
-                <img
-                  src={url}
-                  alt={`Thumb ${i + 1}`}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
-                />
+                <img src={url} alt={`Thumb ${index + 1}`} className="w-full h-full object-cover" loading="lazy" />
               </button>
             ))}
           </div>
@@ -534,125 +570,22 @@ const CarDetail = () => {
           </div>
         )}
 
-        {/* Description */}
         {car.description && (
-          <div
-            className="rounded-2xl border border-border/60 overflow-hidden animate-brutal-up"
-            style={{ animationDelay: "100ms" }}
-          >
+          <div className="rounded-2xl border border-border/60 overflow-hidden animate-brutal-up" style={{ animationDelay: "100ms" }}>
             <div className="border-b border-border/60 px-5 py-3 flex items-center gap-2 bg-muted/40">
               <FileText className="h-4 w-4 text-muted-foreground" />
               <h2 className="text-sm font-semibold">Descrizione</h2>
             </div>
             <div className="p-5">
-              <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
-                {car.description}
-              </p>
+              <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">{car.description}</p>
             </div>
           </div>
         )}
 
-        {/* Extra data sections (Dati tecnici, Colore e interni, Equipaggiamento) */}
-        {(() => {
-          const ex = car.extra_data as Record<string, unknown> | null | undefined;
-          if (!ex || typeof ex !== "object") return null;
-
-          const techFields = [
-            { label: "Trazione", value: ex.drive_type as string },
-            { label: "Cilindrata", value: ex.displacement as string },
-            { label: "Marce", value: ex.gears != null ? String(ex.gears) : undefined },
-            { label: "Cilindri", value: ex.cylinders != null ? String(ex.cylinders) : undefined },
-            { label: "Peso a vuoto", value: ex.weight as string },
-            { label: "Consumo", value: ex.fuel_consumption as string },
-          ].filter((f) => f.value);
-
-          const interiorFields = [
-            { label: "Tipo vernice", value: ex.paint_type as string },
-            { label: "Colore interni", value: ex.interior_color as string },
-            { label: "Materiale", value: ex.interior_material as string },
-          ].filter((f) => f.value);
-
-          const equipment = Array.isArray(ex.equipment) ? (ex.equipment as string[]) : [];
-
-          return (
-            <>
-              {techFields.length > 0 && (
-                <div
-                  className="rounded-2xl border border-border/60 overflow-hidden animate-brutal-up"
-                  style={{ animationDelay: "120ms" }}
-                >
-                  <div className="border-b border-border/60 px-5 py-3 bg-muted/40">
-                    <h2 className="text-sm font-semibold">Dati tecnici</h2>
-                  </div>
-                  <div className="p-5 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {techFields.map((f) => (
-                      <div key={f.label} className="bg-muted/60 rounded-xl px-3 py-2.5">
-                        <div className="text-[10px] font-medium text-muted-foreground mb-0.5">
-                          {f.label}
-                        </div>
-                        <div className="text-sm font-bold">{f.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {interiorFields.length > 0 && (
-                <div
-                  className="rounded-2xl border border-border/60 overflow-hidden animate-brutal-up"
-                  style={{ animationDelay: "140ms" }}
-                >
-                  <div className="border-b border-border/60 px-5 py-3 bg-muted/40">
-                    <h2 className="text-sm font-semibold">Colore e interni</h2>
-                  </div>
-                  <div className="p-5 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {interiorFields.map((f) => (
-                      <div key={f.label} className="bg-muted/60 rounded-xl px-3 py-2.5">
-                        <div className="text-[10px] font-medium text-muted-foreground mb-0.5">
-                          {f.label}
-                        </div>
-                        <div className="text-sm font-bold">{f.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {equipment.length > 0 && (
-                <div
-                  className="rounded-2xl border border-border/60 overflow-hidden animate-brutal-up"
-                  style={{ animationDelay: "160ms" }}
-                >
-                  <div className="border-b border-border/60 px-5 py-3 bg-muted/40">
-                    <h2 className="text-sm font-semibold">
-                      Equipaggiamento{" "}
-                      <span className="text-muted-foreground font-normal">
-                        ({equipment.length})
-                      </span>
-                    </h2>
-                  </div>
-                  <div className="p-5 flex flex-wrap gap-1.5">
-                    {equipment.map((item, i) => (
-                      <span
-                        key={i}
-                        className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 border border-violet-200 dark:border-violet-700/50"
-                      >
-                        {item}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          );
-        })()}
-
-        {/* Loan Calculator */}
         <div className="animate-brutal-up" style={{ animationDelay: "180ms" }}>
           <LoanCalculator price={car.price} />
         </div>
 
-        {/* Price history chart */}
         {priceHistory.length >= 2 && (
           <div className="space-y-4 animate-brutal-up" style={{ animationDelay: "195ms" }}>
             <div>
@@ -664,69 +597,43 @@ const CarDetail = () => {
                 <LineChart data={priceHistory} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
                   <XAxis
                     dataKey="recorded_at"
-                    tickFormatter={(v) =>
-                      new Date(v).toLocaleDateString("it-IT", { day: "2-digit", month: "short" })
+                    tickFormatter={(value) =>
+                      new Date(value).toLocaleDateString("it-IT", { day: "2-digit", month: "short" })
                     }
                     tick={{ fontSize: 10, fontFamily: "Inter" }}
                     interval="preserveStartEnd"
                   />
                   <YAxis
                     tick={{ fontSize: 10, fontFamily: "Inter" }}
-                    tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`}
+                    tickFormatter={(value) => `EUR ${(value / 1000).toFixed(0)}k`}
                     domain={["auto", "auto"]}
                     width={52}
                   />
                   <Tooltip
-                    formatter={(value: number) => [`€${value.toLocaleString("it-IT")}`, "Prezzo"]}
-                    labelFormatter={(v) =>
-                      new Date(v).toLocaleDateString("it-IT", {
+                    formatter={(value: number) => [`EUR ${value.toLocaleString("it-IT")}`, "Prezzo"]}
+                    labelFormatter={(value) =>
+                      new Date(value).toLocaleDateString("it-IT", {
                         day: "2-digit",
                         month: "long",
                         year: "numeric",
                       })
                     }
-                    contentStyle={{
-                      fontFamily: "Inter",
-                      fontSize: 12,
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: 12,
-                    }}
                   />
-                  <Line
-                    type="monotone"
-                    dataKey="price"
-                    stroke="hsl(262 83% 60%)"
-                    strokeWidth={2}
-                    dot={{ r: 3, fill: "hsl(262 83% 60%)" }}
-                    activeDot={{ r: 5 }}
-                  />
+                  <Line type="monotone" dataKey="price" stroke="hsl(262 83% 60%)" strokeWidth={2} dot={{ r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </div>
         )}
 
-        {/* Price comparison chart */}
         {chartData.length > 1 && (
           <div className="space-y-4 animate-brutal-up" style={{ animationDelay: "200ms" }}>
             <div className="flex items-end justify-between">
               <div>
                 <h2 className="text-lg font-bold">Confronto prezzi</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {listing.brand} {listing.model} — Media: €{avgPrice.toLocaleString("it-IT")}
+                  {listing.brand} {listing.model} - Media: EUR {avgPrice.toLocaleString("it-IT")}
                 </p>
-              </div>
-              <div className="flex gap-3 text-[10px] text-muted-foreground">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full inline-block" /> Affare
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 bg-blue-500 rounded-full inline-block" /> Buon prezzo
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 bg-muted-foreground rounded-full inline-block" />{" "}
-                  Media
-                </span>
               </div>
             </div>
             <div className="rounded-2xl border border-border/60 p-4 bg-card shadow-sm">
@@ -739,19 +646,8 @@ const CarDetail = () => {
                     textAnchor="end"
                     interval={0}
                   />
-                  <YAxis
-                    tick={{ fontSize: 10, fontFamily: "Inter" }}
-                    tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`}
-                  />
-                  <Tooltip
-                    formatter={(value: number) => [`€${value.toLocaleString("it-IT")}`, "Prezzo"]}
-                    contentStyle={{
-                      fontFamily: "Inter",
-                      fontSize: 12,
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: 12,
-                    }}
-                  />
+                  <YAxis tick={{ fontSize: 10, fontFamily: "Inter" }} tickFormatter={(v) => `EUR ${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip formatter={(value: number) => [`EUR ${value.toLocaleString("it-IT")}`, "Prezzo"]} />
                   <ReferenceLine
                     y={avgPrice}
                     stroke="hsl(var(--muted-foreground))"
@@ -759,9 +655,9 @@ const CarDetail = () => {
                     label={{ value: "Media", position: "right", fontSize: 10, fontFamily: "Inter" }}
                   />
                   <Bar dataKey="price" radius={[6, 6, 0, 0]}>
-                    {chartData.map((entry, i) => (
+                    {chartData.map((entry, index) => (
                       <Cell
-                        key={i}
+                        key={index}
                         fill={
                           entry.isCurrent
                             ? "hsl(262 83% 60%)"
@@ -781,18 +677,15 @@ const CarDetail = () => {
           </div>
         )}
 
-        {/* Similar listings */}
         {similar.length > 0 && (
           <div className="space-y-4">
             <h2 className="text-lg font-bold">
               Annunci simili
-              <span className="text-muted-foreground font-normal text-sm ml-2">
-                ({similar.length})
-              </span>
+              <span className="text-muted-foreground font-normal text-sm ml-2">({similar.length})</span>
             </h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
-              {similar.map((l, i) => (
-                <CarCard key={l.id} listing={toCardListing(l)} index={i} />
+              {similar.map((item, index) => (
+                <CarCard key={item.id} listing={toCardListing(item)} index={index} />
               ))}
             </div>
           </div>

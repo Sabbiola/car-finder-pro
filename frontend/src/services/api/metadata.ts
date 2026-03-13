@@ -1,4 +1,5 @@
 import { getRuntimeConfig } from "@/lib/runtimeConfig";
+import { createRequestId } from "@/lib/requestId";
 
 export interface FilterMetadataResponse {
   fuel_types?: string[];
@@ -17,6 +18,12 @@ export interface FilterMetadataResponse {
     provider_type?: "official_api" | "partner_api" | "html_scraper" | "browser_scraper";
     supports_filters?: string[];
   }>;
+  search_contract?: {
+    version: string;
+    canonical_filters: string[];
+    backend_post_filters: string[];
+    provider_filter_union: string[];
+  };
 }
 
 export async function fetchFilterMetadata(): Promise<FilterMetadataResponse | null> {
@@ -25,7 +32,10 @@ export async function fetchFilterMetadata(): Promise<FilterMetadataResponse | nu
     return null;
   }
 
-  const response = await fetch(`${config.apiBaseUrl}/api/filters/metadata`);
+  const requestId = createRequestId("filters-metadata");
+  const response = await fetch(`${config.apiBaseUrl}/api/filters/metadata`, {
+    headers: { "x-request-id": requestId },
+  });
   if (!response.ok) {
     throw new Error(`Metadata fetch failed: ${response.status}`);
   }

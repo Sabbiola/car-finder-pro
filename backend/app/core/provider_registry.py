@@ -2,9 +2,11 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from app.core.settings import get_settings
+from app.providers.automobile import AutomobileProvider
 from app.providers.autoscout24 import AutoScout24Provider
 from app.providers.base.base_provider import BaseProvider
 from app.providers.base.models import ProviderHealth, ProviderInfo
+from app.providers.brumbrum import BrumBrumProvider
 from app.providers.ebay import EbayProvider
 from app.providers.subito import SubitoProvider
 
@@ -26,6 +28,8 @@ class ProviderRegistry:
             "autoscout24": AutoScout24Provider(),
             "subito": SubitoProvider(),
             "ebay": EbayProvider(),
+            "automobile": AutomobileProvider(),
+            "brumbrum": BrumBrumProvider(),
         }
         for provider_id in disabled:
             provider = self._providers.get(provider_id)

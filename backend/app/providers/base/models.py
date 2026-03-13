@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.models.search import SearchFilterKey
+
 
 ProviderType = Literal["official_api", "partner_api", "html_scraper", "browser_scraper"]
 
@@ -14,7 +16,7 @@ class ProviderInfo(BaseModel):
     market: str
     enabled: bool = True
     configured: bool = True
-    supports_filters: list[str] = Field(default_factory=list)
+    supports_filters: list[SearchFilterKey] = Field(default_factory=list)
 
 
 class ProviderHealth(BaseModel):

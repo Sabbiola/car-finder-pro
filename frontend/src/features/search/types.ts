@@ -23,6 +23,7 @@ export interface SearchCompleteEvent {
   total_results: number;
   provider_summary: Record<string, number>;
   duration_ms: number;
+  final_result_keys?: string[];
   timestamp: string;
 }
 
@@ -37,4 +38,3 @@ export type SearchStreamEvent<TListing = unknown> =
   | SearchErrorEvent
   | SearchCompleteEvent
   | SearchResultEvent<TListing>;
-

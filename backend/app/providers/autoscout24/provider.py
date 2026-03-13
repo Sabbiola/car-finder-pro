@@ -18,6 +18,7 @@ class AutoScout24Provider(BaseProvider):
         supports_filters=[
             "brand",
             "model",
+            "trim",
             "year_min",
             "year_max",
             "price_min",
@@ -31,6 +32,8 @@ class AutoScout24Provider(BaseProvider):
     def _build_urls(request: SearchRequest) -> list[str]:
         brand = (request.brand or "").strip().lower()
         model = (request.model or "").strip()
+        trim = (request.trim or "").strip()
+        model_query = " ".join([value for value in [model, trim] if value]).strip()
         params: list[str] = []
         if request.year_min:
             params.append(f"fregfrom={request.year_min}")
@@ -73,8 +76,8 @@ class AutoScout24Provider(BaseProvider):
         if brand:
             brand_slug = quote_plus(brand.replace(" ", "-"))
             base = f"https://www.autoscout24.it/lst/{brand_slug}"
-            if model:
-                q = quote_plus(model)
+            if model_query:
+                q = quote_plus(model_query)
                 base = f"{base}?q={q}"
                 if query_suffix:
                     base = f"{base}&{query_suffix.lstrip('?')}"

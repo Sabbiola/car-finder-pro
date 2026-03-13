@@ -4,15 +4,15 @@ from app.core.settings import get_settings
 from app.models.search import SearchRequest
 from app.models.vehicle import VehicleListing
 from app.providers.base.base_provider import BaseProvider
-from app.providers.common.scrapingbee import fetch_markdown
 from app.providers.base.models import ProviderHealth, ProviderInfo
-from app.providers.subito.parser import parse_subito_markdown
+from app.providers.brumbrum.parser import parse_brumbrum_markdown
+from app.providers.common.scrapingbee import fetch_markdown
 
 
-class SubitoProvider(BaseProvider):
+class BrumBrumProvider(BaseProvider):
     info = ProviderInfo(
-        id="subito",
-        name="Subito.it",
+        id="brumbrum",
+        name="BrumBrum",
         provider_type="html_scraper",
         market="IT",
         supports_filters=[
@@ -22,21 +22,16 @@ class SubitoProvider(BaseProvider):
             "trim",
             "price_min",
             "price_max",
-            "location",
+            "mileage_max",
         ],
     )
 
     @staticmethod
     def _build_urls(request: SearchRequest) -> list[str]:
         query = request.query or " ".join([request.brand or "", request.model or "", request.trim or ""]).strip()
-        query = quote_plus(query) if query else ""
-        base = (
-            f"https://www.subito.it/annunci-italia/vendita/auto/?q={query}"
-            if query
-            else "https://www.subito.it/annunci-italia/vendita/auto/"
-        )
-        separator = "&" if "?" in base else "?"
-        return [base, f"{base}{separator}o=2", f"{base}{separator}o=3"]
+        encoded_query = quote_plus(query) if query else ""
+        base = f"https://www.brumbrum.it/usato/?q={encoded_query}" if encoded_query else "https://www.brumbrum.it/usato/"
+        return [base, f"{base}&p=2" if "?" in base else f"{base}?p=2"]
 
     def is_configured(self) -> bool:
         settings = get_settings()
@@ -46,30 +41,25 @@ class SubitoProvider(BaseProvider):
 
     @staticmethod
     def _stub_listings(request: SearchRequest) -> list[VehicleListing]:
-        query = (request.query or "").lower()
-        brand = (request.brand or "").lower()
-        if "fail-subito" in query or "fail-subito" in brand:
-            raise RuntimeError("Subito test stub forced failure")
         model_name = request.model or "320d"
         return [
             VehicleListing(
-                provider="subito",
+                provider="brumbrum",
                 market="IT",
-                url="https://stub.subito.local/listing-1",
-                title=f"BMW {model_name} Stub Subito",
+                url="https://stub.brumbrum.local/listing-1",
+                title=f"BMW {model_name} Stub BrumBrum",
                 description="Stub listing for test mode",
-                price_amount=25900,
-                year=2020,
+                price_amount=25100,
+                year=2022,
                 make=request.brand or "BMW",
                 model=model_name,
-                mileage_value=51000,
+                mileage_value=39000,
                 fuel_type="Diesel",
-                transmission="Manuale",
+                transmission="Automatico",
                 body_style="Berlina",
                 city="Roma",
                 country="IT",
-                images=["https://images.example.com/subito-stub.jpg"],
-                seller_type="private",
+                images=["https://images.example.com/brumbrum-stub.jpg"],
             )
         ]
 
@@ -80,8 +70,8 @@ class SubitoProvider(BaseProvider):
 
         all_listings: list[VehicleListing] = []
         for url in self._build_urls(request):
-            markdown = await fetch_markdown(url, wait_ms=7000)
-            parsed = parse_subito_markdown(markdown, request.brand, request.model)
+            markdown = await fetch_markdown(url, wait_ms=8000, premium_proxy=True)
+            parsed = parse_brumbrum_markdown(markdown, request.brand, request.model)
             all_listings.extend(parsed)
         return all_listings
 

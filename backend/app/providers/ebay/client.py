@@ -4,6 +4,7 @@ from typing import Any
 
 import httpx
 
+from app.core.request_context import get_request_id
 from app.core.settings import get_settings
 
 
@@ -75,6 +76,9 @@ class EbayClient:
             "Authorization": f"Bearer {token}",
             "X-EBAY-C-MARKETPLACE-ID": self.settings.ebay_marketplace_id,
         }
+        request_id = get_request_id()
+        if request_id:
+            headers["x-request-id"] = request_id
 
         timeout = httpx.Timeout(self.settings.request_timeout_seconds)
         attempts = max(self.settings.provider_retry_attempts, 1)

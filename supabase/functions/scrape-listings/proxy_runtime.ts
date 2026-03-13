@@ -52,10 +52,9 @@ export function buildFastApiPayload(filters: Record<string, unknown>): Record<st
   const model = asString(filters.model);
   const fuel = asString(filters.fuel);
   const bodyType = asString(filters.bodyType);
-  const query = [brand, model].filter(Boolean).join(" ").trim();
 
   return {
-    query: query || undefined,
+    query: asString(filters.query),
     brand,
     model,
     trim: asString(filters.trim),
@@ -64,9 +63,11 @@ export function buildFastApiPayload(filters: Record<string, unknown>): Record<st
     year_max: asInt(filters.yearMax),
     price_min: asInt(filters.priceMin),
     price_max: asInt(filters.priceMax),
+    mileage_min: asInt(filters.kmMin),
     mileage_max: asInt(filters.kmMax),
     fuel_types: fuel ? [fuel] : undefined,
     body_styles: bodyType ? [bodyType] : undefined,
+    transmission: asString(filters.transmission),
     private_only: filters.sellerType === "private",
     mode: "fast",
     sources: Array.isArray(filters.sources) && filters.sources.length > 0 ? filters.sources : undefined,

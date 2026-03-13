@@ -1,4 +1,4 @@
-export interface CarListing {
+﻿export interface CarListing {
   id: string;
   title: string;
   brand: string;
@@ -36,14 +36,14 @@ export const carBrands = [
   "Volkswagen",
   "Volvo",
   "Alfa Romeo",
-  "Citroën",
+  "Citroen",
   "Dacia",
   "Hyundai",
   "Kia",
   "Mazda",
   "Nissan",
   "Seat",
-  "Škoda",
+  "Skoda",
   "Tesla",
   "Mini",
   "Porsche",
@@ -58,7 +58,7 @@ export const brandModels: Record<string, string[]> = {
   Fiat: ["500", "500X", "Panda", "Tipo", "600", "Punto"],
   Toyota: ["Yaris", "Yaris Cross", "Corolla", "C-HR", "RAV4", "Aygo X"],
   Ford: ["Fiesta", "Focus", "Puma", "Kuga", "Mustang Mach-E"],
-  Renault: ["Clio", "Captur", "Mégane", "Arkana", "Austral"],
+  Renault: ["Clio", "Captur", "Megane", "Arkana", "Austral"],
   Peugeot: ["208", "308", "2008", "3008", "5008", "e-208"],
   Hyundai: ["i10", "i20", "i30", "Tucson", "Kona", "IONIQ 5"],
   Kia: ["Picanto", "Rio", "Ceed", "Sportage", "Niro", "EV6"],
@@ -67,12 +67,12 @@ export const brandModels: Record<string, string[]> = {
   "Alfa Romeo": ["Giulia", "Stelvio", "Tonale", "Junior"],
   Volvo: ["XC40", "XC60", "XC90", "C40", "EX30"],
   Opel: ["Corsa", "Astra", "Mokka", "Crossland", "Grandland"],
-  Citroën: ["C3", "C4", "C5 Aircross", "ë-C4"],
+  Citroen: ["C3", "C4", "C5 Aircross", "e-C4"],
   Dacia: ["Sandero", "Duster", "Jogger", "Spring"],
   Mazda: ["Mazda2", "Mazda3", "CX-30", "CX-5", "MX-5"],
   Nissan: ["Micra", "Juke", "Qashqai", "X-Trail", "Leaf", "Ariya"],
   Seat: ["Ibiza", "Leon", "Arona", "Ateca", "Tarraco"],
-  Škoda: ["Fabia", "Octavia", "Kamiq", "Karoq", "Kodiaq", "Enyaq"],
+  Skoda: ["Fabia", "Octavia", "Kamiq", "Karoq", "Kodiaq", "Enyaq"],
   Mini: ["Cooper", "Countryman", "Clubman"],
   Porsche: ["Cayenne", "Macan", "Taycan", "911", "Panamera"],
   "Land Rover": ["Evoque", "Velar", "Sport", "Defender", "Discovery"],
@@ -162,7 +162,7 @@ export const bodyTypes = [
   "Berlina",
   "SUV",
   "Station Wagon",
-  "Coupé",
+  "Coupe",
   "Monovolume",
   "Cabrio",
   "Citycar",
@@ -377,7 +377,7 @@ export const mockListings: CarListing[] = [
   },
   {
     id: "9",
-    title: "BMW Serie 4 420d Coupé",
+    title: "BMW Serie 4 420d Coupe",
     brand: "BMW",
     model: "Serie 4",
     year: 2022,
@@ -395,11 +395,11 @@ export const mockListings: CarListing[] = [
     priceRating: "best",
     color: "Nero",
     doors: 2,
-    bodyType: "Coupé",
+    bodyType: "Coupe",
   },
   {
     id: "10",
-    title: "BMW Serie 4 430i Gran Coupé",
+    title: "BMW Serie 4 430i Gran Coupe",
     brand: "BMW",
     model: "Serie 4",
     year: 2023,
@@ -437,11 +437,11 @@ export const mockListings: CarListing[] = [
     priceRating: "normal",
     color: "Blu",
     doors: 2,
-    bodyType: "Coupé",
+    bodyType: "Coupe",
   },
   {
     id: "12",
-    title: "BMW Serie 4 420d xDrive Coupé",
+    title: "BMW Serie 4 420d xDrive Coupe",
     brand: "BMW",
     model: "Serie 4",
     year: 2023,
@@ -459,7 +459,7 @@ export const mockListings: CarListing[] = [
     priceRating: "best",
     color: "Bianco",
     doors: 2,
-    bodyType: "Coupé",
+    bodyType: "Coupe",
   },
   {
     id: "13",
@@ -484,7 +484,7 @@ export const mockListings: CarListing[] = [
   },
   {
     id: "14",
-    title: "BMW Serie 4 420d Gran Coupé",
+    title: "BMW Serie 4 420d Gran Coupe",
     brand: "BMW",
     model: "Serie 4",
     year: 2021,
@@ -505,7 +505,7 @@ export const mockListings: CarListing[] = [
   },
   {
     id: "15",
-    title: "BMW Serie 4 M440i Gran Coupé",
+    title: "BMW Serie 4 M440i Gran Coupe",
     brand: "BMW",
     model: "Serie 4",
     year: 2023,
@@ -526,7 +526,7 @@ export const mockListings: CarListing[] = [
   },
   {
     id: "16",
-    title: "BMW Serie 4 420d Coupé M Sport",
+    title: "BMW Serie 4 420d Coupe M Sport",
     brand: "BMW",
     model: "Serie 4",
     year: 2022,
@@ -543,6 +543,7 @@ export const mockListings: CarListing[] = [
     priceRating: "good",
     color: "Grigio",
     doors: 2,
-    bodyType: "Coupé",
+    bodyType: "Coupe",
   },
 ];
+

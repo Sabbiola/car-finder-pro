@@ -1,4 +1,6 @@
+from app.providers.automobile.parser import parse_automobile_markdown
 from app.providers.autoscout24.parser import parse_autoscout_markdown
+from app.providers.brumbrum.parser import parse_brumbrum_markdown
 from app.providers.subito.parser import parse_subito_markdown
 
 
@@ -29,3 +31,30 @@ Milano (MI)
     assert listings
     assert listings[0].provider == "subito"
     assert listings[0].price_amount == 25000
+
+
+def test_parse_automobile_markdown_extracts_listing() -> None:
+    markdown = """
+[![img](https://cdn.example.com/car.jpg)](https://www.automobile.it/annunci/test-auto)
+### BMW Serie 3 320d
+€ 24.900
+Marzo 2021
+55.000 km
+"""
+    listings = parse_automobile_markdown(markdown, "BMW", "Serie 3")
+    assert listings
+    assert listings[0].provider == "automobile"
+    assert listings[0].price_amount == 24900
+
+
+def test_parse_brumbrum_markdown_extracts_listing() -> None:
+    markdown = """
+[BMW Serie 3 320d](https://www.brumbrum.it/usato/bmw-serie-3-320d)
+€ 26.500
+2022
+48.000 km
+"""
+    listings = parse_brumbrum_markdown(markdown, "BMW", "Serie 3")
+    assert listings
+    assert listings[0].provider == "brumbrum"
+    assert listings[0].price_amount == 26500

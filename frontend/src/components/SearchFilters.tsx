@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import {
   Search,
   SlidersHorizontal,
@@ -120,6 +120,46 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
       };
     });
   }, [metadata]);
+
+  const selectedProviderCapabilitySet = useMemo(() => {
+    const contract = metadata?.search_contract;
+    if (!contract) return null;
+    const selectedSourceIds = new Set(filters.sources);
+    const selectedProviders = (metadata?.providers || []).filter((provider) =>
+      selectedSourceIds.has(provider.id),
+    );
+    const supported = new Set<string>(contract.backend_post_filters || []);
+    for (const provider of selectedProviders) {
+      for (const filterKey of provider.supports_filters || []) {
+        supported.add(filterKey);
+      }
+    }
+    return supported;
+  }, [metadata, filters.sources]);
+
+  const unsupportedSelectedFilters = useMemo(() => {
+    if (!selectedProviderCapabilitySet) return [];
+    const knownProviderIds = new Set((metadata?.providers || []).map((provider) => provider.id));
+    const hasUnknownSelectedSources = filters.sources.some((source) => !knownProviderIds.has(source));
+    if (hasUnknownSelectedSources) return [];
+    const activeFilters: Array<{ key: string; label: string; active: boolean }> = [
+      { key: "trim", label: "allestimento", active: Boolean(filters.trim) },
+      { key: "location", label: "citta/regione", active: Boolean(filters.location) },
+      { key: "year_min", label: "anno min", active: Boolean(filters.yearMin) },
+      { key: "year_max", label: "anno max", active: Boolean(filters.yearMax) },
+      { key: "price_min", label: "prezzo min", active: Boolean(filters.priceMin) },
+      { key: "price_max", label: "prezzo max", active: Boolean(filters.priceMax) },
+      { key: "mileage_min", label: "km min", active: Boolean(filters.kmMin) },
+      { key: "mileage_max", label: "km max", active: Boolean(filters.kmMax) },
+      { key: "fuel_types", label: "alimentazione", active: Boolean(filters.fuel) },
+      { key: "body_styles", label: "carrozzeria", active: Boolean(filters.bodyType) },
+      { key: "transmission", label: "cambio", active: Boolean(filters.transmission) },
+      { key: "private_only", label: "solo privati", active: filters.sellerType === "private" },
+    ];
+    return activeFilters
+      .filter((item) => item.active && !selectedProviderCapabilitySet.has(item.key))
+      .map((item) => item.label);
+  }, [filters, metadata, selectedProviderCapabilitySet]);
 
   useEffect(() => {
     const disabledProviderIds = new Set(
@@ -410,6 +450,12 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
             transition={{ duration: 0.3, ease: "easeInOut" }}
             className="overflow-hidden"
           >
+            {unsupportedSelectedFilters.length > 0 && (
+              <p className="mb-2 text-xs text-amber-700">
+                Alcuni filtri non sono supportati dalle fonti selezionate:{" "}
+                {unsupportedSelectedFilters.join(", ")}.
+              </p>
+            )}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 p-4 rounded-xl bg-card border border-border">
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Anno min</Label>
@@ -436,7 +482,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Prezzo min €</Label>
+                <Label className="text-xs text-muted-foreground">Prezzo min EUR</Label>
                 <Input
                   type="number"
                   placeholder="5.000"
@@ -447,7 +493,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Prezzo max €</Label>
+                <Label className="text-xs text-muted-foreground">Prezzo max EUR</Label>
                 <Input
                   type="number"
                   placeholder="50.000"
@@ -537,7 +583,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">N° Porte</Label>
+                <Label className="text-xs text-muted-foreground">N Porte</Label>
                 <Select
                   value={filters.doors || "_all"}
                   onValueChange={(v) => update("doors", v === "_all" ? "" : v)}
@@ -594,7 +640,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Città / Regione</Label>
+                <Label className="text-xs text-muted-foreground">Citta / Regione</Label>
                 <Input
                   placeholder="Es. Milano, Lombardia"
                   value={filters.location}
@@ -655,3 +701,4 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
 };
 
 export default SearchFilters;
+

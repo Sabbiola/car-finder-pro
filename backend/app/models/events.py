@@ -35,5 +35,5 @@ class CompleteEvent(BaseModel):
     total_results: int
     provider_summary: dict[str, int]
     duration_ms: int
+    final_result_keys: list[str] = Field(default_factory=list)
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
