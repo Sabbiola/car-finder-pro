@@ -3,6 +3,8 @@
 Questo modulo contiene il backend provider-based di CarFinder Pro, usato come backend primario nella release di transizione.
 
 ## Avvio locale
+Requisito runtime: `Python 3.14`.
+
 ```bash
 python -m venv .venv
 # Linux/macOS

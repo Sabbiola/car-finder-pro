@@ -96,6 +96,8 @@ npm run test
 
 ### 2. Backend (FastAPI)
 
+Requisito runtime: `Python 3.14`.
+
 ```bash
 cd backend
 python -m venv .venv
