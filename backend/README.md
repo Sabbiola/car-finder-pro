@@ -1,9 +1,20 @@
 # Backend (FastAPI)
 
-Questo modulo contiene il backend provider-based di CarFinder Pro, usato come backend primario nella release di transizione.
+Questo modulo contiene il backend FastAPI provider-based di CarFinder Pro.
 
-## Avvio locale
-Requisito runtime: `Python 3.14`.
+Ruolo attuale:
+- implementazione primaria per search e search streaming
+- API di listing detail e listing analysis
+- API alert e alerts processor
+- API backend per favorites, saved searches e listings batch
+
+Il prodotto complessivo resta hybrid bounded perche Supabase Auth rimane frontend-direct e il proxy edge/fallback esiste ancora.
+
+## Runtime
+
+Runtime richiesto: `Python 3.14`
+
+Avvio locale:
 
 ```bash
 python -m venv .venv
@@ -15,30 +26,64 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-## Endpoint principali
+## Inventory Rotte Correnti
+
 - `POST /api/search`
 - `POST /api/search/stream`
 - `GET /api/providers`
 - `GET /api/providers/health`
 - `GET /api/filters/metadata`
+- `GET /api/metadata/ownership`
 - `GET /api/listings/{listing_id}`
-- `POST /api/listings/batch`
-- `GET/POST/DELETE /api/user/favorites`
-- `GET/POST/DELETE /api/user/saved-searches`
+- `POST /api/listings/analyze`
+- `GET /api/alerts`
+- `POST /api/alerts`
+- `POST /api/alerts/{alert_id}/deactivate`
 - `POST /api/alerts/process`
+- `GET /api/user/favorites`
+- `POST /api/user/favorites`
+- `DELETE /api/user/favorites/{listing_id}`
+- `GET /api/user/saved-searches`
+- `POST /api/user/saved-searches`
+- `DELETE /api/user/saved-searches/{search_id}`
+- `POST /api/listings/batch`
+- `GET /api/ops/metrics`
+- `GET /api/ops/alerts`
+- `GET /healthz`
 
-## Note architetturali
-- provider migrati: `autoscout24`, `subito`, `ebay`, `automobile`, `brumbrum`
-- orchestrazione concorrente con timeout e gestione failure parziali
-- semantica strict capability: provider esclusi se non compatibili con filtri attivi non post-filter
-- dedup/ranking base lato backend
-- post-filter backend esteso (`is_new`, `color`, `doors`, `emission_class`, `seller_type`)
-- metriche runtime provider esposte in `/api/providers/health`
-  (`latency_ms`, `error_rate`, `last_success`, `total_calls`, `failed_calls`, `last_error`)
-- metriche operative in `/api/ops/metrics` con breakdown `search_vs_analysis_ms`, `repository_calls_count`, `cache_hit_rate`
-- pipeline alerts con retry/idempotenza/audit (`alert_delivery_attempts`) e delivery `email + in-app`
+## Contratto Search
+
+Note sul contratto search backend:
+- eventi SSE stabili: `progress`, `result`, `complete`, `error`
+- `SearchRequest v1` include:
+  - `is_new`
+  - `color`
+  - `doors`
+  - `emission_class`
+  - `seller_type`
+- `private_only` resta per compatibilita additiva
+- i metadata di capability arrivano da `GET /api/filters/metadata`
+- la semantica attiva e `strict_all_active_non_post_filters`
+
+## Provider
+
+Provider search implementati nel backend:
+- `autoscout24`
+- `subito`
+- `ebay`
+- `automobile`
+- `brumbrum`
+
+## Note Operative
+
+- timeout, retry e concorrenza provider sono guidati da env
+- l'enrichment analysis e limitato da concorrenza configurabile
+- gli endpoint ops possono essere protetti con `X-Ops-Token` quando `OPS_TOKEN` e configurato
+- l'alerts processor supporta idempotenza, retry metadata e audit di delivery
+- l'export observability via webhook e supportato, ma dashboarding live e runbook restano tema di rollout e non prova interna al repo
 
 ## Test
+
 Da `backend/`:
 
 ```bash

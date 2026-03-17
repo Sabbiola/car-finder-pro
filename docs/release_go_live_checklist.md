@@ -1,245 +1,175 @@
 # Release Go-Live Checklist
 
-## 1. Repository State
+Usare questa checklist per le decisioni di go-live su staging e produzione.
 
-Run:
+## 1. Stato Repo e Toolchain
 
-```powershell
-git status
-git branch --show-current
-git pull
-```
-
-Go:
+Verificare:
 - branch corretto
-- working tree pulito o modifiche note
-- nessun conflitto pendente
+- working tree controllato
+- ultime modifiche remote tirate giu
+- toolchain locali richieste presenti quando si eseguono smoke manuali:
+  - Python 3.14
+  - Node 22
+  - npm
+  - Deno v2
 
-No-go:
-- branch sbagliato
-- stato repo non controllato
+No-go se:
+- lo stato del repo e incerto
+- le toolchain necessarie mancano per la validazione che si sta tentando
 
-## 2. Supabase Migrations
+## 2. Database e Migration
 
-Run:
-
-```powershell
-supabase db push
-```
-
-Verify:
-- migration `20260312000100_listing_analysis_and_fingerprints.sql` applicata
-- tabelle presenti:
+Verificare:
+- tutte le 15 migration applicate
+- la migration piu recente `20260313000000_alert_delivery_attempts.sql` presente nella history del database target
+- tabelle richieste presenti, incluse:
+  - `listing_analysis_snapshots`
   - `listing_image_fingerprints`
   - `seller_fingerprints`
-  - `listing_analysis_snapshots`
-- policy RLS corrette
+  - `price_alerts`
+  - `alert_delivery_attempts`
+- le policy RLS richieste continuano a comportarsi correttamente
 
-Go:
-- DB aggiornato senza regressioni
+No-go se:
+- lo stato migration e incompleto
+- manca lo storage di audit per i delivery alert
 
-No-go:
-- migration fallita
-- accessi service role non funzionanti
+## 3. Environment e Secret
 
-## 3. Backend Environment
-
-Required:
+Env backend da verificare nell'ambiente target:
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `SUPABASE_ANON_KEY`
-- `ANALYSIS_SNAPSHOT_TTL_HOURS=24`
-- `NEGOTIATION_LLM_ENABLED=false`
-- provider secrets richiesti
-- `OBSERVABILITY_WEBHOOK_URL` se usato
+- secret provider necessari
+- `ALERTS_PROCESSOR_TOKEN`
+- `RESEND_API_KEY`
+- `RESEND_FROM_EMAIL`
+- `OBSERVABILITY_WEBHOOK_URL` se il webhook export e previsto
 
-Go:
-- env completi e caricati dal runtime
+Secret dei workflow deploy da verificare:
+- Railway:
+  - `RAILWAY_TOKEN`
+  - `RAILWAY_PROJECT_ID`
+  - `RAILWAY_ENVIRONMENT_ID`
+  - `RAILWAY_SERVICE_ID`
+  - `FASTAPI_HEALTHCHECK_URL`
+- Supabase functions:
+  - `SUPABASE_ACCESS_TOKEN`
+  - `SUPABASE_PROJECT_ID`
+- Workflow schedulati quando previsti:
+  - `FASTAPI_STAGING_BASE_URL`
+  - `FASTAPI_OPS_BASE_URL`
+  - `ALERTS_PROCESS_URL`
+  - `ALERTS_PROCESSOR_TOKEN`
 
-No-go:
-- secret critici mancanti
+No-go se un secret richiesto manca o e stale.
 
-## 4. Backend Test Suite
+## 4. CI e Gate Statici
 
-Run:
+Job GitHub Actions richiesti:
+- `frontend`
+- `backend`
+- `edge-functions`
+- `e2e`
+- `release-gate`
 
-```powershell
-cd backend
-pytest
-```
+Verificare anche che i workflow schedulati di supporto siano configurati quando attesi:
+- `perf-load.yml`
+- `ops-snapshot.yml`
+- `process-alerts.yml`
 
-Go:
-- unit e integration verdi
+No-go se i check richiesti sono rossi o se lo stato branch protection e ignoto per il release target.
 
-No-go:
-- failure su `search`, `stream`, `analysis`, `providers`
+## 5. Backend Smoke
 
-## 5. Frontend Validation
+Verificare queste rotte sul backend deployato:
+- `GET /healthz`
+- `GET /api/providers`
+- `GET /api/providers/health`
+- `GET /api/filters/metadata`
+- `GET /api/metadata/ownership`
+- `POST /api/search`
+- `POST /api/search/stream`
+- `GET /api/listings/{listing_id}`
+- `POST /api/listings/analyze`
+- `GET /api/alerts`
+- `POST /api/alerts`
+- `POST /api/alerts/{alert_id}/deactivate`
+- `POST /api/alerts/process`
+- `GET/POST/DELETE /api/user/favorites`
+- `GET/POST/DELETE /api/user/saved-searches`
+- `POST /api/listings/batch`
 
-Run:
+Verificare anche:
+- ordine SSE `progress -> result -> complete`
+- presenza di `provider_error_details` sui failure provider
+- metadata con strict capability semantics
+- alerts processor con retry e idempotency data machine-readable
 
-```powershell
-cd frontend
-npm install
-npm run lint
-npm run test
-npm run build
-```
+No-go se inventory route o payload shape non coincidono con il contratto documentato.
 
-Go:
-- lint verde
-- test verdi
-- build completata
+## 6. Frontend Smoke
 
-No-go:
-- regressioni su results, detail, compare, runtime config
+Validare nell'ambiente target:
+- la search funziona in modalita FastAPI
+- stream progress e partial failure vengono renderizzati correttamente
+- il listing detail carica via backend API in modalita FastAPI
+- favorites e saved searches funzionano in modalita FastAPI
+- compare funziona con backend listings batch in modalita FastAPI
+- gli alert possono essere creati e disattivati
+- l'auth continua a funzionare tramite Supabase
 
-## 6. Backend Smoke APIs
+No-go se il frontend va in fallback verso un runtime non voluto o rompe i journey core.
 
-Run:
+## 7. Runtime Mode e Boundary Checks
 
-```powershell
-curl http://localhost:8000/healthz
-curl http://localhost:8000/api/providers
-curl http://localhost:8000/api/providers/health
-curl http://localhost:8000/api/filters/metadata
-curl http://localhost:8000/api/metadata/ownership
-```
+Verificare la verita runtime:
+- `backendMode` lato frontend risolve come previsto
+- il default e intenzionale per l'ambiente target
+- `FASTAPI_PROXY_MODE` lato edge e impostato intenzionalmente
+- `fastapi_only` viene usato dove il rollout plan lo richiede
 
-Go:
-- tutti `200`
-- payload coerenti
+No-go se il comportamento production dipende da default accidentali o override localStorage non documentati.
 
-No-go:
-- `500`, timeout o contract errato
+## 8. Observability e Alerts
 
-## 7. Search Sync Contract
+Verificare:
+- `/api/ops/metrics` e `/api/ops/alerts` rispondono come atteso
+- la protezione `X-Ops-Token` funziona se configurata
+- il workflow snapshot raggiunge gli ops endpoint
+- il workflow perf puo colpire staging
+- lo scheduler alerts puo invocare `/api/alerts/process`
+- log e metriche sono visibili nel sink esterno scelto
 
-Run:
+No-go se il sistema resta osservabile solo leggendo il repo e non da operazioni live.
 
-```powershell
-curl -X POST http://localhost:8000/api/search -H "Content-Type: application/json" -d "{\"brand\":\"BMW\",\"model\":\"320d\",\"sources\":[\"autoscout24\"]}"
-```
+## 9. Evidenza di Rollout
 
-Verify:
-- `total_results`
-- `listings`
-- `deal_summary`
-- `trust_summary`
-- `negotiation_summary`
+Prima della produzione:
+- staging deve essere stabile nella runtime mode prevista
+- il canary deve essere eseguito
+- il rollback drill deve essere eseguito
+- gli SLO chiave devono essere verificati sulla telemetria live
 
-Go:
-- payload enriched presente
+Target SLO:
+- `search sync p95 < 5s`
+- `search stream error rate < 2%`
+- `provider success rate >= 98%`
+- `stream completion rate >= 98%`
 
-No-go:
-- listing non arricchiti o endpoint rotto
+No-go se l'evidenza di rollout manca o il rollback non e provato.
 
-## 8. Search Stream Contract
+## 10. Decisione Finale
 
-Run:
+Go solo se sono tutte vere:
+- codice e docs concordano sul comportamento runtime attuale
+- i check richiesti sono verdi
+- secret e migration sono verificati
+- esistono evidenze di staging e canary
+- il rollback e provato
+- non ci sono Sev1 aperti
 
-```powershell
-curl -N -X POST http://localhost:8000/api/search/stream -H "Content-Type: application/json" -d "{\"brand\":\"BMW\",\"model\":\"320d\",\"sources\":[\"autoscout24\"]}"
-```
-
-Verify:
-- ordine eventi: `progress`, `result`, `complete`
-- partial failure gestito
-
-Go:
-- SSE stabile
-
-No-go:
-- ordine errato o stream interrotto
-
-## 9. Listing Analysis Contract
-
-Run:
-
-```powershell
-curl -X POST http://localhost:8000/api/listings/analyze -H "Content-Type: application/json" -d "{\"listing_id\":\"<ID>\",\"include\":[\"deal\",\"trust\",\"negotiation\",\"ownership\"]}"
-```
-
-Go:
-- ritorna `ListingAnalysis`
-- ownership disponibile
-- snapshot/cache senza errori
-
-No-go:
-- `404` inatteso o failure repository/cache
-
-## 10. Frontend Smoke
-
-Verify manually:
-- ricerca standard
-- stream `progress/result/complete`
-- badge decisionali nelle card
-- drawer `Why this car?`
-- detail page con analysis panel
-- compare con `Perche si`, `Perche no`, `Target`, `Costo 24 mesi`
-
-Go:
-- UX invariata e pannelli nuovi funzionanti
-
-No-go:
-- errori JS
-- regressioni su ricerca, sorting, detail, compare
-
-## 11. Proxy Transition Modes
-
-Test:
-- `FASTAPI_PROXY_MODE=primary_with_fallback`
-- `FASTAPI_PROXY_MODE=fastapi_only`
-- `FASTAPI_PROXY_MODE=legacy_only`
-- backend down
-- provider core in errore
-
-Go:
-- fallback e rollback reali e coerenti
-
-No-go:
-- rottura compatibilita lato client
-
-## 12. Staging Deploy
-
-Deploy:
-- Railway backend
-- frontend staging
-- Supabase Edge Functions staging
-
-Verify:
-- env corretti
-- healthcheck ok
-- CORS ok
-- smoke completo ripetuto in staging
-
-Go:
-- staging stabile
-
-No-go:
-- error rate o regressioni critiche
-
-## 13. Observability
-
-Verify:
-- log JSON presenti
-- `request_id` propagato
-- metriche provider disponibili
-- errori e timeout visibili
-- alert minimi attivi
-
-Go:
-- produzione osservabile
-
-No-go:
-- sistema non monitorabile
-
-## 14. Final Go / No-Go Decision
-
-Deploy production only if:
-- CI completamente verde
-- staging smoke verde
-- env completi
-- migration ok
-- rollback verificato
-- nessuna regressione su `search`, `SSE`, `detail`, `compare`, `analysis`
+Altrimenti lo stato corretto del release e:
+- non ancora production-ready
+- continuare il production hardening

@@ -1,84 +1,91 @@
 # CarFinder Pro
 
-**CarFinder Pro** e un motore di ricerca multi-provider per auto usate che aggrega annunci da piu marketplace, li normalizza e aiuta a capire quali annunci meritano davvero attenzione.
+CarFinder Pro e un prodotto di ricerca multi-provider e decision support per auto usate, focalizzato sul mercato italiano.
 
-Obiettivo prodotto:
-- ricerca multi-source
-- comparazione annunci
-- analisi di convenienza
-- segnali di rischio
-- supporto alla negoziazione
+Aggrega annunci da piu sorgenti, li normalizza, li ordina e aggiunge supporto decisionale su convenienza, trust, negoziazione e costo di possesso.
 
-## Visione
+## Vision
 
-> **Find the right car. Know the real deal.**
+> Find the right car. Know the real deal.
 
-## Stato attuale
+## Where We Are
 
-Il progetto e in modalita ibrida:
-- frontend in `frontend/` (React + TypeScript + Vite)
-- backend target in `backend/` (FastAPI provider-based)
-- runtime produzione in transizione con Supabase Edge Functions (`supabase/functions`) come proxy/fallback
-- datastore e migrazioni in Supabase (`supabase/migrations`)
+Il repository oggi e **hybrid bounded**. FastAPI e l'implementazione primaria per la search e per buona parte delle API decisionali, ma il prodotto non e ancora provato in modo completo come production-ready.
 
-## Feature attuali
+| Area | Stato | Verita del repo |
+| --- | --- | --- |
+| Search platform | done | FastAPI espone `/api/search` e `/api/search/stream` con orchestrazione provider e SSE |
+| Provider migration | done | `autoscout24`, `subito`, `ebay`, `automobile`, `brumbrum` esistono in `backend/app/providers` |
+| Filter contract v1 | done | filtri estesi e strict capability semantics sono implementati in backend e frontend |
+| Frontend/runtime boundary | partial | Auth resta Supabase-direct e alcuni flussi dipendono ancora dalla runtime mode |
+| Alerts operations | partial | esistono alerts CRUD, processor API, audit migration e scheduler workflow, ma la prova di delivery live non e documentata qui |
+| Observability | partial | esistono ops endpoints e workflow di perf e snapshot, ma dashboard esterne e alert consumption restano leggere |
+| Testing | partial | il repo contiene 44 test backend, 39 test frontend, 1 Playwright spec e test edge, ma questo ambiente non puo eseguirli |
+| Rollout evidence | missing proof | il repo non prova da solo canary staging, rollback drill o SLO live |
+| Local bootstrap | missing proof | in questo ambiente mancano Python, Node, npm e Deno, quindi install e startup non sono verificati qui |
 
-- ricerca multi-source
-- streaming progressivo ricerca via SSE (`progress`, `result`, `complete`, `error`)
-- filtri avanzati
-- risultati ordinabili
-- export CSV
-- runtime config frontend unificata (`backendMode` + `apiBaseUrl`)
-- fallback legacy automatico nella release di transizione
-
-## Architettura repository
+## Architettura
 
 ```text
 /
-  frontend/               # React app
-    src/
-  backend/                # FastAPI backend
-    app/
-  supabase/               # Edge Functions + migrations
-  docs/
-    piano_azione_carfinder_pro.md
-    marketplace_catalog.tsv
+  frontend/    React 18 + TypeScript + Vite
+  backend/     FastAPI + Pydantic + httpx
+  supabase/    PostgreSQL migrations + Edge Functions
+  docs/        readiness, rollout, env profiles, SLO baseline
 ```
 
-## Backend APIs
+Boundary runtime:
+- FastAPI gestisce search, search-stream, listing detail, listing analysis, alerts API e user data API lato backend.
+- Supabase Auth resta frontend-direct.
+- L'edge `scrape-listings` continua a supportare proxy e fallback via `FASTAPI_PROXY_MODE`.
 
+## Superficie API Corrente
+
+Rotte backend in uso:
 - `POST /api/search`
-  - response: `total_results`, `listings`, `providers_used`, `provider_errors`, `provider_error_details`
 - `POST /api/search/stream`
-  - SSE con eventi stabili: `progress`, `result`, `complete`, `error`
 - `GET /api/providers`
 - `GET /api/providers/health`
 - `GET /api/filters/metadata`
+- `GET /api/metadata/ownership`
 - `GET /api/listings/{listing_id}`
-  - query params:
-    - `include_analysis=true|false`
-    - `include=deal&include=trust&include=negotiation&include=ownership`
-- `POST /api/listings/batch`
+- `POST /api/listings/analyze`
+- `GET /api/alerts`
+- `POST /api/alerts`
+- `POST /api/alerts/{alert_id}/deactivate`
+- `POST /api/alerts/process`
 - `GET/POST/DELETE /api/user/favorites`
 - `GET/POST/DELETE /api/user/saved-searches`
-- `POST /api/alerts/process`
-  - supporta `idempotency_key` + retry metadata nel payload di risposta
+- `POST /api/listings/batch`
 
-## Transizione FastAPI
+Note sul contratto search:
+- gli eventi SSE stabili sono `progress`, `result`, `complete`, `error`
+- `SearchRequest v1` include `is_new`, `color`, `doors`, `emission_class`, `seller_type`
+- `private_only` resta per compatibilita additiva
+- `GET /api/filters/metadata` espone:
+  - `canonical_filters`
+  - `backend_post_filters`
+  - `provider_filter_union`
+  - `provider_filter_intersection`
+  - `provider_filter_semantics = strict_all_active_non_post_filters`
 
-Durante la release di transizione:
-- `supabase/functions/scrape-listings` fa da proxy verso FastAPI
-- target runtime: `fastapi_only` per ricerca primaria
-- provider migrati su backend FastAPI: `autoscout24`, `subito`, `ebay`, `automobile`, `brumbrum`
-- fallback legacy non e piu happy path di default
+## Runtime Configuration
 
-Env flag principali edge:
-- `FASTAPI_SEARCH_URL`
-- `FASTAPI_PROXY_MODE` = `primary_with_fallback` | `fastapi_only` | `legacy_only`
+La runtime config frontend arriva da `frontend/src/lib/runtimeConfig.ts`.
+
+Regole:
+- `backendMode` supporta `supabase | fastapi`
+- la precedenza e override localStorage, poi env vars, poi fallback default
+- se `VITE_BACKEND_MODE` manca, il frontend va in fallback su `supabase`
+
+Runtime dell'edge proxy:
+- `FASTAPI_PROXY_MODE=primary_with_fallback`
+- `FASTAPI_PROXY_MODE=fastapi_only`
+- `FASTAPI_PROXY_MODE=legacy_only`
 
 ## Installazione
 
-### 1. Frontend
+### Frontend
 
 ```bash
 cd frontend
@@ -86,17 +93,9 @@ npm install
 npm run dev
 ```
 
-Build/lint/test:
+### Backend
 
-```bash
-npm run build
-npm run lint
-npm run test
-```
-
-### 2. Backend (FastAPI)
-
-Requisito runtime: `Python 3.14`.
+Runtime richiesto: `Python 3.14`
 
 ```bash
 cd backend
@@ -109,89 +108,67 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 3. Edge Functions (Supabase)
+### Edge Functions
 
-Deploy via workflow GitHub Actions o CLI Supabase.
+Deploy via GitHub Actions o Supabase CLI.
 
-## Variabili ambiente
+## Environment Profiles
 
-### Frontend
+Esempi versionati:
+- `frontend/.env.local.example`
+- `frontend/.env.staging.example`
+- `frontend/.env.production.example`
+- `backend/.env.local.example`
+- `backend/.env.staging.example`
+- `backend/.env.production.example`
+- `.env.edge.local.example`
+- `.env.edge.staging.example`
+- `.env.edge.production.example`
 
-```env
-# usa i profili versionati:
-# - frontend/.env.local.example
-# - frontend/.env.staging.example
-# - frontend/.env.production.example
-```
-
-### Backend
-
-```env
-# usa i profili versionati:
-# - backend/.env.local.example
-# - backend/.env.staging.example
-# - backend/.env.production.example
-```
-
-### Infra/Edge
-
-```env
-# usa i profili versionati:
-# - .env.edge.local.example
-# - .env.edge.staging.example
-# - .env.edge.production.example
-```
-
-Dettaglio completo: [`docs/runtime_env_profiles.md`](docs/runtime_env_profiles.md)
+Dettagli: [runtime_env_profiles.md](docs/runtime_env_profiles.md)
 
 ## CI/CD
 
 Workflow principali:
 - `.github/workflows/ci.yml`
-  - frontend lint/test/build
-  - backend test
-  - edge typecheck + proxy contract check
-- `.github/workflows/deploy-functions.yml`
-  - deploy Supabase Edge Functions
+  - frontend lint, test, build
+  - backend test e import smoke
+  - edge typecheck e proxy contract checks
+  - Playwright smoke
+  - release gate aggregato
 - `.github/workflows/deploy-fastapi.yml`
-  - test backend + deploy Railway
-  - secret checks obbligatori + healthcheck smoke
+  - backend test piu deploy Railway
+- `.github/workflows/deploy-functions.yml`
+  - edge typecheck piu deploy Supabase Functions
 - `.github/workflows/perf-load.yml`
-  - load test k6 su `/api/search` e `/api/search/stream`
+  - k6 load test schedulato
 - `.github/workflows/process-alerts.yml`
-  - scheduler per `POST /api/alerts/process` con token e idempotency key
+  - trigger schedulato dell'alerts processor
 - `.github/workflows/ops-snapshot.yml`
-  - polling periodico di `/api/ops/metrics` e `/api/ops/alerts` (telemetria verso sink esterno)
+  - polling schedulato di `/api/ops/metrics` e `/api/ops/alerts`
 
-Checklist release/cutover: [`docs/production_readiness_checklist.md`](docs/production_readiness_checklist.md)
+## Production Readiness
 
-## Roadmap prodotto
+Questo repo **non e ancora production-ready in modo dimostrato**.
 
-1. Deal Thesis Engine
-2. Negotiation Copilot
-3. Trust and Fraud Layer
-4. Ownership Intelligence
+Cosa esiste gia:
+- implementazione search FastAPI-first
+- provider search migrati
+- strict filter semantics e contratto search esteso
+- alerts processor API e scheduler workflow
+- ops endpoints e workflow CI/release
 
-## TODO immediati
+Cosa blocca ancora una dichiarazione pulita di production-ready:
+- FastAPI non e ancora il default runtime inequivocabile end-to-end
+- observability live, alert consumption e dashboard proof sono ancora leggere
+- canary staging e rollback evidence non sono raccolte qui
+- bootstrap locale ed esecuzione test non sono verificati in questo ambiente
 
-- [x] split frontend fisico in `frontend/`
-- [x] base runtime config unificata frontend
-- [x] backend provider-based base + provider core
-- [x] endpoint metadata/providers/health/search
-- [x] proxy legacy -> FastAPI con fallback
-- [x] dedup/ranking avanzati
-- [x] observability estesa
-- [x] test E2E smoke completi (Playwright + CI gate)
-- [x] estensione provider successivi (eBay Motors)
+Documenti canonici sul readiness:
+- [production_readiness_checklist.md](docs/production_readiness_checklist.md)
+- [production_readiness_backlog.md](docs/production_readiness_backlog.md)
+- [release_go_live_checklist.md](docs/release_go_live_checklist.md)
 
-## Sicurezza
+## License
 
-- nessuna credenziale hardcodata
-- input validation tipizzata
-- timeout bounded verso provider esterni
-- CORS controllato
-- logging senza esposizione segreti
-
-## Licenza
-
-Definire la licenza finale del progetto (es. MIT o proprietaria).
+La licenza finale del progetto e ancora da definire.

@@ -1,25 +1,39 @@
 # Production Readiness Backlog
 
-## P0 (Must Fix Before Full Cutover)
+Questo backlog traccia i gap reali che restano dopo il lavoro di migrazione FastAPI gia presente nel codice.
 
-- Unify search contract across frontend, FastAPI, edge proxy.
-- Keep SSE `complete` consistent with final deduped result set.
-- Add machine-readable provider error details in sync and stream flows.
-- Migrate remaining legacy providers (`automobile`, `brumbrum`) to FastAPI provider architecture.
-- Add canary deploy + rollback drill checklist for `fastapi_only`.
+## P0 - Da Chiudere Prima di Una Dichiarazione Seria di Production Ready
 
-## P1 (Hardening)
+- Rendere FastAPI il default runtime esplicito end-to-end dove questa e la direzione voluta, non solo una modalita disponibile.
+- Raccogliere evidenza staging per `fastapi_only`, canary rollout e rollback drill.
+- Verificare il bootstrap locale con toolchain correnti:
+  - Python 3.14
+  - Node 22
+  - npm
+  - Deno v2
+- Validare secret di deploy, health check e uso runbook negli ambienti target.
+- Chiudere definitivamente il drift documentale e i problemi di encoding.
 
-- Reduce N+1 queries in repository layer for image/seller fingerprint lookups.
-- Add request/provider correlation IDs through frontend -> backend -> provider logs.
-- Add provider-level timeout and failure alerts with operational runbook.
-- Extend E2E scenarios for search + detail + compare + alerts.
-- Add load test workflow for `/api/search` and `/api/search/stream`.
+## P1 - Hardening
 
-## P2 (Quality and Parity)
+- Portare l'observability oltre i raw ops endpoint:
+  - sink reale
+  - ownership dashboard
+  - alert azionabili
+- Provare operativamente il delivery alerts:
+  - send in staging
+  - retry behavior
+  - audit visibility
+- Estendere la copertura E2E oltre l'attuale spec centrata sullo stream:
+  - detail
+  - compare
+  - favorites
+  - saved searches
+  - alerts
+- Documentare lo stato branch protection e required checks fuori dal repo e linkarlo dalla release documentation.
 
-- Move listing detail read path to backend API where possible.
-- Complete price alerts pipeline (persist + trigger + notify + state).
-- Improve UX for partial provider failures and unsupported filters.
-- Fix frontend string encoding issues in pages/components.
-- Expand metadata-driven UI behavior (capability-aware controls).
+## P2 - Pulizia Boundary
+
+- Ridurre ulteriormente il peso dei flussi edge legacy che restano fuori dal path primario FastAPI.
+- Decidere se altri user journey Supabase-direct debbano restare ibridi o passare dietro backend API.
+- Aggiungere un passo ricorrente di documentation audit per evitare nuovo drift tra contratti pubblici e codice.
