@@ -365,16 +365,40 @@ class SearchOrchestrator:
                 provider_summary[provider_id] += len(normalized)
                 collected.extend(normalized)
                 scored_batch = apply_basic_scoring(normalized)
-                for listing in scored_batch:
-                    if not self._passes_post_filters(listing, request):
-                        continue
-                    await self.analysis_service.analyze_listing(
-                        listing,
-                        include=["deal", "trust", "negotiation"],
-                        local_candidates=collected,
-                        use_snapshot=False,
+                filtered_batch = [
+                    listing
+                    for listing in scored_batch
+                    if self._passes_post_filters(listing, request)
+                ]
+
+                if filtered_batch:
+                    analysis_concurrency = max(
+                        1,
+                        int(
+                            getattr(
+                                self.analysis_service,
+                                "analysis_max_concurrency",
+                                self.settings.analysis_max_concurrency,
+                            )
+                        ),
                     )
-                    yield ResultEvent(listing=listing).model_dump(mode="json")
+                    analysis_semaphore = asyncio.Semaphore(analysis_concurrency)
+
+                    async def enrich_one(listing: VehicleListing) -> VehicleListing:
+                        async with analysis_semaphore:
+                            await self.analysis_service.analyze_listing(
+                                listing,
+                                include=["deal", "trust", "negotiation"],
+                                local_candidates=collected,
+                                use_snapshot=False,
+                            )
+                            return listing
+
+                    enriched_batch = await asyncio.gather(
+                        *(enrich_one(listing) for listing in filtered_batch)
+                    )
+                    for listing in enriched_batch:
+                        yield ResultEvent(listing=listing).model_dump(mode="json")
 
                 yield ProgressEvent(
                     provider=provider_id,

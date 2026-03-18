@@ -62,7 +62,9 @@ const ChartContainer = React.forwardRef<
 ChartContainer.displayName = "Chart";
 
 const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
-  const colorConfig = Object.entries(config).filter(([_, config]) => config.theme || config.color);
+  const colorConfig = Object.entries(config).filter(
+    ([_, configItem]) => configItem.theme ?? configItem.color,
+  );
 
   if (!colorConfig.length) {
     return null;
@@ -133,7 +135,7 @@ const ChartTooltipContent = React.forwardRef<
       const itemConfig = getPayloadConfigFromPayload(config, item, key);
       const value =
         !labelKey && typeof label === "string"
-          ? config[label as keyof typeof config]?.label || label
+          ? config[label].label ?? label
           : itemConfig?.label;
 
       if (labelFormatter) {
@@ -168,7 +170,9 @@ const ChartTooltipContent = React.forwardRef<
           {payload.map((item, index) => {
             const key = `${nameKey || item.name || item.dataKey || "value"}`;
             const itemConfig = getPayloadConfigFromPayload(config, item, key);
-            const indicatorColor = color || item.payload.fill || item.color;
+            const itemPayload = item.payload as Record<string, unknown> | undefined;
+            const indicatorFill = typeof itemPayload?.fill === "string" ? itemPayload.fill : undefined;
+            const indicatorColor = color ?? indicatorFill ?? item.color;
 
             return (
               <div
@@ -178,7 +182,8 @@ const ChartTooltipContent = React.forwardRef<
                   indicator === "dot" && "items-center",
                 )}
               >
-                {formatter && item?.value !== undefined && item.name ? (
+                {formatter && item.value !== undefined && item.name ? (
+                  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                   formatter(item.value, item.name, item, index, item.payload)
                 ) : (
                   <>
@@ -262,12 +267,12 @@ const ChartLegendContent = React.forwardRef<
       )}
     >
       {payload.map((item) => {
-        const key = `${nameKey || item.dataKey || "value"}`;
+        const key = `${nameKey || String(item.dataKey) || "value"}`;
         const itemConfig = getPayloadConfigFromPayload(config, item, key);
 
         return (
           <div
-            key={item.value}
+            key={String(item.value)}
             className={cn(
               "flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground",
             )}
@@ -314,7 +319,7 @@ function getPayloadConfigFromPayload(config: ChartConfig, payload: unknown, key:
     configLabelKey = payloadPayload[key as keyof typeof payloadPayload] as string;
   }
 
-  return configLabelKey in config ? config[configLabelKey] : config[key as keyof typeof config];
+  return configLabelKey in config ? config[configLabelKey] : config[key];
 }
 
 export {

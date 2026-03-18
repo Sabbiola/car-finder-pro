@@ -5,7 +5,7 @@ import type {
   ListingAnalysis,
   OwnershipProfile,
 } from "@/lib/api/listings";
-import { getRuntimeConfig } from "@/lib/runtimeConfig";
+import { getFastApiBaseUrlOrThrow, getRuntimeConfig } from "@/lib/runtimeConfig";
 import { analyzeListing, fetchOwnershipMetadata } from "@/services/api/listingAnalysis";
 
 interface UseListingAnalysisParams {
@@ -24,16 +24,15 @@ export function useListingAnalysis({
   enabled = true,
 }: UseListingAnalysisParams) {
   const runtime = getRuntimeConfig();
-  const canFetch = runtime.backendMode === "fastapi" && !!runtime.apiBaseUrl && enabled;
+  const canFetch = runtime.backendMode === "fastapi" && enabled;
 
   return useQuery<ListingAnalysis | null>({
     queryKey: ["listing-analysis", listingId || listing?.id || listing?.source_url || "inline", include, ownershipProfile],
     enabled: canFetch && Boolean(listingId || listing),
     queryFn: async () => {
-      if (!runtime.apiBaseUrl) return null;
-      return analyzeListing(runtime.apiBaseUrl, {
+      return analyzeListing(getFastApiBaseUrlOrThrow("Listing analysis"), {
         listing_id: listingId || undefined,
-        listing: listingId ? undefined : listing || undefined,
+        listing: listingId ? undefined : listing ?? undefined,
         include,
         ownership_profile: ownershipProfile,
       });
@@ -45,13 +44,12 @@ export function useListingAnalysis({
 
 export function useOwnershipMetadata(enabled = true) {
   const runtime = getRuntimeConfig();
-  const canFetch = runtime.backendMode === "fastapi" && !!runtime.apiBaseUrl && enabled;
+  const canFetch = runtime.backendMode === "fastapi" && enabled;
   return useQuery({
     queryKey: ["ownership-metadata"],
     enabled: canFetch,
     queryFn: async () => {
-      if (!runtime.apiBaseUrl) return null;
-      return fetchOwnershipMetadata(runtime.apiBaseUrl);
+      return fetchOwnershipMetadata(getFastApiBaseUrlOrThrow("Ownership metadata"));
     },
     staleTime: 60 * 60 * 1000,
     retry: 1,

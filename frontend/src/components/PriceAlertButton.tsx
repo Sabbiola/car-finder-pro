@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { Bell, BellOff } from "lucide-react";
 
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  getClientId,
+  PRICE_ALERT_LISTING_UUID_REGEX,
+  readLocalAlerts,
+  saveLocalAlerts,
+  type LocalPriceAlert,
+} from "@/lib/priceAlertsLocal";
 import { getRuntimeConfig } from "@/lib/runtimeConfig";
 import {
   createAlertApi,
@@ -22,41 +29,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const LS_KEY = "car-finder-price-alerts";
-const CLIENT_ID_KEY = "car-finder-client-id";
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-interface LocalPriceAlert {
-  listingId: string;
-  title: string;
-  currentPrice: number;
-  targetPrice: number;
-  createdAt: string;
-}
-
-function readLocalAlerts(): LocalPriceAlert[] {
-  try {
-    return JSON.parse(localStorage.getItem(LS_KEY) || "[]");
-  } catch {
-    return [];
-  }
-}
-
-function saveLocalAlerts(alerts: LocalPriceAlert[]) {
-  localStorage.setItem(LS_KEY, JSON.stringify(alerts));
-}
-
-function getClientId(): string {
-  const existing = localStorage.getItem(CLIENT_ID_KEY);
-  if (existing) return existing;
-  const generated =
-    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : `client-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-  localStorage.setItem(CLIENT_ID_KEY, generated);
-  return generated;
-}
-
 interface Props {
   listingId: string;
   currentPrice: number;
@@ -73,7 +45,7 @@ const PriceAlertButton = ({ listingId, currentPrice, title }: Props) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [targetInput, setTargetInput] = useState("");
 
-  const isFastApiMode = runtime.backendMode === "fastapi" && !!runtime.apiBaseUrl;
+  const isFastApiMode = runtime.backendMode === "fastapi";
 
   useEffect(() => {
     const loadState = async () => {
@@ -91,6 +63,9 @@ const PriceAlertButton = ({ listingId, currentPrice, title }: Props) => {
           return;
         } catch (error) {
           console.error("[PriceAlertButton] Failed to load alerts from API:", error);
+          setIsActive(false);
+          setActiveAlertId(null);
+          return;
         }
       }
 
@@ -189,7 +164,7 @@ const PriceAlertButton = ({ listingId, currentPrice, title }: Props) => {
     setDialogOpen(false);
 
     if (isFastApiMode) {
-      if (!UUID_REGEX.test(listingId)) {
+      if (!PRICE_ALERT_LISTING_UUID_REGEX.test(listingId)) {
         toast({
           title: "Alert non disponibile",
           description: "Apri un annuncio persistito per attivare l'alert prezzo.",
@@ -320,61 +295,3 @@ const PriceAlertButton = ({ listingId, currentPrice, title }: Props) => {
 };
 
 export default PriceAlertButton;
-
-export function usePriceAlerts() {
-  const { user } = useAuth();
-  const runtime = getRuntimeConfig();
-  const [alerts, setAlerts] = useState<LocalPriceAlert[]>([]);
-
-  useEffect(() => {
-    const load = async () => {
-      const isFastApiMode = runtime.backendMode === "fastapi" && !!runtime.apiBaseUrl;
-      if (isFastApiMode) {
-        try {
-          const owner = user ? { userId: user.id } : { clientId: getClientId() };
-          const response = await listAlertsApi({
-            userId: owner.userId,
-            clientId: owner.clientId,
-            activeOnly: true,
-          });
-          setAlerts(
-            response.alerts.map((entry) => ({
-              listingId: entry.alert.listing_id,
-              title: entry.alert.listing?.title || "",
-              currentPrice: entry.alert.listing?.price || 0,
-              targetPrice: entry.alert.target_price,
-              createdAt: entry.alert.created_at,
-            })),
-          );
-          return;
-        } catch (error) {
-          console.error("[usePriceAlerts] API load failed:", error);
-        }
-      }
-
-      if (user) {
-        const { data } = await supabase
-          .from("price_alerts")
-          .select("listing_id, target_price, created_at")
-          .eq("user_id", user.id)
-          .eq("is_active", true);
-        setAlerts(
-          (data || []).map((row) => ({
-            listingId: row.listing_id,
-            title: "",
-            currentPrice: 0,
-            targetPrice: row.target_price,
-            createdAt: row.created_at,
-          })),
-        );
-        return;
-      }
-
-      setAlerts(readLocalAlerts());
-    };
-
-    void load();
-  }, [runtime.apiBaseUrl, runtime.backendMode, user]);
-
-  return { alerts, count: alerts.length };
-}

@@ -45,6 +45,7 @@ class AutomobileProvider(BaseProvider):
         model_name = request.model or "320d"
         return [
             VehicleListing(
+                id="44444444-4444-4444-8444-444444444444",
                 provider="automobile",
                 market="IT",
                 url="https://stub.automobile.local/listing-1",
@@ -61,6 +62,10 @@ class AutomobileProvider(BaseProvider):
                 city="Milano",
                 country="IT",
                 images=["https://images.example.com/automobile-stub.jpg"],
+                color="Nero",
+                doors=4,
+                emission_class="Euro 6",
+                seller_type="dealer",
             )
         ]
 

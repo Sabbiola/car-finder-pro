@@ -29,7 +29,7 @@ export type CardListing = {
 };
 
 function normalizeUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
+  if (!url) {return null;}
   let u = url.startsWith("//") ? "https:" + url : url;
   // New Subito.it CDN uses fullscreen-1x-auto; gallery-2x only worked on old static.sbito.it
   if (u.includes("images.sbito.it") && u.includes("rule=")) {
@@ -55,7 +55,7 @@ export function toCardListing(l: CarListing): CardListing {
     transmission: l.transmission || "",
     power: l.power || "",
     source: l.source as CardListing["source"],
-    allSources: (l.extra_data?.all_sources as string[] | undefined) || [l.source],
+    allSources: (l.extra_data?.all_sources as string[] | undefined) ?? [l.source],
     imageUrl: normalizeUrl(l.image_url) || FALLBACK_IMAGE,
     location: l.location || "",
     isNew: l.is_new,
@@ -65,8 +65,8 @@ export function toCardListing(l: CarListing): CardListing {
     color: l.color || "",
     doors: l.doors || 4,
     bodyType: l.body_type || "",
-    dealSummary: l.deal_summary || null,
-    trustSummary: l.trust_summary || null,
-    negotiationSummary: l.negotiation_summary || null,
+    dealSummary: l.deal_summary ?? null,
+    trustSummary: l.trust_summary ?? null,
+    negotiationSummary: l.negotiation_summary ?? null,
   };
 }

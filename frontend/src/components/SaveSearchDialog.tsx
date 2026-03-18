@@ -23,7 +23,7 @@ const SaveSearchDialog = ({ open, defaultName, onSave, onClose }: Props) => {
 
   const handleSave = () => {
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (!trimmed) {return;}
     onSave(trimmed);
     onClose();
   };
@@ -46,7 +46,7 @@ const SaveSearchDialog = ({ open, defaultName, onSave, onClose }: Props) => {
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") handleSave();
+              if (e.key === "Enter") {handleSave();}
             }}
             autoFocus
             className="rounded-xl"

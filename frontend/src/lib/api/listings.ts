@@ -183,6 +183,14 @@ interface FastApiSearchResponse {
   }>;
 }
 
+interface LegacyScrapeResponse {
+  success: boolean;
+  count?: number;
+  source?: string;
+  error?: string;
+  provider_errors?: string[];
+}
+
 export interface FastApiSearchRequest {
   query?: string;
   brand?: string;
@@ -221,22 +229,29 @@ const LEGACY_ONLY_SOURCES: string[] = [];
 const mergedCacheByQuery = new Map<string, CarListing[]>();
 
 function getCacheKey(filters: SearchFiltersState): string {
-  const normalizedSources = [...(filters.sources || [])].sort();
+  const normalizedSources = [...filters.sources].sort();
   return JSON.stringify({ ...filters, sources: normalizedSources });
 }
 
 function shouldUseFastApi(config: RuntimeConfig): boolean {
-  return config.backendMode === "fastapi" && !!config.apiBaseUrl;
+  return config.backendMode === "fastapi";
+}
+
+function requireFastApiBaseUrl(config: RuntimeConfig, context: string): string {
+  if (!config.apiBaseUrl) {
+    throw new Error(`${context} requires VITE_API_BASE_URL when backendMode=fastapi.`);
+  }
+  return config.apiBaseUrl;
 }
 
 function parseMaybeNumber(value: string): number | undefined {
-  if (!value) return undefined;
+  if (!value) {return undefined;}
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function normalizeSources(filters: SearchFiltersState): string[] {
-  return filters.sources?.length
+  return filters.sources.length
     ? filters.sources
     : ["autoscout24", "subito", "ebay", "automobile", "brumbrum"];
 }
@@ -248,7 +263,10 @@ function splitSources(filters: SearchFiltersState): { coreSources: string[]; leg
   return { coreSources: core, legacySources: legacy };
 }
 
-export function buildFastApiRequest(filters: SearchFiltersState): FastApiSearchRequest {
+export function buildFastApiRequest(
+  filters: SearchFiltersState,
+  options?: { mode?: "fast" | "full" },
+): FastApiSearchRequest {
   return {
     query: undefined,
     brand: filters.brand || undefined,
@@ -264,13 +282,13 @@ export function buildFastApiRequest(filters: SearchFiltersState): FastApiSearchR
     body_styles: filters.bodyType ? [filters.bodyType] : undefined,
     fuel_types: filters.fuel ? [filters.fuel] : undefined,
     transmission: filters.transmission || undefined,
-    is_new: filters.isNew === null ? undefined : filters.isNew,
+    is_new: filters.isNew ?? undefined,
     color: filters.color || undefined,
     doors: parseMaybeNumber(filters.doors),
     emission_class: filters.emissionClass || undefined,
     seller_type: filters.sellerType,
     private_only: filters.sellerType === "private",
-    mode: "fast",
+    mode: options?.mode ?? "fast",
     sources: normalizeSources(filters),
   };
 }
@@ -285,16 +303,16 @@ export function reconcileListingsByResultKeys(
   listings: CarListing[],
   finalResultKeys: string[],
 ): CarListing[] {
-  if (!finalResultKeys.length) return listings;
+  if (!finalResultKeys.length) {return listings;}
   const byKey = new Map<string, CarListing>();
   for (const listing of listings) {
     const key = buildListingIdentityKey(listing);
-    if (!byKey.has(key)) byKey.set(key, listing);
+    if (!byKey.has(key)) {byKey.set(key, listing);}
   }
   const reconciled: CarListing[] = [];
   for (const key of finalResultKeys) {
     const listing = byKey.get(key);
-    if (listing) reconciled.push(listing);
+    if (listing) {reconciled.push(listing);}
   }
   return reconciled;
 }
@@ -337,12 +355,12 @@ export function mapFastApiListing(item: FastApiVehicleListing): CarListing {
     seats: null,
     condition: item.seller_type || item.condition || null,
     detail_scraped: false,
-    image_urls: item.images || null,
+    image_urls: item.images ?? null,
     extra_data: {
       market: item.market || null,
       currency: item.price_currency || "EUR",
-      reason_codes: item.reason_codes || [],
-      raw_payload: item.raw_payload || null,
+      reason_codes: item.reason_codes ?? [],
+      raw_payload: item.raw_payload ?? null,
       deal_score: item.deal_score ?? null,
     },
     seller_name: item.seller_name || null,
@@ -351,10 +369,10 @@ export function mapFastApiListing(item: FastApiVehicleListing): CarListing {
     seller_phone_hash: item.seller_phone_hash || null,
     listing_hash: item.listing_hash || null,
     deal_score: item.deal_score ?? null,
-    reason_codes: item.reason_codes || [],
-    deal_summary: item.deal_summary || null,
-    trust_summary: item.trust_summary || null,
-    negotiation_summary: item.negotiation_summary || null,
+    reason_codes: item.reason_codes ?? [],
+    deal_summary: item.deal_summary ?? null,
+    trust_summary: item.trust_summary ?? null,
+    negotiation_summary: item.negotiation_summary ?? null,
   };
 }
 
@@ -383,7 +401,7 @@ async function runFastApiSearch(filters: SearchFiltersState, apiBaseUrl: string)
     throw new Error(detailMessage);
   }
   const payload = (await response.json()) as FastApiSearchResponse;
-  return (payload.listings || []).map(mapFastApiListing);
+  return payload.listings.map(mapFastApiListing);
 }
 
 async function streamFastApiSearch(
@@ -411,73 +429,81 @@ function mergeListings(...chunks: CarListing[][]): CarListing[] {
   for (const chunk of chunks) {
     for (const listing of chunk) {
       const key = buildListingIdentityKey(listing);
-      if (!map.has(key)) map.set(key, listing);
+      if (!map.has(key)) {map.set(key, listing);}
     }
   }
   return [...map.values()];
 }
 
 async function scrapeLegacy(filters: SearchFiltersState) {
-  const { data, error } = await supabase.functions.invoke("scrape-listings", {
-    body: { filters },
-  });
-  if (error) throw error;
+  const response = (await supabase.functions.invoke(
+    "scrape-listings",
+    {
+      body: { filters },
+    },
+  )) as { data: LegacyScrapeResponse; error: Error | null };
+  const data = response.data;
+  const error = response.error;
+  if (error) {throw error;}
   return data;
 }
 
 async function fetchLegacyListings(filters: SearchFiltersState): Promise<CarListing[]> {
   let query = supabase.from("car_listings").select("*");
 
-  if (filters.brand) query = query.eq("brand", filters.brand);
-  if (filters.model) query = query.ilike("model", `%${filters.model}%`);
-  if (filters.trim) query = query.ilike("trim", `%${filters.trim}%`);
-  if (filters.fuel) query = query.eq("fuel", filters.fuel);
-  if (filters.transmission) query = query.eq("transmission", filters.transmission);
-  if (filters.isNew !== null && filters.isNew !== undefined) query = query.eq("is_new", filters.isNew);
-  if (filters.location) query = query.ilike("location", `%${filters.location}%`);
-  if (filters.priceMin) query = query.gte("price", Number(filters.priceMin));
-  if (filters.priceMax) query = query.lte("price", Number(filters.priceMax));
-  if (filters.kmMin) query = query.gte("km", Number(filters.kmMin));
-  if (filters.kmMax) query = query.lte("km", Number(filters.kmMax));
-  if (filters.yearMin && Number(filters.yearMin) > 0) query = query.gte("year", Number(filters.yearMin));
-  if (filters.yearMax) query = query.lte("year", Number(filters.yearMax));
-  if (filters.color) query = query.eq("color", filters.color);
-  if (filters.doors) query = query.eq("doors", Number(filters.doors));
-  if (filters.bodyType) query = query.eq("body_type", filters.bodyType);
-  if (filters.emissionClass) query = query.eq("emission_class", filters.emissionClass);
+  if (filters.brand) {query = query.eq("brand", filters.brand);}
+  if (filters.model) {query = query.ilike("model", `%${filters.model}%`);}
+  if (filters.trim) {query = query.ilike("trim", `%${filters.trim}%`);}
+  if (filters.fuel) {query = query.eq("fuel", filters.fuel);}
+  if (filters.transmission) {query = query.eq("transmission", filters.transmission);}
+  if (filters.isNew != null) {query = query.eq("is_new", filters.isNew);}
+  if (filters.location) {query = query.ilike("location", `%${filters.location}%`);}
+  if (filters.priceMin) {query = query.gte("price", Number(filters.priceMin));}
+  if (filters.priceMax) {query = query.lte("price", Number(filters.priceMax));}
+  if (filters.kmMin) {query = query.gte("km", Number(filters.kmMin));}
+  if (filters.kmMax) {query = query.lte("km", Number(filters.kmMax));}
+  if (filters.yearMin && Number(filters.yearMin) > 0) {query = query.gte("year", Number(filters.yearMin));}
+  if (filters.yearMax) {query = query.lte("year", Number(filters.yearMax));}
+  if (filters.color) {query = query.eq("color", filters.color);}
+  if (filters.doors) {query = query.eq("doors", Number(filters.doors));}
+  if (filters.bodyType) {query = query.eq("body_type", filters.bodyType);}
+  if (filters.emissionClass) {query = query.eq("emission_class", filters.emissionClass);}
 
-  if (filters.sources?.length) {
+  if (filters.sources.length) {
     query = query.in("source", filters.sources);
   }
 
-  const { data, error } = await query.order("price", { ascending: true }).limit(500);
-  if (error) throw error;
-  return (data as CarListing[]) || [];
+  const { data, error } = await query
+    .order("price", { ascending: true })
+    .limit(500)
+    .returns<CarListing[]>();
+  if (error) {throw error;}
+  return data;
 }
 
 function applyInMemoryFilters(listings: CarListing[], filters: SearchFiltersState): CarListing[] {
   return listings.filter((listing) => {
-    if (filters.brand && listing.brand !== filters.brand) return false;
-    if (filters.model && !listing.model.toLowerCase().includes(filters.model.toLowerCase())) return false;
-    if (filters.trim && !(listing.trim || "").toLowerCase().includes(filters.trim.toLowerCase())) return false;
-    if (filters.fuel && listing.fuel !== filters.fuel) return false;
-    if (filters.transmission && listing.transmission !== filters.transmission) return false;
+    if (filters.brand && listing.brand !== filters.brand) {return false;}
+    if (filters.model && !listing.model.toLowerCase().includes(filters.model.toLowerCase())) {return false;}
+    if (filters.trim && !(listing.trim || "").toLowerCase().includes(filters.trim.toLowerCase())) {return false;}
+    if (filters.fuel && listing.fuel !== filters.fuel) {return false;}
+    if (filters.transmission && listing.transmission !== filters.transmission) {return false;}
     if (filters.location && !(listing.location || "").toLowerCase().includes(filters.location.toLowerCase()))
-      return false;
-    if (filters.priceMin && listing.price < Number(filters.priceMin)) return false;
-    if (filters.priceMax && listing.price > Number(filters.priceMax)) return false;
-    if (filters.kmMin && listing.km < Number(filters.kmMin)) return false;
-    if (filters.kmMax && listing.km > Number(filters.kmMax)) return false;
-    if (filters.yearMin && listing.year < Number(filters.yearMin)) return false;
-    if (filters.yearMax && listing.year > Number(filters.yearMax)) return false;
-    if (filters.isNew !== null && listing.is_new !== filters.isNew) return false;
-    if (filters.color && listing.color !== filters.color) return false;
-    if (filters.doors && Number(listing.doors || 0) !== Number(filters.doors)) return false;
-    if (filters.bodyType && listing.body_type !== filters.bodyType) return false;
-    if (filters.emissionClass && listing.emission_class !== filters.emissionClass) return false;
-    if (filters.sellerType === "private" && listing.condition !== "private") return false;
-    if (filters.sellerType === "dealer" && listing.condition !== "dealer") return false;
-    if (filters.sources?.length && !filters.sources.includes(listing.source)) return false;
+      {return false;}
+    if (filters.priceMin && listing.price < Number(filters.priceMin)) {return false;}
+    if (filters.priceMax && listing.price > Number(filters.priceMax)) {return false;}
+    if (filters.kmMin && listing.km < Number(filters.kmMin)) {return false;}
+    if (filters.kmMax && listing.km > Number(filters.kmMax)) {return false;}
+    if (filters.yearMin && listing.year < Number(filters.yearMin)) {return false;}
+    if (filters.yearMax && listing.year > Number(filters.yearMax)) {return false;}
+    if (filters.isNew !== null && listing.is_new !== filters.isNew) {return false;}
+    if (filters.color && listing.color !== filters.color) {return false;}
+    if (filters.doors && Number(listing.doors || 0) !== Number(filters.doors)) {return false;}
+    if (filters.bodyType && listing.body_type !== filters.bodyType) {return false;}
+    if (filters.emissionClass && listing.emission_class !== filters.emissionClass) {return false;}
+    if (filters.sellerType === "private" && listing.condition !== "private") {return false;}
+    if (filters.sellerType === "dealer" && listing.condition !== "dealer") {return false;}
+    if (filters.sources.length && !filters.sources.includes(listing.source)) {return false;}
     return true;
   });
 }
@@ -489,13 +515,15 @@ function withSources(filters: SearchFiltersState, sources: string[]): SearchFilt
 export async function scrapeListings(filters: SearchFiltersState) {
   const cacheKey = getCacheKey(filters);
   const runtimeConfig = getRuntimeConfig();
-  if (!shouldUseFastApi(runtimeConfig) || !runtimeConfig.apiBaseUrl) {
+  if (!shouldUseFastApi(runtimeConfig)) {
     return scrapeLegacy(filters);
   }
+  const apiBaseUrl = requireFastApiBaseUrl(runtimeConfig, "Search");
 
   const { coreSources, legacySources } = splitSources(filters);
   const chunks: CarListing[][] = [];
   const providerErrors: string[] = [];
+  const fatalProviderErrors: string[] = [];
 
   if (!coreSources.length) {
     throw new Error("No FastAPI providers selected");
@@ -508,15 +536,17 @@ export async function scrapeListings(filters: SearchFiltersState) {
   }
 
   try {
-    chunks.push(await runFastApiSearch(withSources(filters, coreSources), runtimeConfig.apiBaseUrl));
+    chunks.push(await runFastApiSearch(withSources(filters, coreSources), apiBaseUrl));
   } catch (error) {
-    providerErrors.push(error instanceof Error ? error.message : "FastAPI search failed");
+    const message = error instanceof Error ? error.message : "FastAPI search failed";
+    providerErrors.push(message);
+    fatalProviderErrors.push(message);
   }
 
   const mergedCache = mergeListings(...chunks);
   mergedCacheByQuery.set(cacheKey, mergedCache);
-  if (providerErrors.length && mergedCache.length === 0) {
-    throw new Error(providerErrors.join(" | "));
+  if (fatalProviderErrors.length && mergedCache.length === 0) {
+    throw new Error(fatalProviderErrors.join(" | "));
   }
 
   return {
@@ -533,24 +563,26 @@ export async function streamListings(
   signal?: AbortSignal,
 ): Promise<void> {
   const runtimeConfig = getRuntimeConfig();
-  if (!shouldUseFastApi(runtimeConfig) || !runtimeConfig.apiBaseUrl) {
+  if (!shouldUseFastApi(runtimeConfig)) {
     throw new Error("Streaming is available only in FastAPI mode");
   }
+  const apiBaseUrl = requireFastApiBaseUrl(runtimeConfig, "Search stream");
   const { coreSources } = splitSources(filters);
   if (!coreSources.length) {
     throw new Error("No FastAPI-migrated providers selected for streaming");
   }
-  await streamFastApiSearch(withSources(filters, coreSources), runtimeConfig.apiBaseUrl, onEvent, signal);
+  await streamFastApiSearch(withSources(filters, coreSources), apiBaseUrl, onEvent, signal);
 }
 
 export async function fetchListings(filters: SearchFiltersState): Promise<CarListing[]> {
   const runtimeConfig = getRuntimeConfig();
-  if (shouldUseFastApi(runtimeConfig) && runtimeConfig.apiBaseUrl) {
+  if (shouldUseFastApi(runtimeConfig)) {
+    requireFastApiBaseUrl(runtimeConfig, "Search listings fetch");
     const cacheKey = getCacheKey(filters);
     let cached = mergedCacheByQuery.get(cacheKey);
     if (!cached?.length) {
       await scrapeListings(filters);
-      cached = mergedCacheByQuery.get(cacheKey) || [];
+      cached = mergedCacheByQuery.get(cacheKey) ?? [];
     }
     return applyInMemoryFilters(cached, filters)
       .sort((a, b) => a.price - b.price)

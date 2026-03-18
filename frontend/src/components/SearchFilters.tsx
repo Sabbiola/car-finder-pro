@@ -90,10 +90,10 @@ function pruneUnsupportedFilters(
   current: SearchFiltersState,
   supportedFilterKeys: Set<string> | null,
 ): SearchFiltersState {
-  if (!supportedFilterKeys) return current;
+  if (!supportedFilterKeys) {return current;}
   const next = { ...current };
   const maybeReset = (filterKey: string, reset: () => void) => {
-    if (!supportedFilterKeys.has(filterKey)) reset();
+    if (!supportedFilterKeys.has(filterKey)) {reset();}
   };
 
   maybeReset("trim", () => {
@@ -170,14 +170,15 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
       : modelTrims;
   const availableSources = useMemo(() => {
     const fallbackOrder = Object.keys(sourceLabels);
-    const metadataSources = metadata?.providers?.map((provider) => provider.id) || [];
+    const metadataSources = metadata?.providers?.map((provider) => provider.id) ?? [];
     const ordered = [...new Set([...fallbackOrder, ...metadataSources])];
     return ordered.map((id) => {
       const metadataProvider = metadata?.providers?.find((provider) => provider.id === id);
       const metadataLabel = metadataProvider?.name;
+      const sourceLabel = sourceLabels[id] as string | undefined;
       return {
         id,
-        label: sourceLabels[id as keyof typeof sourceLabels] || metadataLabel || id,
+        label: sourceLabel ?? metadataLabel ?? id,
         configured: metadataProvider?.configured ?? true,
       };
     });
@@ -185,18 +186,18 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
 
   const selectedProviderCapabilitySet = useMemo(() => {
     const contract = metadata?.search_contract;
-    if (!contract) return null;
+    if (!contract) {return null;}
     const selectedSourceIds = new Set(filters.sources);
-    const selectedProviders = (metadata?.providers || []).filter((provider) =>
+    const selectedProviders = (metadata.providers ?? []).filter((provider) =>
       selectedSourceIds.has(provider.id) && provider.enabled !== false && provider.configured !== false,
     );
     if (selectedProviders.length === 0) {
-      return new Set<string>(contract.backend_post_filters || []);
+      return new Set<string>(contract.backend_post_filters);
     }
     const firstProvider = selectedProviders[0];
-    const intersection = new Set<string>(firstProvider.supports_filters || []);
+    const intersection = new Set<string>(firstProvider.supports_filters ?? []);
     for (const provider of selectedProviders.slice(1)) {
-      const current = new Set(provider.supports_filters || []);
+      const current = new Set(provider.supports_filters ?? []);
       for (const key of [...intersection]) {
         if (!current.has(key)) {
           intersection.delete(key);
@@ -204,17 +205,17 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
       }
     }
     const supported = new Set<string>(intersection);
-    for (const filterKey of contract.backend_post_filters || []) {
+    for (const filterKey of contract.backend_post_filters) {
       supported.add(filterKey);
     }
     return supported;
   }, [metadata, filters.sources]);
 
   const unsupportedSelectedFilters = useMemo(() => {
-    if (!selectedProviderCapabilitySet) return [];
-    const knownProviderIds = new Set((metadata?.providers || []).map((provider) => provider.id));
+    if (!selectedProviderCapabilitySet) {return [];}
+    const knownProviderIds = new Set((metadata?.providers ?? []).map((provider) => provider.id));
     const hasUnknownSelectedSources = filters.sources.some((source) => !knownProviderIds.has(source));
-    if (hasUnknownSelectedSources) return [];
+    if (hasUnknownSelectedSources) {return [];}
     const activeFilters: Array<{ key: string; label: string; active: boolean }> = [
       { key: "trim", label: "allestimento", active: Boolean(filters.trim) },
       { key: "location", label: "citta/regione", active: Boolean(filters.location) },
@@ -240,11 +241,11 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
 
   useEffect(() => {
     const disabledProviderIds = new Set(
-      (metadata?.providers || [])
+      (metadata?.providers ?? [])
         .filter((provider) => provider.configured === false)
         .map((provider) => provider.id),
     );
-    if (disabledProviderIds.size === 0) return;
+    if (disabledProviderIds.size === 0) {return;}
 
     setFilters((current) => {
       const nextSources = current.sources.filter((source) => !disabledProviderIds.has(source));
@@ -278,7 +279,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
   };
 
   const handleSaveConfirm = (name: string) => {
-    save(name, filters);
+    void save(name, filters);
   };
 
   const normalizeFilters = (current: SearchFiltersState): SearchFiltersState => {
@@ -304,10 +305,10 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
     } else {
       const params = new URLSearchParams();
       Object.entries(nextFilters).forEach(([k, v]) => {
-        if (Array.isArray(v)) params.set(k, v.join(","));
-        else if (v !== "" && v !== false && v !== null) params.set(k, String(v));
+        if (Array.isArray(v)) {params.set(k, v.join(","));}
+        else if (v !== "" && v !== false && v !== null) {params.set(k, String(v));}
       });
-      if (nextFilters.isNew === false) params.set("isNew", "false");
+      if (nextFilters.isNew === false) {params.set("isNew", "false");}
       navigate(`/risultati?${params.toString()}`);
     }
   };
@@ -336,6 +337,11 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
     filters.brand && filters.model
       ? `${filters.brand} ${filters.model}`
       : filters.brand || "Ricerca";
+  const modelsForSelectedBrand = (availableModelsByBrand[filters.brand] as string[] | undefined) ?? [];
+  const trimsByModel = availableTrimsByBrandModel[filters.brand] as
+    | Record<string, string[]>
+    | undefined;
+  const trimsForSelectedModel = trimsByModel?.[filters.model] ?? [];
 
   return (
     <div className="w-full space-y-4">
@@ -384,7 +390,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
               <SelectValue placeholder="Modello" />
             </SelectTrigger>
             <SelectContent>
-              {(availableModelsByBrand[filters.brand] || []).map((m) => (
+              {modelsForSelectedBrand.map((m) => (
                 <SelectItem key={m} value={m}>
                   {m}
                 </SelectItem>
@@ -420,7 +426,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
               />
             </SelectTrigger>
             <SelectContent>
-              {(availableTrimsByBrandModel[filters.brand]?.[filters.model] || []).map((t) => (
+              {trimsForSelectedModel.map((t) => (
                 <SelectItem key={t} value={t}>
                   {t}
                 </SelectItem>
@@ -753,7 +759,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                         checked={filters.sources.includes(id)}
                         disabled={configured === false}
                         onCheckedChange={() => {
-                          if (configured === false) return;
+                          if (configured === false) {return;}
                           toggleSource(id);
                         }}
                       />

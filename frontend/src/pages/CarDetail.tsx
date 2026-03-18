@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import {
@@ -35,7 +35,6 @@ import PriceAlertButton from "@/components/PriceAlertButton";
 import CarCard from "@/components/CarCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import ListingInsightsPanel from "@/features/results/components/ListingInsightsPanel";
 import { useListingAnalysis } from "@/features/results/hooks/useListingAnalysis";
 import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,9 +42,11 @@ import { FALLBACK_IMAGE } from "@/lib/constants";
 import type { CarListing } from "@/lib/api/listings";
 import { sourceColors, sourceLabels } from "@/lib/mock-data";
 import { priceRatingConfig as ratingConfig } from "@/lib/rating-config";
-import { getRuntimeConfig } from "@/lib/runtimeConfig";
+import { getFastApiBaseUrlOrThrow, getRuntimeConfig } from "@/lib/runtimeConfig";
 import { toCardListing } from "@/lib/toCardListing";
 import { fetchListingDetailContext } from "@/services/api/listingDetail";
+
+const ListingInsightsPanel = lazy(() => import("@/features/results/components/ListingInsightsPanel"));
 
 interface ExtendedListing extends CarListing {
   description?: string | null;
@@ -161,7 +162,7 @@ const CarDetail = () => {
   };
 
   const galleryImages = useMemo(() => {
-    if (!car) return [];
+    if (!car) {return [];}
     const normalize = (raw: string) => {
       let value = raw.startsWith("//") ? `https:${raw}` : raw;
       if (value.includes("images.sbito.it") && value.includes("rule=")) {
@@ -172,8 +173,12 @@ const CarDetail = () => {
       }
       return value;
     };
-    const main = normalize(car.image_url || "") || FALLBACK_IMAGE;
-    const extras = (car.image_urls || []).map(normalize).filter((url) => url && url !== main);
+    const rawMainImage = typeof car.image_url === "string" ? car.image_url : "";
+    const normalizedMainImage = normalize(rawMainImage);
+    const main = normalizedMainImage.length > 0 ? normalizedMainImage : FALLBACK_IMAGE;
+    const extras = (car.image_urls ?? [])
+      .map(normalize)
+      .filter((url): url is string => Boolean(url && url !== main));
     return [main, ...extras];
   }, [car]);
 
@@ -187,15 +192,15 @@ const CarDetail = () => {
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (event.key === "ArrowLeft") prevImage();
-      if (event.key === "ArrowRight") nextImage();
+      if (event.key === "ArrowLeft") {prevImage();}
+      if (event.key === "ArrowRight") {nextImage();}
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [nextImage, prevImage]);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) {return;}
 
     let cancelled = false;
     const fetchCar = async () => {
@@ -207,13 +212,13 @@ const CarDetail = () => {
 
       try {
         const runtime = getRuntimeConfig();
-        if (runtime.backendMode === "fastapi" && runtime.apiBaseUrl) {
-          const detail = await fetchListingDetailContext(runtime.apiBaseUrl, {
+        if (runtime.backendMode === "fastapi") {
+          const detail = await fetchListingDetailContext(getFastApiBaseUrlOrThrow("Listing detail"), {
             listingId: id,
             sourceUrl: sourceUrlFromState,
             includeAnalysis: false,
           });
-          if (cancelled) return;
+          if (cancelled) {return;}
 
           const detailListing: ExtendedListing = {
             ...detail.listing,
@@ -223,8 +228,8 @@ const CarDetail = () => {
             seats: detail.listing.seats || null,
             condition: detail.listing.condition || null,
             detail_scraped: true,
-            image_urls: detail.listing.image_urls || null,
-            extra_data: detail.listing.extra_data || null,
+            image_urls: detail.listing.image_urls ?? null,
+            extra_data: detail.listing.extra_data ?? null,
           };
 
           setCar(detailListing);
@@ -236,9 +241,9 @@ const CarDetail = () => {
           return;
         }
 
-        const { data, error } = await supabase.from("car_listings").select("*").eq("id", id).single();
-        if (cancelled) return;
-        if (error || !data) {
+        const { data } = await supabase.from("car_listings").select("*").eq("id", id).single();
+        if (cancelled) {return;}
+        if (!data) {
           setFetchError("Auto non trovata o errore nel caricamento.");
           return;
         }
@@ -270,10 +275,11 @@ const CarDetail = () => {
             .limit(30),
         ]);
 
-        if (cancelled) return;
-        setSimilar((similarRes.data as CarListing[]) || []);
-        setAllPrices((pricesRes.data as CarListing[]) || []);
-        setPriceHistory(historyRes.data || []);
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (cancelled) {return;}
+        setSimilar((similarRes.data as CarListing[] | null) ?? []);
+        setAllPrices((pricesRes.data as CarListing[] | null) ?? []);
+        setPriceHistory(historyRes.data ?? []);
 
         let listingUrl = carData.source_url && carData.source_url !== "#" ? carData.source_url : null;
         if (!listingUrl && carData.source === "autoscout24" && carData.image_url) {
@@ -286,9 +292,9 @@ const CarDetail = () => {
             listingUrl = `https://www.autoscout24.it/annunci/${slug}-${idMatch[1]}`;
           }
         }
-        if (listingUrl) setResolvedUrl(listingUrl);
+        if (listingUrl) {setResolvedUrl(listingUrl);}
       } catch (error) {
-        if (cancelled) return;
+        if (cancelled) {return;}
         console.error("[CarDetail] Unexpected fetch error:", error);
         if (listingSnapshot) {
           const fallback = snapshotToExtendedListing(listingSnapshot as Record<string, unknown>, id);
@@ -300,7 +306,9 @@ const CarDetail = () => {
           setResolvedUrl(fallback.source_url || sourceUrlFromState);
           setFetchError(null);
         } else {
-          setFetchError("Errore imprevisto nel caricamento dell'auto.");
+          setFetchError(
+            error instanceof Error ? error.message : "Errore imprevisto nel caricamento dell'auto.",
+          );
         }
       } finally {
         if (!cancelled) {
@@ -317,7 +325,7 @@ const CarDetail = () => {
   }, [addRecent, id, listingSnapshot, sourceUrlFromState]);
 
   const chartData = useMemo(() => {
-    if (!allPrices.length || !car) return [];
+    if (!allPrices.length || !car) {return [];}
     return allPrices.map((item) => ({
       name: item.title.length > 20 ? `${item.title.slice(0, 20)}...` : item.title,
       price: item.price,
@@ -327,7 +335,7 @@ const CarDetail = () => {
   }, [allPrices, car]);
 
   const avgPrice = useMemo(() => {
-    if (!allPrices.length) return 0;
+    if (!allPrices.length) {return 0;}
     return Math.round(allPrices.reduce((acc, item) => acc + item.price, 0) / allPrices.length);
   }, [allPrices]);
 
@@ -527,7 +535,7 @@ const CarDetail = () => {
                   className="flex-1 gap-2 font-semibold rounded-xl h-12 bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-700 hover:to-indigo-600 border-0 text-white shadow-md hover:shadow-violet-200 transition-all disabled:opacity-40"
                   onClick={() => {
                     const url = listing.url !== "#" ? listing.url : resolvedUrl;
-                    if (url) window.open(url, "_blank", "noopener,noreferrer");
+                    if (url) {window.open(url, "_blank", "noopener,noreferrer");}
                   }}
                   disabled={listing.url === "#" && !resolvedUrl}
                 >
@@ -558,14 +566,22 @@ const CarDetail = () => {
           </div>
         )}
 
-        {(analysisQuery.data || analysisQuery.isLoading) && (
+        {(analysisQuery.isLoading || Boolean(analysisQuery.data)) && (
           <div className="animate-brutal-up" style={{ animationDelay: "90ms" }}>
             {analysisQuery.isLoading ? (
               <div className="rounded-2xl border border-border/60 bg-card p-4 text-sm text-muted-foreground">
                 Caricamento analisi decisionale...
               </div>
             ) : (
-              <ListingInsightsPanel listing={car} analysis={analysisQuery.data} />
+              <Suspense
+                fallback={
+                  <div className="rounded-2xl border border-border/60 bg-card p-4 text-sm text-muted-foreground">
+                    Caricamento insights...
+                  </div>
+                }
+              >
+                <ListingInsightsPanel listing={car} analysis={analysisQuery.data} />
+              </Suspense>
             )}
           </div>
         )}
@@ -598,7 +614,10 @@ const CarDetail = () => {
                   <XAxis
                     dataKey="recorded_at"
                     tickFormatter={(value) =>
-                      new Date(value).toLocaleDateString("it-IT", { day: "2-digit", month: "short" })
+                      new Date(String(value)).toLocaleDateString("it-IT", {
+                        day: "2-digit",
+                        month: "short",
+                      })
                     }
                     tick={{ fontSize: 10, fontFamily: "Inter" }}
                     interval="preserveStartEnd"
@@ -612,7 +631,7 @@ const CarDetail = () => {
                   <Tooltip
                     formatter={(value: number) => [`EUR ${value.toLocaleString("it-IT")}`, "Prezzo"]}
                     labelFormatter={(value) =>
-                      new Date(value).toLocaleDateString("it-IT", {
+                      new Date(String(value)).toLocaleDateString("it-IT", {
                         day: "2-digit",
                         month: "long",
                         year: "numeric",

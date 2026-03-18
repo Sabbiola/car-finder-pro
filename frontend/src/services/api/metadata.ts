@@ -1,4 +1,4 @@
-import { getRuntimeConfig } from "@/lib/runtimeConfig";
+import { getFastApiBaseUrlOrThrow, getRuntimeConfig } from "@/lib/runtimeConfig";
 import { createRequestId } from "@/lib/requestId";
 
 export interface FilterMetadataResponse {
@@ -23,24 +23,43 @@ export interface FilterMetadataResponse {
     canonical_filters: string[];
     backend_post_filters: string[];
     provider_filter_union: string[];
-    provider_filter_intersection?: string[];
-    provider_filter_semantics?: string;
+    provider_filter_intersection: string[];
+    provider_filter_semantics: string;
   };
+}
+
+function assertCanonicalSearchContract(payload: FilterMetadataResponse): void {
+  const contract = payload.search_contract;
+  if (!contract) {
+    throw new Error("Metadata payload missing search_contract.");
+  }
+  if (!Array.isArray(contract.provider_filter_union)) {
+    throw new Error("Metadata payload missing provider_filter_union.");
+  }
+  if (!Array.isArray(contract.provider_filter_intersection)) {
+    throw new Error("Metadata payload missing provider_filter_intersection.");
+  }
+  if (contract.provider_filter_semantics !== "strict_all_active_non_post_filters") {
+    throw new Error("Metadata payload has unsupported provider_filter_semantics.");
+  }
 }
 
 export async function fetchFilterMetadata(): Promise<FilterMetadataResponse | null> {
   const config = getRuntimeConfig();
-  if (config.backendMode !== "fastapi" || !config.apiBaseUrl) {
+  if (config.backendMode !== "fastapi") {
     return null;
   }
+  const baseUrl = getFastApiBaseUrlOrThrow("Filter metadata");
 
   const requestId = createRequestId("filters-metadata");
-  const response = await fetch(`${config.apiBaseUrl}/api/filters/metadata`, {
+  const response = await fetch(`${baseUrl}/api/filters/metadata`, {
     headers: { "x-request-id": requestId },
   });
   if (!response.ok) {
     throw new Error(`Metadata fetch failed: ${response.status}`);
   }
 
-  return (await response.json()) as FilterMetadataResponse;
+  const payload = (await response.json()) as FilterMetadataResponse;
+  assertCanonicalSearchContract(payload);
+  return payload;
 }

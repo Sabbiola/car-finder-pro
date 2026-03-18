@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 import { getRuntimeConfig } from "@/lib/runtimeConfig";
 import {
   addUserFavorite,
@@ -12,7 +12,8 @@ const LS_KEY = "car-finder-favorites";
 
 function readFromStorage(): string[] {
   try {
-    return JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+    const parsed: unknown = JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
   } catch {
     return [];
   }
@@ -21,7 +22,7 @@ function readFromStorage(): string[] {
 export function useFavorites() {
   const { user } = useAuth();
   const runtimeConfig = getRuntimeConfig();
-  const useBackendApi = runtimeConfig.backendMode === "fastapi" && !!runtimeConfig.apiBaseUrl;
+  const useBackendApi = runtimeConfig.backendMode === "fastapi";
   const [favorites, setFavorites] = useState<string[]>(readFromStorage);
 
   // Load from Supabase when logged in, localStorage otherwise
@@ -31,25 +32,28 @@ export function useFavorites() {
       return;
     }
     if (useBackendApi) {
-      listUserFavorites(user.id)
+      void listUserFavorites(user.id)
         .then((ids) => setFavorites(ids))
-        .catch(() => setFavorites([]));
+        .catch((error) => {
+          console.error("[useFavorites] Failed to load favorites via backend API:", error);
+          setFavorites([]);
+        });
       return;
     }
-    supabase
+    void supabase
       .from("user_favorites")
       .select("listing_id")
       .eq("user_id", user.id)
       .then(({ data }) => {
-        if (data) setFavorites(data.map((r: { listing_id: string }) => r.listing_id));
+        if (data) {setFavorites(data.map((r: { listing_id: string }) => r.listing_id));}
       });
   }, [user, useBackendApi]);
 
   // Listen for localStorage changes when anonymous
   useEffect(() => {
-    if (user) return;
+    if (user) {return;}
     const handler = (e: StorageEvent) => {
-      if (e.key === LS_KEY) setFavorites(readFromStorage());
+      if (e.key === LS_KEY) {setFavorites(readFromStorage());}
     };
     window.addEventListener("storage", handler);
     return () => window.removeEventListener("storage", handler);

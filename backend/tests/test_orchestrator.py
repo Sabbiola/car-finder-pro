@@ -41,6 +41,14 @@ class FakeProvider(BaseProvider):
         return self._results
 
 
+class StubAnalysisService:
+    def __init__(self, analysis_max_concurrency: int = 4) -> None:
+        self.analysis_max_concurrency = analysis_max_concurrency
+
+    async def analyze_listing(self, listing: VehicleListing, **_kwargs) -> VehicleListing:
+        return listing
+
+
 def _listing(provider: str, title: str, url: str, price: int) -> VehicleListing:
     return VehicleListing(
         provider=provider,
@@ -149,6 +157,44 @@ async def test_stream_search_emits_provider_not_configured_for_requested_source(
     assert events[1]["event"] == "error"
     assert events[1]["code"] == "no_provider"
     assert events[-1]["event"] == "complete"
+
+
+@pytest.mark.asyncio
+async def test_stream_search_emits_results_before_provider_completed_progress() -> None:
+    registry = ProviderRegistry()
+    registry._providers = {  # type: ignore[attr-defined]
+        "autoscout24": FakeProvider(
+            "autoscout24",
+            results=[
+                _listing("autoscout24", "A", "https://example.com/a", 20000),
+                _listing("autoscout24", "B", "https://example.com/b", 21000),
+                _listing("autoscout24", "C", "https://example.com/c", 22000),
+            ],
+        ),
+    }
+    registry._stats = {"autoscout24": ProviderRuntimeStats()}  # type: ignore[attr-defined]
+    orchestrator = SearchOrchestrator(
+        registry=registry,
+        analysis_service=StubAnalysisService(analysis_max_concurrency=4),
+    )
+
+    events = [event async for event in orchestrator.stream_search(SearchRequest(brand="BMW"))]
+    completed_index = next(
+        index
+        for index, event in enumerate(events)
+        if event["event"] == "progress"
+        and event.get("provider") == "autoscout24"
+        and event.get("status") == "completed"
+    )
+    result_indices = [
+        index
+        for index, event in enumerate(events)
+        if event["event"] == "result"
+        and event.get("listing", {}).get("provider") == "autoscout24"
+    ]
+
+    assert len(result_indices) == 3
+    assert all(index < completed_index for index in result_indices)
 
 
 @pytest.mark.asyncio

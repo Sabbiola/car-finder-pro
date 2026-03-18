@@ -1,5 +1,8 @@
 import http from "k6/http";
 import { check } from "k6";
+import { Rate } from "k6/metrics";
+
+const streamCompletionRate = new Rate("stream_completion_rate");
 
 const BASE_URL = __ENV.FASTAPI_BASE_URL || "http://localhost:8000";
 
@@ -8,6 +11,7 @@ export const options = {
     http_req_duration: ["p(95)<5000"],
     checks: ["rate>0.98"],
     http_req_failed: ["rate<0.02"],
+    stream_completion_rate: ["rate>=0.98"],
   },
   scenarios: {
     search_sync: {
@@ -65,8 +69,10 @@ export function syncSearch() {
 
 export function streamSearch() {
   const response = http.post(`${BASE_URL}/api/search/stream`, PAYLOAD, PARAMS);
+  const hasCompleteEvent = response.body.includes("event: complete");
+  streamCompletionRate.add(hasCompleteEvent);
   check(response, {
     "stream status ok": (r) => r.status === 200,
-    "stream completion present": (r) => r.body.includes("event: complete"),
+    "stream completion present": () => hasCompleteEvent,
   });
 }

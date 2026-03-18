@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { SearchFiltersState } from "@/components/SearchFilters";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useSavedSearches } from "@/hooks/useSavedSearches";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,14 +19,11 @@ import { getRuntimeConfig } from "@/lib/runtimeConfig";
 import { toCardListing } from "@/lib/toCardListing";
 import { deactivateAlertApi, listAlertsApi } from "@/services/api/alerts";
 
-// Cast to any to bypass incomplete generated table types.
-const sb = supabase as any;
-
 const CLIENT_ID_KEY = "car-finder-client-id";
 
 function getClientId(): string {
   const existing = localStorage.getItem(CLIENT_ID_KEY);
-  if (existing) return existing;
+  if (existing) {return existing;}
   const generated =
     typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
@@ -50,17 +47,59 @@ interface AlertRow {
   } | null;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object";
+}
+
+function normalizeCarListingSummary(value: unknown): AlertRow["car_listings"] {
+  const maybeRecord: unknown = Array.isArray(value) ? value[0] : value;
+  if (!isRecord(maybeRecord)) {
+    return null;
+  }
+  const title = typeof maybeRecord.title === "string" ? maybeRecord.title : "";
+  const price = typeof maybeRecord.price === "number" ? maybeRecord.price : 0;
+  const imageUrl = typeof maybeRecord.image_url === "string" ? maybeRecord.image_url : null;
+  return { title, price, image_url: imageUrl };
+}
+
+function parseAlertRow(value: unknown): AlertRow | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  if (
+    typeof value.id !== "string" ||
+    typeof value.listing_id !== "string" ||
+    typeof value.target_price !== "number" ||
+    typeof value.is_active !== "boolean" ||
+    typeof value.created_at !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    id: value.id,
+    listing_id: value.listing_id,
+    target_price: value.target_price,
+    is_active: value.is_active,
+    notified_at: typeof value.notified_at === "string" ? value.notified_at : null,
+    created_at: value.created_at,
+    notification_status:
+      typeof value.notification_status === "string" ? value.notification_status : undefined,
+    car_listings: normalizeCarListingSummary(value.car_listings),
+  };
+}
+
 function filtersLabel(filters: SearchFiltersState): string {
   const parts: string[] = [];
-  if (filters.brand) parts.push(filters.brand);
-  if (filters.model) parts.push(filters.model);
+  if (filters.brand) {parts.push(filters.brand);}
+  if (filters.model) {parts.push(filters.model);}
   if (filters.yearMin || filters.yearMax) {
     parts.push(`${filters.yearMin || ""}-${filters.yearMax || ""}`);
   }
   if (filters.priceMax) {
     parts.push(`max EUR ${Number(filters.priceMax).toLocaleString("it-IT")}`);
   }
-  if (filters.fuel) parts.push(filters.fuel);
+  if (filters.fuel) {parts.push(filters.fuel);}
   return parts.length ? parts.join(" | ") : "Tutti i filtri";
 }
 
@@ -70,7 +109,7 @@ export default function Profile() {
   const navigate = useNavigate();
   const { favorites } = useFavorites();
   const { searches, remove: removeSearch } = useSavedSearches();
-  const isFastApiMode = runtime.backendMode === "fastapi" && !!runtime.apiBaseUrl;
+  const isFastApiMode = runtime.backendMode === "fastapi";
 
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(false);
@@ -79,7 +118,7 @@ export default function Profile() {
   const [activeTab, setActiveTab] = useState("info");
 
   useEffect(() => {
-    if (activeTab !== "alerts" || !user) return;
+    if (activeTab !== "alerts" || !user) {return;}
     setAlertsLoading(true);
     const load = async () => {
       try {
@@ -91,14 +130,14 @@ export default function Profile() {
               listing_id: entry.alert.listing_id,
               target_price: entry.alert.target_price,
               is_active: entry.alert.is_active,
-              notified_at: entry.alert.notified_at || null,
+              notified_at: entry.alert.notified_at ?? null,
               created_at: entry.alert.created_at,
               notification_status: entry.notification_status,
               car_listings: entry.alert.listing
                 ? {
-                    title: entry.alert.listing.title || "",
-                    price: entry.alert.listing.price || 0,
-                    image_url: entry.alert.listing.image_url || null,
+                    title: entry.alert.listing.title ?? "",
+                    price: entry.alert.listing.price ?? 0,
+                    image_url: entry.alert.listing.image_url ?? null,
                   }
                 : null,
             })),
@@ -106,14 +145,22 @@ export default function Profile() {
           return;
         }
 
-        const { data } = await sb
+        const { data } = await supabase
           .from("price_alerts")
           .select(
             "id, listing_id, target_price, is_active, notified_at, created_at, car_listings(title, price, image_url)",
           )
           .eq("user_id", user.id)
           .order("created_at", { ascending: false });
-        setAlerts((data as AlertRow[] | null) || []);
+
+        const rawRows: unknown[] = Array.isArray(data) ? (data as unknown[]) : [];
+        const rows = rawRows
+          .map((entry) => parseAlertRow(entry))
+          .filter((entry): entry is AlertRow => entry !== null);
+        setAlerts(rows);
+      } catch (error) {
+        console.error("[Profile] Failed to load alerts:", error);
+        setAlerts([]);
       } finally {
         setAlertsLoading(false);
       }
@@ -122,15 +169,19 @@ export default function Profile() {
   }, [activeTab, isFastApiMode, user]);
 
   useEffect(() => {
-    if (activeTab !== "favorites" || !user) return;
+    if (activeTab !== "favorites" || !user) {return;}
     if (!favorites.length) {
       setFavListings([]);
       return;
     }
     setFavLoading(true);
-    fetchListingsByIds(favorites)
+    void fetchListingsByIds(favorites)
       .then((data) => {
-        setFavListings(data || []);
+        setFavListings(data);
+      })
+      .catch((error) => {
+        console.error("[Profile] Failed to load favorite listings:", error);
+        setFavListings([]);
       })
       .finally(() => setFavLoading(false));
   }, [activeTab, favorites, user]);
@@ -146,7 +197,7 @@ export default function Profile() {
     );
   }
 
-  if (!user) return <Navigate to="/" replace />;
+  if (!user) {return <Navigate to="/" replace />;}
 
   const initials = user.email ? user.email.slice(0, 2).toUpperCase() : "U";
   const joinedDate = new Date(user.created_at).toLocaleDateString("it-IT", {
@@ -159,7 +210,7 @@ export default function Profile() {
     if (isFastApiMode) {
       await deactivateAlertApi(id, { userId: user.id, clientId: getClientId() });
     } else {
-      await sb.from("price_alerts").delete().eq("id", id);
+      await supabase.from("price_alerts").delete().eq("id", id);
     }
     setAlerts((prev) => prev.filter((item) => item.id !== id));
   };
@@ -168,12 +219,12 @@ export default function Profile() {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
       if (key === "isNew") {
-        if (value === true) params.set("isNew", "true");
-        else if (value === false) params.set("isNew", "false");
+        if (value === true) {params.set("isNew", "true");}
+        else if (value === false) {params.set("isNew", "false");}
         return;
       }
       if (Array.isArray(value)) {
-        if (value.length) params.set(key, value.join(","));
+        if (value.length) {params.set(key, value.join(","));}
         return;
       }
       if (value !== "" && value !== null && value !== undefined) {
@@ -369,7 +420,9 @@ export default function Profile() {
                       variant="ghost"
                       size="icon"
                       className="rounded-xl h-8 w-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => removeSearch(search.id)}
+                      onClick={() => {
+                        void removeSearch(search.id);
+                      }}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>

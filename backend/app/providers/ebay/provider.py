@@ -67,6 +67,7 @@ class EbayProvider(BaseProvider):
         model_name = request.model or "320d"
         return [
             VehicleListing(
+                id="33333333-3333-4333-8333-333333333333",
                 provider="ebay",
                 market="IT",
                 url="https://stub.ebay.local/item-1",
@@ -84,6 +85,9 @@ class EbayProvider(BaseProvider):
                 city="Torino",
                 country="IT",
                 images=["https://images.example.com/ebay-stub.jpg"],
+                color="Nero",
+                doors=4,
+                emission_class="Euro 6",
                 seller_type="dealer",
             )
         ]

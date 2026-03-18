@@ -5,7 +5,7 @@ import Header from "@/components/Header";
 import { fetchListingsByIds } from "@/lib/api/fetchByIds";
 import type { CarListing, ListingAnalysis } from "@/lib/api/listings";
 import { priceRatingConfig } from "@/lib/rating-config";
-import { getRuntimeConfig } from "@/lib/runtimeConfig";
+import { getFastApiBaseUrlOrThrow, getRuntimeConfig } from "@/lib/runtimeConfig";
 import { analyzeListing } from "@/services/api/listingAnalysis";
 
 import { FALLBACK_IMAGE } from "@/lib/constants";
@@ -40,6 +40,7 @@ const rows: RowDef[] = [
   { label: "Porte", get: (c) => c.doors ?? "—" },
   {
     label: "Rating prezzo",
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     get: (c) => priceRatingConfig[c.price_rating || "normal"]?.label || "—",
   },
   { label: "Posizione", get: (c) => c.location || "—" },
@@ -50,7 +51,7 @@ function findBestIndex(values: (number | null)[], mode: "min" | "max"): number |
     v: number;
     i: number;
   }[];
-  if (nums.length < 2) return null;
+  if (nums.length < 2) {return null;}
   const best =
     mode === "min"
       ? nums.reduce((a, b) => (a.v < b.v ? a : b))
@@ -61,9 +62,11 @@ function findBestIndex(values: (number | null)[], mode: "min" | "max"): number |
 const Confronta = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const ids = (searchParams.get("ids") || "").split(",").filter(Boolean);
+  const idsParam = searchParams.get("ids") || "";
+  const ids = idsParam.split(",").filter(Boolean);
+  const idsKey = ids.join(",");
   const [cars, setCars] = useState<CarListing[]>([]);
-  const [analysesById, setAnalysesById] = useState<Record<string, ListingAnalysis>>({});
+  const [analysesById, setAnalysesById] = useState<Partial<Record<string, ListingAnalysis>>>({});
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
@@ -82,26 +85,28 @@ const Confronta = () => {
       .then(setCars)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [ids.join(",")]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey]);
 
   useEffect(() => {
     const runtime = getRuntimeConfig();
-    if (runtime.backendMode !== "fastapi" || !runtime.apiBaseUrl || cars.length === 0) return;
+    if (runtime.backendMode !== "fastapi" || cars.length === 0) {return;}
+    const apiBaseUrl = getFastApiBaseUrlOrThrow("Compare analysis");
 
     let cancelled = false;
     Promise.all(
       cars.map(async (car) => ({
         id: car.id,
-        analysis: await analyzeListing(runtime.apiBaseUrl!, {
+        analysis: await analyzeListing(apiBaseUrl, {
           listing_id: car.id,
           include: ["deal", "trust", "negotiation", "ownership"],
         }),
       })),
     )
       .then((entries) => {
-        if (cancelled) return;
+        if (cancelled) {return;}
         setAnalysesById(
-          entries.reduce<Record<string, ListingAnalysis>>((acc, entry) => {
+          entries.reduce<Partial<Record<string, ListingAnalysis>>>((acc, entry) => {
             acc[entry.id] = entry.analysis;
             return acc;
           }, {}),
@@ -199,7 +204,7 @@ const Confronta = () => {
                   {rows.map((row, ri) => {
                     const bestIdx =
                       row.bestMode && row.numericGet
-                        ? findBestIndex(cars.map(row.numericGet!), row.bestMode)
+                        ? findBestIndex(cars.map(row.numericGet), row.bestMode)
                         : null;
 
                     return (

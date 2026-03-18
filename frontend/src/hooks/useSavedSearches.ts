@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import type { SearchFiltersState } from "@/components/SearchFilters";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 import { getRuntimeConfig } from "@/lib/runtimeConfig";
 import {
   createUserSavedSearch,
@@ -20,7 +20,23 @@ const LS_KEY = "savedSearches";
 
 function readFromStorage(): SavedSearch[] {
   try {
-    return JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+    const parsed: unknown = JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter((item): item is SavedSearch => {
+      if (!item || typeof item !== "object") {
+        return false;
+      }
+      const candidate = item as Record<string, unknown>;
+      return (
+        typeof candidate.id === "string" &&
+        typeof candidate.name === "string" &&
+        typeof candidate.createdAt === "string" &&
+        !!candidate.filters &&
+        typeof candidate.filters === "object"
+      );
+    });
   } catch {
     return [];
   }
@@ -29,7 +45,7 @@ function readFromStorage(): SavedSearch[] {
 export function useSavedSearches() {
   const { user } = useAuth();
   const runtimeConfig = getRuntimeConfig();
-  const useBackendApi = runtimeConfig.backendMode === "fastapi" && !!runtimeConfig.apiBaseUrl;
+  const useBackendApi = runtimeConfig.backendMode === "fastapi";
   const [searches, setSearches] = useState<SavedSearch[]>(readFromStorage);
 
   // Load from Supabase when logged in
@@ -39,21 +55,24 @@ export function useSavedSearches() {
       return;
     }
     if (useBackendApi) {
-      listUserSavedSearches(user.id)
+      void listUserSavedSearches(user.id)
         .then((data) =>
           setSearches(
             data.map((r) => ({
               id: r.id,
               name: r.name,
-              filters: r.filters as SearchFiltersState,
+              filters: r.filters,
               createdAt: r.created_at,
             })),
           ),
         )
-        .catch(() => setSearches([]));
+        .catch((error) => {
+          console.error("[useSavedSearches] Failed to load saved searches via backend API:", error);
+          setSearches([]);
+        });
       return;
     }
-    supabase
+    void supabase
       .from("user_saved_searches")
       .select("id, name, filters, created_at")
       .eq("user_id", user.id)
@@ -80,7 +99,7 @@ export function useSavedSearches() {
         const entry: SavedSearch = {
           id: data.id,
           name: data.name,
-          filters: data.filters as SearchFiltersState,
+          filters: data.filters,
           createdAt: data.created_at,
         };
         setSearches((prev) => [entry, ...prev].slice(0, 20));

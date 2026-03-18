@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from app.core.observability import log_event
 from app.core.settings import get_settings
+from app.core.metrics import get_runtime_metrics
 from app.core.dependencies import get_market_repository
 from app.models.alerts import (
     AlertListingSummary,
@@ -137,7 +138,8 @@ async def process_alerts(
 ) -> ProcessPriceAlertsResponse:
     settings = get_settings()
     expected_token = (settings.alerts_processor_token or "").strip()
-    if expected_token and x_alerts_token != expected_token:
+    provided_token = (x_alerts_token or "").strip()
+    if expected_token and provided_token != expected_token:
         raise HTTPException(status_code=401, detail="Invalid alerts processor token.")
 
     processor = PriceAlertProcessor(repository=repository)
@@ -146,8 +148,18 @@ async def process_alerts(
         limit=request.limit,
         idempotency_key=request.idempotency_key,
     )
+    get_runtime_metrics().record_alerts_processor_run(
+        scanned=result.scanned,
+        triggered=result.triggered,
+        notified=result.notified,
+        failed=result.failed,
+        dry_run=result.dry_run,
+        idempotent_replay=result.idempotent_replay,
+    )
     log_event(
         "price_alert_process_completed",
+        run_id=result.run_id,
+        idempotent_replay=result.idempotent_replay,
         scanned=result.scanned,
         triggered=result.triggered,
         notified=result.notified,

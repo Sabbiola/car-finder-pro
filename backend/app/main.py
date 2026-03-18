@@ -3,6 +3,9 @@ from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from starlette.requests import Request
 
 from app.api.alerts import router as alerts_router
@@ -18,6 +21,7 @@ from app.core.observability import configure_logging, log_event
 from app.core.request_context import set_request_id
 from app.core.settings import get_settings
 from app.core.metrics import get_runtime_metrics
+from app.core.rate_limiter import limiter
 
 
 settings = get_settings()
@@ -32,6 +36,9 @@ app = FastAPI(
     version="0.1.0",
     root_path=settings.fastapi_root_path,
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

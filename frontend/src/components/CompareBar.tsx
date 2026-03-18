@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { X, GitCompare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+
 import { useCompare } from "@/hooks/useCompare";
 import { fetchListingsByIds } from "@/lib/api/fetchByIds";
 import type { CarListing } from "@/lib/api/listings";
@@ -30,7 +31,6 @@ const CompareBar = () => {
           className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/60 bg-background/95 backdrop-blur-xl shadow-[0_-4px_32px_rgba(0,0,0,0.10)] dark:shadow-[0_-4px_32px_rgba(0,0,0,0.4)]"
         >
           <div className="container flex items-center justify-between h-16 gap-4">
-            {/* Mini preview auto */}
             <div className="flex items-center gap-2 overflow-x-auto flex-1 min-w-0">
               {previews.map((car) => (
                 <div
@@ -51,7 +51,9 @@ const CompareBar = () => {
                     <div className="text-[10px] font-semibold leading-none max-w-[80px] truncate">
                       {car.brand} {car.model}
                     </div>
-                    <div className="text-[9px] font-bold">€{car.price.toLocaleString("it-IT")}</div>
+                    <div className="text-[9px] font-bold">
+                      EUR {car.price.toLocaleString("it-IT")}
+                    </div>
                   </div>
                   <button
                     onClick={() => removeFromCompare(car.id)}
@@ -64,7 +66,6 @@ const CompareBar = () => {
               ))}
             </div>
 
-            {/* Azioni */}
             <div className="flex items-center gap-3 flex-shrink-0">
               <button
                 onClick={clearCompare}

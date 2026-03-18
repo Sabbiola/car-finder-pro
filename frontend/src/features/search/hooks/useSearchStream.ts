@@ -44,7 +44,7 @@ export function useSearchStream<TPayload = unknown, TListing = unknown>() {
           setState((prev) => {
             const nextEvents = [...prev.events, event];
             const nextResults =
-              event.event === "result" ? [...prev.results, event.listing as TListing] : prev.results;
+              event.event === "result" ? [...prev.results, event.listing] : prev.results;
             return {
               ...prev,
               events: nextEvents,

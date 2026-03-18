@@ -2,15 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const runtimeConfigMock = vi.fn();
 const invokeMock = vi.fn();
+type RuntimeConfigStub = { backendMode: "fastapi" | "supabase"; apiBaseUrl: string | null };
 
 vi.mock("@/lib/runtimeConfig", () => ({
-  getRuntimeConfig: () => runtimeConfigMock(),
+  getRuntimeConfig: () => runtimeConfigMock() as RuntimeConfigStub,
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     functions: {
-      invoke: (...args: unknown[]) => invokeMock(...args),
+      invoke: (...args: unknown[]) => invokeMock(...args) as unknown,
     },
   },
 }));
@@ -71,6 +72,18 @@ describe("scrapeListings fastapi mode", () => {
   it("fails when no migrated fastapi providers are selected", async () => {
     await expect(scrapeListings(makeFilters({ sources: ["legacy-only"] }))).rejects.toThrow(
       "No FastAPI providers selected",
+    );
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when fastapi mode is selected without API base URL", async () => {
+    runtimeConfigMock.mockReturnValue({
+      backendMode: "fastapi",
+      apiBaseUrl: null,
+    });
+
+    await expect(scrapeListings(makeFilters({ sources: ["autoscout24"] }))).rejects.toThrow(
+      "Search requires VITE_API_BASE_URL when backendMode=fastapi.",
     );
     expect(invokeMock).not.toHaveBeenCalled();
   });

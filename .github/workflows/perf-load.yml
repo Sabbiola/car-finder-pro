@@ -18,4 +18,12 @@ jobs:
       - name: Run search load test
         env:
           FASTAPI_BASE_URL: ${{ secrets.FASTAPI_STAGING_BASE_URL }}
-        run: k6 run backend/perf/search-load.js
+        run: k6 run --summary-export=perf-load-summary.json backend/perf/search-load.js
+
+      - name: Upload perf summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-load-summary
+          path: perf-load-summary.json
+          if-no-files-found: ignore

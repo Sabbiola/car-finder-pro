@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { lazy, Suspense, useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { ArrowUpDown, Loader2, LayoutGrid, Map, Link2, Check } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import {
@@ -10,10 +10,9 @@ import {
 } from "@/components/ui/select";
 import Header from "@/components/Header";
 import ApiConfigBanner from "@/components/ApiConfigBanner";
-import SearchFilters, { SearchFiltersState } from "@/components/SearchFilters";
+import SearchFilters, { type SearchFiltersState } from "@/components/SearchFilters";
 import CarCardSkeleton from "@/components/CarCardSkeleton";
 import ActiveFilterChips from "@/components/ActiveFilterChips";
-import ListingsMap from "@/components/ListingsMap";
 import ListingResultCard from "@/features/results/components/ListingResultCard";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -29,6 +28,8 @@ import { useToast } from "@/hooks/use-toast";
 import { sourceLabels, sourceColors } from "@/lib/mock-data";
 import { VALID_SORT_OPTIONS, type SortOption, PAGE_SIZE, CACHE_TTL_HOURS } from "@/lib/constants";
 import { getRuntimeConfig } from "@/lib/runtimeConfig";
+
+const ListingsMap = lazy(() => import("@/components/ListingsMap"));
 
 const sortLabels: Record<SortOption, string> = {
   "price-asc": "Prezzo crescente",
@@ -47,41 +48,48 @@ function parseSortParam(raw: string | null): SortOption {
 }
 
 function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
+  const sellerTypeParam = params.get("sellerType");
+  const sellerType: SearchFiltersState["sellerType"] =
+    sellerTypeParam === "all" || sellerTypeParam === "private" || sellerTypeParam === "dealer"
+      ? sellerTypeParam
+      : "all";
   const sourcesRaw = params.get("sources");
   const sources = sourcesRaw
     ? sourcesRaw.split(",").filter((s) => s.length > 0)
     : ["autoscout24", "subito", "ebay", "automobile", "brumbrum"];
 
   return {
-    brand: params.get("brand") || "",
-    model: params.get("model") || "",
-    trim: params.get("trim") || "",
-    yearMin: params.get("yearMin") || "",
-    yearMax: params.get("yearMax") || "",
-    priceMin: params.get("priceMin") || "",
-    priceMax: params.get("priceMax") || "",
-    kmMin: params.get("kmMin") || "",
-    kmMax: params.get("kmMax") || "",
-    fuel: params.get("fuel") || "",
-    transmission: params.get("transmission") || "",
+    brand: params.get("brand") ?? "",
+    model: params.get("model") ?? "",
+    trim: params.get("trim") ?? "",
+    yearMin: params.get("yearMin") ?? "",
+    yearMax: params.get("yearMax") ?? "",
+    priceMin: params.get("priceMin") ?? "",
+    priceMax: params.get("priceMax") ?? "",
+    kmMin: params.get("kmMin") ?? "",
+    kmMax: params.get("kmMax") ?? "",
+    fuel: params.get("fuel") ?? "",
+    transmission: params.get("transmission") ?? "",
     isNew: params.get("isNew") === "true" ? true : params.get("isNew") === "false" ? false : null,
     sources,
-    color: params.get("color") || "",
-    doors: params.get("doors") || "",
-    bodyType: params.get("bodyType") || "",
-    location: params.get("location") || "",
-    sellerType: (params.get("sellerType") as "all" | "private" | "dealer") || "all",
-    emissionClass: params.get("emissionClass") || "",
+    color: params.get("color") ?? "",
+    doors: params.get("doors") ?? "",
+    bodyType: params.get("bodyType") ?? "",
+    location: params.get("location") ?? "",
+    sellerType,
+    emissionClass: params.get("emissionClass") ?? "",
   };
 }
 
 function mergeUniqueListings(left: CarListing[], right: CarListing[]): CarListing[] {
-  const map = new Map<string, CarListing>();
+  const byKey: Record<string, CarListing> = {};
   for (const listing of [...left, ...right]) {
     const key = buildListingIdentityKey(listing);
-    if (!map.has(key)) map.set(key, listing);
+    if (!Object.prototype.hasOwnProperty.call(byKey, key)) {
+      byKey[key] = listing;
+    }
   }
-  return [...map.values()];
+  return Object.values(byKey);
 }
 
 const SearchResults = () => {
@@ -121,10 +129,10 @@ const SearchResults = () => {
     setStreamErrors([]);
     try {
       const runtime = getRuntimeConfig();
-      const useFastApiStream = runtime.backendMode === "fastapi" && !!runtime.apiBaseUrl;
+      const useFastApiStream = runtime.backendMode === "fastapi";
 
       if (useFastApiStream) {
-        const selectedSources = currentFilters.sources?.length
+        const selectedSources = currentFilters.sources.length
           ? currentFilters.sources
           : ["autoscout24", "subito", "ebay", "automobile", "brumbrum"];
         const coreSources = selectedSources.filter((s) => FASTAPI_CORE_SOURCES.includes(s as (typeof FASTAPI_CORE_SOURCES)[number]));
@@ -147,11 +155,11 @@ const SearchResults = () => {
           await streamListings(
             { ...currentFilters, sources: coreSources },
             (event) => {
-              if (isStaleRequest()) return;
+              if (isStaleRequest()) {return;}
               if (event.event === "progress") {
                 setStreamProviderStatus((prev) => ({ ...prev, [event.provider]: event.status }));
                 if (typeof event.fetched_count === "number") {
-                  setStreamProviderCount((prev) => ({ ...prev, [event.provider]: event.fetched_count || 0 }));
+                  setStreamProviderCount((prev) => ({ ...prev, [event.provider]: event.fetched_count ?? 0 }));
                 }
               } else if (event.event === "result") {
                 streamedResults = mergeUniqueListings(streamedResults, [event.listing]);
@@ -161,7 +169,7 @@ const SearchResults = () => {
                   streamedResults = reconcileListingsByResultKeys(streamedResults, event.final_result_keys);
                   setListings(streamedResults);
                 }
-              } else if (event.event === "error") {
+              } else {
                 const formatted =
                   event.code === "provider_excluded_unsupported_filter"
                     ? `${event.provider}: escluso per filtri non supportati`
@@ -175,7 +183,7 @@ const SearchResults = () => {
             streamController.signal,
           );
         }
-        if (isStaleRequest()) return;
+        if (isStaleRequest()) {return;}
 
         const finalResults = streamedResults;
         setListings(finalResults);
@@ -191,7 +199,7 @@ const SearchResults = () => {
 
       if (!forceRefresh) {
         const existing = await fetchListings(currentFilters);
-        if (isStaleRequest()) return;
+        if (isStaleRequest()) {return;}
         if (existing.length > 0) {
           const newestTs = Math.max(...existing.map((l) => new Date(l.scraped_at).getTime()));
           const ageHours = (Date.now() - newestTs) / 3_600_000;
@@ -208,17 +216,17 @@ const SearchResults = () => {
       }
       toast({ title: "Ricerca in corso...", description: "Scraping annunci reali dai portali" });
       const result = await scrapeListings(currentFilters);
-      if (isStaleRequest()) return;
-      if (result?.success) {
+      if (isStaleRequest()) {return;}
+      if (result.success) {
         const fresh = await fetchListings(currentFilters);
-        if (isStaleRequest()) return;
+        if (isStaleRequest()) {return;}
         setListings(fresh);
         setScraped(true);
         toast({ title: `${fresh.length} annunci trovati` });
       } else {
         toast({
           title: "Errore",
-          description: result?.error || "Scraping fallito",
+          description: result.error ?? "Scraping fallito",
           variant: "destructive",
         });
       }
@@ -227,9 +235,10 @@ const SearchResults = () => {
         return;
       }
       console.error("[SearchResults] Error fetching listings:", err);
+      const message = err instanceof Error ? err.message : "Impossibile caricare gli annunci";
       toast({
         title: "Errore",
-        description: "Impossibile caricare gli annunci",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -240,7 +249,7 @@ const SearchResults = () => {
   }, [toast]);
 
   useEffect(() => {
-    doSearch(filters);
+    void doSearch(filters);
   }, [doSearch, filters]);
 
   useEffect(() => {
@@ -281,8 +290,8 @@ const SearchResults = () => {
       case "best-deal":
         list.sort((a, b) => {
           const order: Record<string, number> = { best: 0, good: 1, normal: 2 };
-          const ra = order[a.price_rating || "normal"] ?? 2;
-          const rb = order[b.price_rating || "normal"] ?? 2;
+          const ra = order[a.price_rating ?? "normal"] ?? 2;
+          const rb = order[b.price_rating ?? "normal"] ?? 2;
           return ra !== rb ? ra - rb : a.price - b.price;
         });
         break;
@@ -294,17 +303,18 @@ const SearchResults = () => {
   const hasMore = visibleCount < results.length;
 
   const stats = useMemo(() => {
-    if (!results.length) return null;
+    if (!results.length) {return null;}
     const prices = results.map((r) => r.price);
     const kms = results.map((r) => r.km).filter((k) => k > 0);
     const fuelCounts = results.reduce(
       (acc, r) => {
-        if (r.fuel) acc[r.fuel] = (acc[r.fuel] || 0) + 1;
+        if (r.fuel) {acc[r.fuel] = (acc[r.fuel] ?? 0) + 1;}
         return acc;
       },
       {} as Record<string, number>,
     );
-    const topFuel = Object.entries(fuelCounts).sort((a, b) => b[1] - a[1])[0];
+    const fuelEntries = Object.entries(fuelCounts).sort((a, b) => b[1] - a[1]);
+    const topFuel = fuelEntries.length > 0 ? fuelEntries[0] : null;
     return {
       minPrice: Math.min(...prices),
       avgPrice: Math.round(prices.reduce((s, p) => s + p, 0) / prices.length),
@@ -317,10 +327,10 @@ const SearchResults = () => {
   // Infinite scroll sentinel
   useEffect(() => {
     const el = sentinelRef.current;
-    if (!el) return;
+    if (!el) {return;}
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore) setVisibleCount((c) => c + PAGE_SIZE);
+        if (entries[0].isIntersecting && hasMore) {setVisibleCount((c) => c + PAGE_SIZE);}
       },
       { rootMargin: "200px" },
     );
@@ -424,7 +434,9 @@ const SearchResults = () => {
             )}
             {!loading && scraped && (
               <button
-                onClick={() => doSearch(filters, true)}
+                onClick={() => {
+                  void doSearch(filters, true);
+                }}
                 className="text-xs text-muted-foreground hover:text-accent hover:underline transition-colors"
               >
                 Aggiorna
@@ -520,7 +532,15 @@ const SearchResults = () => {
         )}
 
         {viewMode === "map" ? (
-          <ListingsMap listings={results} />
+          <Suspense
+            fallback={
+              <div className="rounded-xl border border-border/70 bg-card p-6 text-center text-sm text-muted-foreground">
+                Caricamento mappa...
+              </div>
+            }
+          >
+            <ListingsMap listings={results} />
+          </Suspense>
         ) : loading && !scraped ? (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -557,7 +577,9 @@ const SearchResults = () => {
             <p className="text-sm font-semibold text-foreground">Nessun risultato</p>
             <p className="text-xs">Modifica i filtri di ricerca o cambia brand/modello</p>
             <button
-              onClick={() => doSearch(filters, true)}
+              onClick={() => {
+                void doSearch(filters, true);
+              }}
               className="text-xs text-violet-600 hover:underline mt-2 block mx-auto"
             >
               Riprova

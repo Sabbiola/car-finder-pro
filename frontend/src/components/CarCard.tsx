@@ -51,7 +51,7 @@ const CarCard = ({ listing, showCompare }: Props) => {
           }}
         />
         <div className="absolute top-2 left-2 flex flex-wrap gap-1 max-w-[70%]">
-          {(listing.allSources || [listing.source]).map((src) => (
+          {listing.allSources.map((src) => (
             <span
               key={src}
               className={`${sourceColors[src] || "bg-gray-500"} text-white text-[10px] font-semibold px-2.5 py-0.5 rounded-full shadow-sm`}

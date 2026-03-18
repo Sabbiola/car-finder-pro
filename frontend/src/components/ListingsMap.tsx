@@ -11,10 +11,27 @@ import type { CarListing } from "@/lib/api/listings";
 // ---------------------------------------------------------------------------
 const CACHE_KEY = "geo_cache_v1";
 
+interface NominatimItem {
+  lat: string;
+  lon: string;
+}
+
+function isNominatimItem(value: unknown): value is NominatimItem {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.lat === "string" && typeof candidate.lon === "string";
+}
+
+function isNominatimResultArray(value: unknown): value is NominatimItem[] {
+  return Array.isArray(value) && value.every(isNominatimItem);
+}
+
 function loadCache(): Map<string, [number, number] | null> {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return new Map();
+    if (!raw) {return new Map();}
     return new Map(JSON.parse(raw) as [string, [number, number] | null][]);
   } catch {
     return new Map();
@@ -33,12 +50,13 @@ const geocodeCache = loadCache();
 
 async function geocode(location: string): Promise<[number, number] | null> {
   const key = location.toLowerCase().trim();
-  if (geocodeCache.has(key)) return geocodeCache.get(key)!;
+  if (geocodeCache.has(key)) {return geocodeCache.get(key) ?? null;}
 
   try {
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(key + ", Italia")}&format=json&limit=1`;
     const res = await fetch(url, { headers: { "User-Agent": "car-finder-pro/1.0" } });
-    const data = await res.json();
+    const rawData: unknown = await res.json();
+    const data = isNominatimResultArray(rawData) ? rawData : [];
     const coords: [number, number] | null =
       data.length > 0 ? [parseFloat(data[0].lat), parseFloat(data[0].lon)] : null;
     geocodeCache.set(key, coords);
@@ -94,7 +112,7 @@ const ListingsMap = ({ listings }: Props) => {
 
   useEffect(() => {
     const toGeocode = listings.filter((l) => l.location);
-    if (!toGeocode.length) return;
+    if (!toGeocode.length) {return;}
 
     setGeoListings([]);
     setProgress({ done: 0, total: toGeocode.length });
@@ -106,22 +124,25 @@ const ListingsMap = ({ listings }: Props) => {
 
     const run = async () => {
       for (let i = 0; i < toGeocode.length; i += BATCH) {
-        if (!isMounted.current) return;
+        if (!isMounted.current) {return;}
         const batch = toGeocode.slice(i, i + BATCH);
-        const coordResults = await Promise.all(batch.map((l) => geocode(l.location!)));
+        const coordResults = await Promise.all(
+          batch.map((l) => geocode(l.location ?? "")),
+        );
         batch.forEach((listing, j) => {
-          if (coordResults[j]) results.push({ listing, coords: coordResults[j]! });
+          const coords = coordResults[j];
+          if (coords) {
+            results.push({ listing, coords });
+          }
         });
         done += batch.length;
-        if (isMounted.current) {
-          setProgress({ done, total: toGeocode.length });
-          setGeoListings([...results]);
-        }
+        setProgress({ done, total: toGeocode.length });
+        setGeoListings([...results]);
       }
-      if (isMounted.current) setProgress(null);
+      setProgress(null);
     };
 
-    run();
+    void run();
   }, [listings]);
 
   return (

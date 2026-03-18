@@ -8,15 +8,15 @@ import { fetchListingsBatch } from "@/services/api/userData";
  * Mantiene l'ordine dell'array originale (importante per "visti di recente").
  */
 export async function fetchListingsByIds(ids: string[]): Promise<CarListing[]> {
-  if (!ids.length) return [];
+  if (!ids.length) {return [];}
   const config = getRuntimeConfig();
-  if (config.backendMode === "fastapi" && config.apiBaseUrl) {
+  if (config.backendMode === "fastapi") {
     return fetchListingsBatch(ids);
   }
 
   const { data, error } = await supabase.from("car_listings").select("*").in("id", ids);
 
-  if (error) throw error;
+  if (error) {throw error;}
 
   const map = new Map((data as CarListing[]).map((l) => [l.id, l]));
   return ids.map((id) => map.get(id)).filter(Boolean) as CarListing[];

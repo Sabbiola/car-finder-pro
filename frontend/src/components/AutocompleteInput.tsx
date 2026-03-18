@@ -76,7 +76,7 @@ const AutocompleteInput = ({
   );
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (!suggestions.length) return;
+    if (!suggestions.length) {return;}
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setHighlightIndex((i) => Math.min(i + 1, suggestions.length - 1));
@@ -157,7 +157,7 @@ function getSuggestionsWithCatalog(
   brands: string[],
   modelsByBrand: Record<string, string[]>,
 ): Suggestion[] {
-  if (!query && !selectedBrand) return [];
+  if (!query && !selectedBrand) {return [];}
   const q = query.toLowerCase().trim();
 
   const results: Suggestion[] = [];
@@ -172,7 +172,7 @@ function getSuggestionsWithCatalog(
 
   const brandsToSearch = selectedBrand ? [selectedBrand] : brands;
   for (const brand of brandsToSearch) {
-    const models = modelsByBrand[brand] || [];
+    const models = modelsByBrand[brand] ?? [];
     for (const model of models) {
       const full = `${brand} ${model}`.toLowerCase();
       if (q && (model.toLowerCase().includes(q) || full.includes(q))) {

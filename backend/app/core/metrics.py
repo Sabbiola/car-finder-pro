@@ -36,6 +36,17 @@ class _AnalysisSeries:
     cache_misses: int = 0
 
 
+@dataclass
+class _AlertsProcessorSeries:
+    runs: int = 0
+    dry_runs: int = 0
+    idempotent_replays: int = 0
+    scanned: int = 0
+    triggered: int = 0
+    notified: int = 0
+    failed: int = 0
+
+
 class RuntimeMetrics:
     def __init__(self) -> None:
         self._lock = Lock()
@@ -43,6 +54,7 @@ class RuntimeMetrics:
         self._search_stream = _SearchSeries()
         self._http_by_path: dict[str, _HttpSeries] = {}
         self._analysis = _AnalysisSeries()
+        self._alerts_processor = _AlertsProcessorSeries()
         self._stream_started = 0
         self._stream_completed = 0
 
@@ -85,6 +97,27 @@ class RuntimeMetrics:
     def record_stream_completed(self) -> None:
         with self._lock:
             self._stream_completed += 1
+
+    def record_alerts_processor_run(
+        self,
+        *,
+        scanned: int,
+        triggered: int,
+        notified: int,
+        failed: int,
+        dry_run: bool,
+        idempotent_replay: bool,
+    ) -> None:
+        with self._lock:
+            self._alerts_processor.runs += 1
+            if dry_run:
+                self._alerts_processor.dry_runs += 1
+            if idempotent_replay:
+                self._alerts_processor.idempotent_replays += 1
+            self._alerts_processor.scanned += max(scanned, 0)
+            self._alerts_processor.triggered += max(triggered, 0)
+            self._alerts_processor.notified += max(notified, 0)
+            self._alerts_processor.failed += max(failed, 0)
 
     @staticmethod
     def _search_snapshot(series: _SearchSeries) -> dict[str, float | int | None]:
@@ -129,6 +162,23 @@ class RuntimeMetrics:
             "cache_misses": series.cache_misses,
         }
 
+    @staticmethod
+    def _alerts_processor_snapshot(series: _AlertsProcessorSeries) -> dict[str, object]:
+        trigger_total = series.triggered
+        return {
+            "runs": series.runs,
+            "dry_runs": series.dry_runs,
+            "idempotent_replays": series.idempotent_replays,
+            "scanned_total": series.scanned,
+            "triggered_total": trigger_total,
+            "notified_total": series.notified,
+            "failed_total": series.failed,
+            "notification_success_rate": round((series.notified / trigger_total), 4)
+            if trigger_total
+            else 1.0,
+            "failure_rate": round((series.failed / trigger_total), 4) if trigger_total else 0.0,
+        }
+
     def snapshot(self) -> dict[str, object]:
         with self._lock:
             http_snapshot = {
@@ -141,6 +191,7 @@ class RuntimeMetrics:
                 },
                 "http": http_snapshot,
                 "analysis": self._analysis_snapshot(self._analysis),
+                "alerts_processor": self._alerts_processor_snapshot(self._alerts_processor),
                 "stream_completion": {
                     "started": self._stream_started,
                     "completed": self._stream_completed,
