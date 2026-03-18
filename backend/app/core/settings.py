@@ -1,7 +1,8 @@
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -11,7 +12,7 @@ class Settings(BaseSettings):
     env: str = "development"
     log_level: str = "info"
     fastapi_root_path: str = ""
-    cors_origins: list[str] = Field(
+    cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://localhost:8080", "http://localhost:5173"]
     )
     request_timeout_seconds: int = 20
@@ -49,7 +50,14 @@ class Settings(BaseSettings):
     @classmethod
     def parse_origins(cls, value: object) -> list[str]:
         if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
+            raw = value.strip()
+            if raw.startswith("[") and raw.endswith("]"):
+                inner = raw[1:-1].strip()
+                if not inner:
+                    return []
+                parts = [item.strip() for item in inner.split(",") if item.strip()]
+                return [item.strip("\"' ").strip() for item in parts if item.strip("\"' ").strip()]
+            return [item.strip() for item in raw.split(",") if item.strip()]
         if isinstance(value, list):
             return [str(item).strip() for item in value if str(item).strip()]
         return ["http://localhost:8080", "http://localhost:5173"]
