@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 import { getRuntimeConfig } from "@/lib/runtimeConfig";
 import {
   addUserFavorite,
@@ -21,7 +21,7 @@ function readFromStorage(): string[] {
 export function useFavorites() {
   const { user } = useAuth();
   const runtimeConfig = getRuntimeConfig();
-  const useBackendApi = runtimeConfig.backendMode === "fastapi" && !!runtimeConfig.apiBaseUrl;
+  const useBackendApi = runtimeConfig.backendMode === "fastapi";
   const [favorites, setFavorites] = useState<string[]>(readFromStorage);
 
   // Load from Supabase when logged in, localStorage otherwise
@@ -33,7 +33,10 @@ export function useFavorites() {
     if (useBackendApi) {
       listUserFavorites(user.id)
         .then((ids) => setFavorites(ids))
-        .catch(() => setFavorites([]));
+        .catch((error) => {
+          console.error("[useFavorites] Failed to load favorites via backend API:", error);
+          setFavorites([]);
+        });
       return;
     }
     supabase

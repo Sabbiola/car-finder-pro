@@ -102,6 +102,7 @@ class AutoScout24Provider(BaseProvider):
         model_name = request.model or "320d"
         return [
             VehicleListing(
+                id="11111111-1111-4111-8111-111111111111",
                 provider="autoscout24",
                 market="IT",
                 url="https://stub.autoscout24.local/listing-1",
@@ -118,6 +119,10 @@ class AutoScout24Provider(BaseProvider):
                 city="Milano",
                 country="IT",
                 images=["https://images.example.com/as24-stub.jpg"],
+                color="Nero",
+                doors=4,
+                emission_class="Euro 6",
+                seller_type="dealer",
             )
         ]
 

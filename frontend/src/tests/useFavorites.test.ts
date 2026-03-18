@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useFavorites } from "../hooks/useFavorites";
 
-vi.mock("../contexts/AuthContext", () => ({
+vi.mock("../contexts/useAuth", () => ({
   useAuth: () => ({ user: null }),
 }));
 

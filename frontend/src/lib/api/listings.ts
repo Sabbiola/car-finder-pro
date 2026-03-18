@@ -226,7 +226,14 @@ function getCacheKey(filters: SearchFiltersState): string {
 }
 
 function shouldUseFastApi(config: RuntimeConfig): boolean {
-  return config.backendMode === "fastapi" && !!config.apiBaseUrl;
+  return config.backendMode === "fastapi";
+}
+
+function requireFastApiBaseUrl(config: RuntimeConfig, context: string): string {
+  if (!config.apiBaseUrl) {
+    throw new Error(`${context} requires VITE_API_BASE_URL when backendMode=fastapi.`);
+  }
+  return config.apiBaseUrl;
 }
 
 function parseMaybeNumber(value: string): number | undefined {
@@ -492,13 +499,15 @@ function withSources(filters: SearchFiltersState, sources: string[]): SearchFilt
 export async function scrapeListings(filters: SearchFiltersState) {
   const cacheKey = getCacheKey(filters);
   const runtimeConfig = getRuntimeConfig();
-  if (!shouldUseFastApi(runtimeConfig) || !runtimeConfig.apiBaseUrl) {
+  if (!shouldUseFastApi(runtimeConfig)) {
     return scrapeLegacy(filters);
   }
+  const apiBaseUrl = requireFastApiBaseUrl(runtimeConfig, "Search");
 
   const { coreSources, legacySources } = splitSources(filters);
   const chunks: CarListing[][] = [];
   const providerErrors: string[] = [];
+  const fatalProviderErrors: string[] = [];
 
   if (!coreSources.length) {
     throw new Error("No FastAPI providers selected");
@@ -511,15 +520,17 @@ export async function scrapeListings(filters: SearchFiltersState) {
   }
 
   try {
-    chunks.push(await runFastApiSearch(withSources(filters, coreSources), runtimeConfig.apiBaseUrl));
+    chunks.push(await runFastApiSearch(withSources(filters, coreSources), apiBaseUrl));
   } catch (error) {
-    providerErrors.push(error instanceof Error ? error.message : "FastAPI search failed");
+    const message = error instanceof Error ? error.message : "FastAPI search failed";
+    providerErrors.push(message);
+    fatalProviderErrors.push(message);
   }
 
   const mergedCache = mergeListings(...chunks);
   mergedCacheByQuery.set(cacheKey, mergedCache);
-  if (providerErrors.length && mergedCache.length === 0) {
-    throw new Error(providerErrors.join(" | "));
+  if (fatalProviderErrors.length && mergedCache.length === 0) {
+    throw new Error(fatalProviderErrors.join(" | "));
   }
 
   return {
@@ -536,19 +547,21 @@ export async function streamListings(
   signal?: AbortSignal,
 ): Promise<void> {
   const runtimeConfig = getRuntimeConfig();
-  if (!shouldUseFastApi(runtimeConfig) || !runtimeConfig.apiBaseUrl) {
+  if (!shouldUseFastApi(runtimeConfig)) {
     throw new Error("Streaming is available only in FastAPI mode");
   }
+  const apiBaseUrl = requireFastApiBaseUrl(runtimeConfig, "Search stream");
   const { coreSources } = splitSources(filters);
   if (!coreSources.length) {
     throw new Error("No FastAPI-migrated providers selected for streaming");
   }
-  await streamFastApiSearch(withSources(filters, coreSources), runtimeConfig.apiBaseUrl, onEvent, signal);
+  await streamFastApiSearch(withSources(filters, coreSources), apiBaseUrl, onEvent, signal);
 }
 
 export async function fetchListings(filters: SearchFiltersState): Promise<CarListing[]> {
   const runtimeConfig = getRuntimeConfig();
-  if (shouldUseFastApi(runtimeConfig) && runtimeConfig.apiBaseUrl) {
+  if (shouldUseFastApi(runtimeConfig)) {
+    requireFastApiBaseUrl(runtimeConfig, "Search listings fetch");
     const cacheKey = getCacheKey(filters);
     let cached = mergedCacheByQuery.get(cacheKey);
     if (!cached?.length) {

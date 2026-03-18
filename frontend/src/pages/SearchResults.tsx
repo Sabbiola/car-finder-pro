@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { lazy, Suspense, useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { ArrowUpDown, Loader2, LayoutGrid, Map, Link2, Check } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import {
@@ -13,7 +13,6 @@ import ApiConfigBanner from "@/components/ApiConfigBanner";
 import SearchFilters, { SearchFiltersState } from "@/components/SearchFilters";
 import CarCardSkeleton from "@/components/CarCardSkeleton";
 import ActiveFilterChips from "@/components/ActiveFilterChips";
-import ListingsMap from "@/components/ListingsMap";
 import ListingResultCard from "@/features/results/components/ListingResultCard";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -29,6 +28,8 @@ import { useToast } from "@/hooks/use-toast";
 import { sourceLabels, sourceColors } from "@/lib/mock-data";
 import { VALID_SORT_OPTIONS, type SortOption, PAGE_SIZE, CACHE_TTL_HOURS } from "@/lib/constants";
 import { getRuntimeConfig } from "@/lib/runtimeConfig";
+
+const ListingsMap = lazy(() => import("@/components/ListingsMap"));
 
 const sortLabels: Record<SortOption, string> = {
   "price-asc": "Prezzo crescente",
@@ -121,7 +122,7 @@ const SearchResults = () => {
     setStreamErrors([]);
     try {
       const runtime = getRuntimeConfig();
-      const useFastApiStream = runtime.backendMode === "fastapi" && !!runtime.apiBaseUrl;
+      const useFastApiStream = runtime.backendMode === "fastapi";
 
       if (useFastApiStream) {
         const selectedSources = currentFilters.sources?.length
@@ -227,9 +228,10 @@ const SearchResults = () => {
         return;
       }
       console.error("[SearchResults] Error fetching listings:", err);
+      const message = err instanceof Error ? err.message : "Impossibile caricare gli annunci";
       toast({
         title: "Errore",
-        description: "Impossibile caricare gli annunci",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -520,7 +522,15 @@ const SearchResults = () => {
         )}
 
         {viewMode === "map" ? (
-          <ListingsMap listings={results} />
+          <Suspense
+            fallback={
+              <div className="rounded-xl border border-border/70 bg-card p-6 text-center text-sm text-muted-foreground">
+                Caricamento mappa...
+              </div>
+            }
+          >
+            <ListingsMap listings={results} />
+          </Suspense>
         ) : loading && !scraped ? (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (

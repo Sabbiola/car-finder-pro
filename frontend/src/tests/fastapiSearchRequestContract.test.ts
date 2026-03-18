@@ -45,5 +45,17 @@ describe("buildFastApiRequest", () => {
     expect(payload.doors).toBe(4);
     expect(payload.emission_class).toBe("Euro 6");
     expect(payload.seller_type).toBe("dealer");
+    expect(payload.private_only).toBe(false);
+  });
+
+  it("keeps additive compatibility via private_only when seller_type=private", () => {
+    const payload = buildFastApiRequest(
+      makeFilters({
+        sellerType: "private",
+      }),
+    );
+
+    expect(payload.seller_type).toBe("private");
+    expect(payload.private_only).toBe(true);
   });
 });

@@ -12,6 +12,7 @@ vi.mock("@/lib/runtimeConfig", () => ({
     backendMode: "fastapi",
     apiBaseUrl: "http://localhost:8000",
   }),
+  getFastApiBaseUrlOrThrow: () => "http://localhost:8000",
 }));
 
 vi.mock("@/services/api/listingAnalysis", () => ({

@@ -15,9 +15,123 @@ jobs:
           ALERTS_PROCESS_URL: ${{ secrets.ALERTS_PROCESS_URL }}
           ALERTS_PROCESSOR_TOKEN: ${{ secrets.ALERTS_PROCESSOR_TOKEN }}
         run: |
+          set -euo pipefail
           RUN_KEY="gha-$(date +%s)"
-          curl --fail --show-error --silent \
+          RESPONSE="$(curl --fail --show-error --silent \
             -X POST "${ALERTS_PROCESS_URL}" \
             -H "Content-Type: application/json" \
             -H "x-alerts-token: ${ALERTS_PROCESSOR_TOKEN}" \
-            --data "{\"dry_run\":false,\"limit\":200,\"idempotency_key\":\"${RUN_KEY}\"}"
+            --data "{\"dry_run\":false,\"limit\":200,\"idempotency_key\":\"${RUN_KEY}\"}")"
+          echo "${RESPONSE}" > alerts-process-response.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path("alerts-process-response.json").read_text(encoding="utf-8"))
+          required = ["run_id", "scanned", "triggered", "notified", "failed", "items", "dry_run"]
+          missing = [key for key in required if key not in payload]
+          if missing:
+              raise SystemExit(f"Missing fields in alerts processor response: {missing}")
+          items = payload.get("items")
+          if not isinstance(items, list):
+              raise SystemExit("alerts processor response 'items' must be a list")
+          if items:
+              item_required = {
+                  "alert_id",
+                  "listing_id",
+                  "target_price",
+                  "status",
+                  "attempt_number",
+                  "max_attempts",
+              }
+              first_item = items[0]
+              if not isinstance(first_item, dict):
+                  raise SystemExit("alerts processor item payload must be object")
+              item_missing = sorted(key for key in item_required if key not in first_item)
+              if item_missing:
+                  raise SystemExit(
+                      f"alerts processor item missing required fields: {item_missing}"
+                  )
+          triggered = int(payload.get("triggered", 0))
+          failed = int(payload.get("failed", 0))
+          if triggered > 0:
+              failure_rate = failed / triggered
+              if failure_rate > 0.6:
+                  raise SystemExit(
+                      f"Alerts processor failure rate too high ({failure_rate:.2%}) in scheduled run"
+                  )
+          print(
+              f"alerts-process run={payload['run_id']} scanned={payload['scanned']} "
+              f"triggered={payload['triggered']} notified={payload['notified']} failed={payload['failed']}"
+          )
+          PY
+
+      - name: Optional synthetic alerts smoke (create -> trigger -> list)
+        if: ${{ secrets.ALERTS_SMOKE_LISTING_ID != '' }}
+        env:
+          ALERTS_PROCESS_URL: ${{ secrets.ALERTS_PROCESS_URL }}
+          ALERTS_PROCESSOR_TOKEN: ${{ secrets.ALERTS_PROCESSOR_TOKEN }}
+          ALERTS_SMOKE_LISTING_ID: ${{ secrets.ALERTS_SMOKE_LISTING_ID }}
+        run: |
+          set -euo pipefail
+          ALERTS_BASE="${ALERTS_PROCESS_URL%/process}"
+          SMOKE_CLIENT_ID="gha-smoke-$(date +%s)"
+          CREATE_PAYLOAD="{\"listing_id\":\"${ALERTS_SMOKE_LISTING_ID}\",\"target_price\":9999999,\"client_id\":\"${SMOKE_CLIENT_ID}\"}"
+          CREATE_RESPONSE="$(curl --fail --show-error --silent \
+            -X POST "${ALERTS_BASE}" \
+            -H "Content-Type: application/json" \
+            --data "${CREATE_PAYLOAD}")"
+          echo "${CREATE_RESPONSE}" > alerts-smoke-create.json
+
+          PROCESS_RUN_KEY="gha-smoke-process-$(date +%s)"
+          PROCESS_RESPONSE="$(curl --fail --show-error --silent \
+            -X POST "${ALERTS_PROCESS_URL}" \
+            -H "Content-Type: application/json" \
+            -H "x-alerts-token: ${ALERTS_PROCESSOR_TOKEN}" \
+            --data "{\"dry_run\":false,\"limit\":200,\"idempotency_key\":\"${PROCESS_RUN_KEY}\"}")"
+          echo "${PROCESS_RESPONSE}" > alerts-smoke-process.json
+
+          LIST_RESPONSE="$(curl --fail --show-error --silent \
+            "${ALERTS_BASE}?client_id=${SMOKE_CLIENT_ID}")"
+          echo "${LIST_RESPONSE}" > alerts-smoke-list.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          created = json.loads(Path("alerts-smoke-create.json").read_text(encoding="utf-8"))
+          processed = json.loads(Path("alerts-smoke-process.json").read_text(encoding="utf-8"))
+          listed = json.loads(Path("alerts-smoke-list.json").read_text(encoding="utf-8"))
+
+          created_alert = (created or {}).get("alert") or {}
+          created_alert_id = created_alert.get("id")
+          if not created_alert_id:
+              raise SystemExit("Synthetic smoke did not return created alert id")
+
+          items = processed.get("items") or []
+          touched = any(item.get("alert_id") == created_alert_id for item in items)
+          if not touched and processed.get("scanned", 0) > 0:
+              print("Warning: synthetic alert not processed in this run window")
+
+          alerts = listed.get("alerts") or []
+          if not alerts:
+              raise SystemExit("Synthetic smoke list returned no alerts")
+          status_values = {entry.get("notification_status") for entry in alerts}
+          valid_statuses = {"active", "inactive", "notified", "retrying", "failed"}
+          if not (status_values & valid_statuses):
+              raise SystemExit(f"Unexpected alert notification statuses: {status_values}")
+          print(f"synthetic smoke alert_id={created_alert_id} statuses={sorted(status_values)}")
+          PY
+
+      - name: Upload alerts processor artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alerts-processor-snapshot
+          path: |
+            alerts-process-response.json
+            alerts-smoke-create.json
+            alerts-smoke-process.json
+            alerts-smoke-list.json
+          if-no-files-found: ignore

@@ -13,6 +13,69 @@ jobs:
       - name: Pull metrics snapshot
         env:
           FASTAPI_OPS_BASE_URL: ${{ secrets.FASTAPI_OPS_BASE_URL }}
+          FASTAPI_OPS_TOKEN: ${{ secrets.FASTAPI_OPS_TOKEN }}
         run: |
-          curl --fail --show-error --silent "${FASTAPI_OPS_BASE_URL}/api/ops/metrics" > /dev/null
-          curl --fail --show-error --silent "${FASTAPI_OPS_BASE_URL}/api/ops/alerts" > /dev/null
+          set -euo pipefail
+          AUTH_HEADER=()
+          if [ -n "${FASTAPI_OPS_TOKEN:-}" ]; then
+            AUTH_HEADER=(-H "x-ops-token: ${FASTAPI_OPS_TOKEN}")
+          fi
+
+          curl --fail --show-error --silent "${AUTH_HEADER[@]}" \
+            "${FASTAPI_OPS_BASE_URL}/api/ops/metrics" > ops-metrics.json
+          curl --fail --show-error --silent "${AUTH_HEADER[@]}" \
+            "${FASTAPI_OPS_BASE_URL}/api/ops/alerts" > ops-alerts.json
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          metrics = json.loads(Path("ops-metrics.json").read_text(encoding="utf-8"))
+          alerts = json.loads(Path("ops-alerts.json").read_text(encoding="utf-8"))
+
+          if "runtime" not in metrics:
+              raise SystemExit("ops-metrics payload missing runtime")
+          if "providers" not in metrics:
+              raise SystemExit("ops-metrics payload missing providers")
+          if "alerts_processor" not in metrics:
+              raise SystemExit("ops-metrics payload missing alerts_processor")
+          delivery = (metrics.get("alerts_processor") or {}).get("delivery_attempts_24h")
+          if not isinstance(delivery, dict):
+              raise SystemExit("ops-metrics payload missing alerts_processor.delivery_attempts_24h")
+          for field in ("total_attempts", "failure_rate", "by_status", "by_channel"):
+              if field not in delivery:
+                  raise SystemExit(
+                      f"ops-metrics delivery_attempts_24h missing required field: {field}"
+                  )
+
+          alert_list = alerts.get("alerts")
+          if not isinstance(alert_list, list):
+              raise SystemExit("ops-alerts payload missing alerts list")
+          if "thresholds" not in alerts:
+              raise SystemExit("ops-alerts payload missing thresholds")
+
+          critical = [item for item in alert_list if item.get("severity") == "critical"]
+          if critical:
+              raise SystemExit(f"Critical ops alerts detected: {critical}")
+
+          search_sync = (((metrics.get("runtime") or {}).get("search") or {}).get("sync") or {})
+          search_stream = (((metrics.get("runtime") or {}).get("search") or {}).get("stream") or {})
+          stream_completion = ((metrics.get("runtime") or {}).get("stream_completion") or {})
+          print(
+              "ops-snapshot ok: "
+              f"sync_p95={search_sync.get('p95_ms')} "
+              f"stream_p95={search_stream.get('p95_ms')} "
+              f"stream_completion={stream_completion.get('completion_rate')} "
+              f"alerts={len(alert_list)}"
+          )
+          PY
+
+      - name: Upload ops snapshot artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ops-snapshot
+          path: |
+            ops-metrics.json
+            ops-alerts.json
+          if-no-files-found: ignore

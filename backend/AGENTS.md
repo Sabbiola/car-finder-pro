@@ -1,132 +1,488 @@
-# CarFinder Pro - Backend AGENTS.md
+# AGENTS.md - Backend
 
-## Scope
+Questo file contiene istruzioni specifiche per agenti che lavorano nella cartella `backend/`.
 
-Questo file si applica al lavoro dentro `backend/`.
+Si applica in aggiunta al file `AGENTS.md` presente nella root del repository.
+Se c'e conflitto, valgono prima le istruzioni piu vicine alla directory su cui stai lavorando.
 
-Il backend FastAPI e la source of truth per:
-- esecuzione provider
-- orchestrazione search sync e stream
-- contratti listing normalizzati
-- dedup e ranking
-- listing analysis
-- alerts processing API
-- user data API lato backend
+---
 
-## Ruolo Attuale del Backend
+# 1. Missione del backend
 
-Stato reale:
-- la search e FastAPI-first
-- esistono provider FastAPI per `autoscout24`, `subito`, `ebay`, `automobile` e `brumbrum`
-- listing detail, listing analysis, alerts, favorites, saved searches e listings batch sono esposti come API backend
-- Supabase resta datastore e auth backend, ma non deve diventare il posto in cui spostare orchestrazione search o logica provider
+Il backend e il cuore applicativo di CarFinder Pro.
 
-Non spostare logica provider, ranking o normalizzazione contratti nel frontend.
+Responsabilita principali:
 
-## Regole Architetturali
+- esporre API coerenti per i journey dati core
+- orchestrare la search multi-provider
+- selezionare provider in base a configurazione/capabilities
+- normalizzare e deduplicare i listing
+- fornire ranking e segnali di analisi
+- gestire detail, batch, metadata, favorites, saved searches e alerts
+- offrire osservabilita minima e endpoint operativi
+- mantenere un boundary chiaro con Supabase e il frontend
 
-Tenere separate le responsabilita:
-1. `app/api/` -> route handler FastAPI sottili
-2. `app/services/search_orchestrator.py` -> concorrenza, esecuzione provider, aggregazione risultati, emissione SSE
-3. `app/providers/` -> fetch e parse specifici per provider
-4. `app/normalizers/` -> normalizzazione listing
-5. `app/dedup/` -> deduplicazione cross-provider
-6. `app/ranking/` -> scoring e reason codes
-7. `app/services/analysis_service.py` e servizi correlati -> deal, trust, negotiation, ownership, comparables
-8. `app/services/supabase_market_repository.py` -> accesso datastore e basta
+Il backend non deve:
+- duplicare funzioni frontend
+- inglobare l'auth utente se non richiesto
+- accoppiare i router ai dettagli dei provider
+- diventare una nuova piattaforma generica fuori scope
 
-I route handler devono restare sottili. I provider adapter non devono possedere policy di ranking o orchestrazione.
+---
 
-## Inventory API Pubbliche
+# 2. Boundary architetturale del backend
 
-Rotte backend correnti:
-- `POST /api/search`
-- `POST /api/search/stream`
-- `GET /api/providers`
-- `GET /api/providers/health`
-- `GET /api/filters/metadata`
-- `GET /api/metadata/ownership`
-- `GET /api/listings/{listing_id}`
-- `POST /api/listings/analyze`
+## Direzione ufficiale
+Il backend e FastAPI-first per i journey dati core.
+
+Journey core che devono passare da qui in fastapi mode:
+- search
+- search stream
+- detail
+- analysis
+- favorites
+- saved searches
+- listings batch
+- alerts
+
+## Cosa non spostare qui senza richiesta esplicita
+- auth completa
+- session management client-side
+- logica Supabase che il progetto ha deciso di tenere diretta
+
+## Ruolo delle edge functions Supabase
+Le edge functions esistenti vanno trattate come:
+- compatibilita
+- proxy
+- fallback
+- supporto transitorio
+
+Non devono essere reintrodotte come path primari dei journey core gia migrati.
+
+---
+
+# 3. Struttura da rispettare
+
+## `app/api/`
+Contiene router HTTP, dependency wiring e minimale orchestration call.
+
+Regole:
+- handler sottili
+- nessuna business logic grossa
+- nessun parsing provider-specifico qui
+- validazione request/response tramite modelli espliciti
+
+## `app/core/`
+Contiene:
+- settings
+- registry
+- request context
+- metrics
+- observability
+- utility infrastrutturali condivise
+
+Regole:
+- qui stanno le fonti canoniche di configurazione runtime
+- evitare dipendenze circolari
+- evitare di mischiare settings e business logic
+
+## `app/models/`
+Contiene i contratti dati canonici:
+- request
+- response
+- provider config
+- listing models
+- user data models
+- alerts models
+
+Regole:
+- usare Pydantic
+- evitare shape anonime sparse
+- ogni endpoint pubblico deve avere modelli chiari
+
+## `app/providers/`
+Ogni provider deve vivere nel proprio namespace.
+
+Regole:
+- logica provider-specifica confinata qui
+- niente branching gigante centralizzato
+- parsing, capability e trasformazioni locali
+- un provider non deve sporcare altri provider
+
+## `app/services/`
+Business logic e orchestration.
+
+Qui devono stare:
+- search orchestration
+- analysis
+- comparables
+- alerts processing
+- favorites / saved searches business flow
+- negotiation/trust/ownership logic
+
+## `app/normalizers/`
+Normalizzazione dei listing grezzi in modello canonico.
+
+## `app/dedup/`
+Deduplicazione e fingerprinting.
+
+## `app/ranking/`
+Scoring, reason codes, ranking helpers.
+
+---
+
+# 4. Invarianti del backend
+
+## 4.1 Route handlers sottili
+Ogni route deve:
+- validare input
+- chiamare il service corretto
+- restituire output tipizzato
+
+Non deve:
+- contenere logica provider-specifica
+- contenere dedup o ranking inline
+- costruire manualmente shape non modellate
+
+## 4.2 Provider failures non bloccano la ricerca globale
+Il fallimento di un provider deve produrre:
+- errori provider-specifici
+- partial failure visibility
+- completamento della request se possibile
+
+Non deve:
+- abbattere l'intera search salvo casi realmente fatali
+
+## 4.3 Modelli canonici
+I contratti pubblici devono essere modellati con Pydantic e riutilizzati.
+Non creare payload ad hoc direttamente nei router se esiste gia un modello.
+
+## 4.4 Settings sono la fonte di verita runtime
+La configurazione backend deve vivere in `app/core/settings.py` e negli env profile ufficiali.
+
+Non introdurre:
+- variabili ambiente lette in modo sparso in file casuali
+- fallback non documentati
+- parsing env incoerente tra file
+
+## 4.5 SSE contract stabile
+Per `/api/search/stream` gli eventi canonici restano:
+- `progress`
+- `result`
+- `complete`
+- `error`
+
+Non cambiare questa semantica senza aggiornare:
+- frontend
+- test backend
+- eventuale proxy
+- docs
+
+---
+
+# 5. Search orchestration
+
+La search e il cuore del prodotto.
+
+## Responsabilita della search orchestration
+- validare request
+- risolvere provider attivi/configurati
+- dispatchare le query ai provider
+- raccogliere risultati
+- normalizzare
+- deduplicare
+- arricchire
+- ranking / reason codes
+- comporre response sync o stream
+
+## Regole
+- no accoppiamento forte tra orchestrator e singolo provider
+- provider selection centralizzata
+- timeouts bounded
+- retry bounded
+- concorrente ma controllata
+- output consistente anche in caso di failure parziali
+
+## SearchRequest
+Il contratto va mantenuto coerente e additivo.
+
+Campi rilevanti:
+- query di ricerca base
+- filtri veicolo
+- `is_new`
+- `color`
+- `doors`
+- `emission_class`
+- `seller_type`
+- compatibilita additiva `private_only`
+
+Se modifichi il contratto:
+- aggiorna modelli
+- aggiorna test
+- aggiorna docs
+- aggiorna frontend request builder
+
+---
+
+# 6. Provider architecture
+
+Ogni provider deve:
+- avere responsabilita isolate
+- dichiarare capabilities in modo coerente
+- restituire shape grezza o normalizzabile
+- non dipendere da dettagli di altri provider
+
+## Regole provider
+- nessun secret hardcodato
+- health/configuration state leggibile
+- no retry infiniti
+- no parsing fragile sparso fuori dal provider
+- errori espliciti
+- output leggibile per orchestrator
+
+## Provider configured / enabled
+La differenza tra:
+- presente nel catalogo
+- abilitato
+- configurato
+- healthy
+
+deve restare chiara tramite:
+- settings
+- registry
+- `/api/providers`
+- `/api/providers/health`
+
+---
+
+# 7. Favorites, saved searches, alerts
+
+Queste aree esistono per supportare journey reali utente.
+
+## Favorites / Saved searches
+Regole:
+- contratto chiaro
+- error handling coerente
+- non mischiare storage path in modo ambiguo
+- mantenere coerenza con boundary Auth/Supabase
+
+## Alerts
+Gli endpoint canonici:
 - `GET /api/alerts`
 - `POST /api/alerts`
 - `POST /api/alerts/{alert_id}/deactivate`
 - `POST /api/alerts/process`
-- `GET /api/user/favorites`
-- `POST /api/user/favorites`
-- `DELETE /api/user/favorites/{listing_id}`
-- `GET /api/user/saved-searches`
-- `POST /api/user/saved-searches`
-- `DELETE /api/user/saved-searches/{search_id}`
-- `POST /api/listings/batch`
-- `GET /api/ops/metrics`
-- `GET /api/ops/alerts`
-- `GET /healthz`
 
-Quando documenti o test citano nomi rotta obsoleti, aggiornarli al contratto reale.
+Il flusso alerts deve supportare:
+- create
+- process
+- retry
+- audit
 
-## Regole sul Contratto Search
+Non trattare alerts come solo endpoint presente.
+Se lavori su quest'area, pensa anche a operativita e osservabilita.
 
-`SearchRequest v1` e il modello canonico.
+---
 
-Regole:
-- validazione request sempre esplicita in modelli Pydantic tipizzati
-- preservare la compatibilita additiva di `private_only`
-- i filtri estesi correnti includono:
-  - `is_new`
-  - `color`
-  - `doors`
-  - `emission_class`
-  - `seller_type`
-- la semantica di capability provider e strict per i filtri attivi non post-filter
-- `provider_error_details` fa parte del contratto pubblico sync e stream
-- i nomi evento SSE restano stabili:
-  - `progress`
-  - `result`
-  - `complete`
-  - `error`
+# 8. Analysis / Trust / Negotiation / Ownership
 
-## Settings e Regole Operative
-
-Le impostazioni operative correnti includono:
-- timeout, retry e concorrenza provider
-- concorrenza analysis
-- webhook di observability
-- token e retry policy per alerts processor
-- impostazioni Resend
-- URL e chiavi Supabase
-- `FASTAPI_PROXY_MODE`
-- `OPS_TOKEN` opzionale per `/api/ops/*`
+Questi servizi differenziano il prodotto.
 
 Regole:
-- segreti solo da env
-- chiamate outbound sempre con timeout e retry bounded
-- non loggare token o credenziali raw
-- preservare request id e errori machine-readable
+- devono stare nei services dedicati
+- nessuna logica pesante nei router
+- output chiaro e degradabile
+- il listing puo esistere anche se l'analisi e parziale
 
-## Boundary Ibrido
+## Campi opzionali accettabili
+- `deal_score`
+- `reason_codes`
+- `deal_summary`
+- `trust_summary`
+- `negotiation_summary`
+- `ownership_estimate`
 
-FastAPI possiede il contratto backend, ma il prodotto resta hybrid bounded.
+Non rompere il contratto se un campo opzionale non e disponibile.
 
-Boundary noto oggi:
-- search e search-stream sono FastAPI-first
-- alerts processor e user data API vivono in FastAPI
-- Supabase Auth resta frontend-direct
-- le Edge Functions restano per proxy, fallback e flussi legacy non core
+---
 
-Non documentare il backend come unico runtime del prodotto finche frontend e prove di rollout non confermano la stessa cosa.
+# 9. Observability e ops
 
-## Regole di Test
+Il backend contiene:
+- request id
+- metrics runtime
+- ops endpoints
+- eventuali webhook sink
+- workflow snapshot/perf
 
-Aspettative minime backend:
-- request validation
-- provider selection e strict capability behavior
-- normalizzazione e dedup
-- ranking e scoring
-- shape del contratto sync e stream
-- partial provider failure handling
-- comportamento listing analysis
-- comportamento alerts processor
-- comportamento user data API
+## Regole
+- non introdurre metriche scollegate dal prodotto
+- non chiamare operativo qualcosa che esiste solo nel codice ma non e configurato
+- proteggi endpoint ops quando previsto
+- mantieni runbook e docs coerenti col comportamento reale
 
-Se cambi un contratto backend, aggiorna test e documentazione nello stesso change.
+## Endpoint ops
+- `/healthz`
+- `/api/ops/metrics`
+- `/api/ops/alerts`
+
+Se tocchi questi endpoint:
+- verifica auth/token
+- verifica shape output
+- verifica docs
+- non esporre dati sensibili inutilmente
+
+---
+
+# 10. Security backend
+
+Regole non negoziabili:
+- niente segreti nel codice
+- niente log di token/chiavi
+- validation input rigorosa
+- timeout bounded
+- retry bounded
+- CORS coerente con env
+- no stack trace grezze nelle response pubbliche
+- no accesso diretto a provider esterni senza sanitizzazione minima degli input
+
+Quando tocchi settings/env:
+- aggiorna i file `.env*.example`
+- mantieni i nomi coerenti
+- non introdurre fallback nascosti
+
+---
+
+# 11. Testing backend
+
+Comando minimo:
+
+```bash
+pytest -q
+```
+
+## Quando aggiungere test
+
+Aggiungi o aggiorna test se tocchi:
+
+- route pubbliche
+- settings/env
+- provider registry
+- provider logic
+- normalizers
+- dedup/ranking
+- SSE
+- alerts processor
+- analysis services
+
+## Tipi di test importanti
+
+- unit test services
+- unit test normalizers/providers
+- route contract tests
+- SSE contract tests
+- settings/env parsing tests
+- partial failure tests
+
+## Regola
+
+Il backend deve puntare a suite verde completa.
+Non lasciare test rotti temporaneamente se il fix e nello scope del task.
+
+---
+
+# 12. Environment e settings
+
+I file environment example sono parte del contratto operativo del backend.
+
+Profili principali:
+
+- `.env.example`
+- `.env.local.example`
+- `.env.staging.example`
+- `.env.production.example`
+
+Documento canonico:
+
+- `docs/runtime_env_profiles.md`
+
+## Regole
+
+- ogni env usata dal codice deve comparire nel profilo appropriato
+- ogni env critica deve essere documentata
+- il parsing deve essere robusto e testato
+- evita naming ambiguo o duplicato
+
+Attenzione speciale a:
+
+- provider credentials
+- timeouts
+- concurrency
+- fallback/runtime mode
+- observability token/webhook
+- alert processor settings
+
+---
+
+# 13. Anti-pattern vietati
+
+- leggere env sparse fuori dai settings senza necessita
+- business logic nei router
+- provider branching gigante in un solo file
+- catch-all exception che nascondono errori reali
+- restituire payload incoerenti o non tipizzati
+- trattare una failure provider come errore globale se non necessario
+- cambiare il contratto pubblico senza aggiornare tutto il percorso
+- segnare docs come production-ready senza evidenza operativa
+
+---
+
+# 14. Cosa fare quando modifichi il backend
+
+Workflow obbligatorio:
+
+1. analizza router/service/model/provider coinvolti
+2. identifica il contratto da mantenere o correggere
+3. applica la modifica minima corretta
+4. aggiorna test
+5. esegui `pytest -q`
+6. aggiorna docs/env se il comportamento cambia
+7. chiudi con report finale
+
+Output finale atteso:
+
+- mini piano
+- file modificati
+- cosa cambiato
+- test eseguiti
+- esito
+- rischi residui
+
+---
+
+# 15. Definizione di done per una modifica backend
+
+Una modifica backend e done solo se:
+
+- rispetta il boundary architetturale
+- mantiene i contratti pubblici stabili o li aggiorna in modo esplicito
+- non aumenta l'accoppiamento tra provider, router e services
+- passa i test rilevanti
+- aggiorna docs/env se necessario
+- porta il backend piu vicino al go-live, non piu vicino a una nuova transizione
+
+---
+
+# 16. Priorita attuali lato backend
+
+Ordine corretto:
+
+1. mantenere test backend completamente verdi
+2. consolidare FastAPI-first sui journey core
+3. rendere chiara la configurazione dei provider reali
+4. rendere alerts e observability operativi davvero
+5. consolidare contratti metadata/search/alerts
+6. supportare staging soak / canary / rollback
+7. solo dopo pensare a espansioni non critiche
+
+Nuove feature non hanno precedenza su questi punti.

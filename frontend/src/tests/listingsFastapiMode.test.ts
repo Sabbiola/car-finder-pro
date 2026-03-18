@@ -74,4 +74,16 @@ describe("scrapeListings fastapi mode", () => {
     );
     expect(invokeMock).not.toHaveBeenCalled();
   });
+
+  it("fails closed when fastapi mode is selected without API base URL", async () => {
+    runtimeConfigMock.mockReturnValue({
+      backendMode: "fastapi",
+      apiBaseUrl: null,
+    });
+
+    await expect(scrapeListings(makeFilters({ sources: ["autoscout24"] }))).rejects.toThrow(
+      "Search requires VITE_API_BASE_URL when backendMode=fastapi.",
+    );
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
 });

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import type { SearchFiltersState } from "@/components/SearchFilters";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 import { getRuntimeConfig } from "@/lib/runtimeConfig";
 import {
   createUserSavedSearch,
@@ -29,7 +29,7 @@ function readFromStorage(): SavedSearch[] {
 export function useSavedSearches() {
   const { user } = useAuth();
   const runtimeConfig = getRuntimeConfig();
-  const useBackendApi = runtimeConfig.backendMode === "fastapi" && !!runtimeConfig.apiBaseUrl;
+  const useBackendApi = runtimeConfig.backendMode === "fastapi";
   const [searches, setSearches] = useState<SavedSearch[]>(readFromStorage);
 
   // Load from Supabase when logged in
@@ -50,7 +50,10 @@ export function useSavedSearches() {
             })),
           ),
         )
-        .catch(() => setSearches([]));
+        .catch((error) => {
+          console.error("[useSavedSearches] Failed to load saved searches via backend API:", error);
+          setSearches([]);
+        });
       return;
     }
     supabase

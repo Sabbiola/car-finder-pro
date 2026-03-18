@@ -476,6 +476,12 @@ class StubMarketRepository:
                 latest[alert_id] = attempt
         return latest
 
+    async def fetch_alert_delivery_attempt_rows(self, *, limit: int = 500, since_iso: str | None = None):
+        rows = sorted(self._delivery_attempts, key=lambda item: item["created_at"], reverse=True)
+        if since_iso:
+            rows = [row for row in rows if str(row.get("created_at") or "") >= since_iso]
+        return rows[:limit]
+
     async def count_delivery_attempts_by_run(self, run_id: str) -> int:
         return sum(1 for item in self._delivery_attempts if item.get("idempotency_key") == run_id)
 
@@ -593,7 +599,17 @@ def test_search_endpoint_contract() -> None:
     client = _build_client()
     response = client.post(
         "/api/search",
-        json={"brand": "BMW", "model": "320d", "sources": ["autoscout24"]},
+        json={
+            "brand": "BMW",
+            "model": "320d",
+            "sources": ["autoscout24"],
+            "is_new": False,
+            "color": "Nero",
+            "doors": 4,
+            "emission_class": "Euro 6",
+            "seller_type": "dealer",
+            "private_only": False,
+        },
     )
     assert response.status_code == 200
     payload = response.json()
@@ -603,6 +619,21 @@ def test_search_endpoint_contract() -> None:
     assert payload["provider_error_details"] == []
     assert payload["listings"][0]["reason_codes"] == ["PRICE_SIGNIFICANTLY_BELOW_MARKET"]
     assert payload["listings"][0]["deal_summary"]["headline"] == "Affare interessante"
+
+
+def test_search_endpoint_rejects_conflicting_seller_flags() -> None:
+    client = _build_client()
+    response = client.post(
+        "/api/search",
+        json={
+            "brand": "BMW",
+            "seller_type": "dealer",
+            "private_only": True,
+        },
+    )
+    assert response.status_code == 422
+    payload = response.json()
+    assert "private_only cannot be combined with seller_type=dealer." in str(payload)
 
 
 def test_search_endpoint_returns_422_when_no_provider_eligible() -> None:
@@ -643,6 +674,12 @@ def test_providers_and_health_contract() -> None:
     by_provider_id = {provider["id"]: provider for provider in providers_payload["providers"]}
     assert by_provider_id["autoscout24"]["configured"] is True
     assert by_provider_id["ebay"]["configured"] is False
+    assert by_provider_id["autoscout24"]["configuration_requirements"] == ["SCRAPINGBEE_API_KEY"]
+    assert by_provider_id["autoscout24"]["missing_configuration"] == []
+    assert by_provider_id["autoscout24"]["configuration_message"] == "Configured"
+    assert by_provider_id["ebay"]["configuration_requirements"] == ["EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET"]
+    assert by_provider_id["ebay"]["missing_configuration"] == ["EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET"]
+    assert "Missing required env" in by_provider_id["ebay"]["configuration_message"]
 
     health_response = client.get("/api/providers/health")
     assert health_response.status_code == 200
@@ -652,6 +689,9 @@ def test_providers_and_health_contract() -> None:
     assert health_payload["providers"][0]["total_calls"] == 3
     assert health_payload["providers"][0]["failed_calls"] == 1
     assert health_payload["providers"][0]["last_error"] == "transient timeout"
+    assert health_payload["providers"][0]["configuration_requirements"] == ["SCRAPINGBEE_API_KEY"]
+    assert health_payload["providers"][0]["missing_configuration"] == []
+    assert health_payload["providers"][0]["configuration_message"] == "Configured"
 
     metadata_response = client.get("/api/filters/metadata")
     assert metadata_response.status_code == 200
@@ -660,7 +700,14 @@ def test_providers_and_health_contract() -> None:
     assert "providers" in metadata_payload
     assert metadata_payload["search_contract"]["version"] == "v1"
     assert "canonical_filters" in metadata_payload["search_contract"]
+    assert "provider_filter_union" in metadata_payload["search_contract"]
+    assert "provider_filter_intersection" in metadata_payload["search_contract"]
     assert metadata_payload["search_contract"]["provider_filter_semantics"] == "strict_all_active_non_post_filters"
+    assert "query" in metadata_payload["search_contract"]["provider_filter_union"]
+    assert metadata_payload["search_contract"]["provider_filter_intersection"] == ["brand", "model"]
+    assert "seller_type" in metadata_payload["search_contract"]["canonical_filters"]
+    assert "private_only" in metadata_payload["search_contract"]["canonical_filters"]
+    assert "seller_type" in metadata_payload["search_contract"]["backend_post_filters"]
     assert "brands" in metadata_payload
     assert "models_by_brand" in metadata_payload
     assert "trims_by_brand_model" in metadata_payload
@@ -744,6 +791,8 @@ def test_ops_metrics_contract() -> None:
     assert "search" in payload["runtime"]
     assert "http" in payload["runtime"]
     assert "providers" in payload
+    assert "alerts_processor" in payload
+    assert "delivery_attempts_24h" in payload["alerts_processor"]
 
 
 def test_ops_alerts_contract() -> None:
@@ -752,7 +801,41 @@ def test_ops_alerts_contract() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert "alerts" in payload
+    assert "alerts_processor" in payload
     assert "thresholds" in payload
+
+
+def test_ops_endpoints_require_token_when_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPS_TOKEN", "ops-secret")
+    get_settings.cache_clear()
+    try:
+        client = _build_client()
+        unauthorized_metrics = client.get("/api/ops/metrics")
+        unauthorized_alerts = client.get("/api/ops/alerts")
+        assert unauthorized_metrics.status_code == 403
+        assert unauthorized_alerts.status_code == 403
+
+        headers = {"x-ops-token": "ops-secret"}
+        authorized_metrics = client.get("/api/ops/metrics", headers=headers)
+        authorized_alerts = client.get("/api/ops/alerts", headers=headers)
+        assert authorized_metrics.status_code == 200
+        assert authorized_alerts.status_code == 200
+    finally:
+        get_settings.cache_clear()
+
+
+def test_ops_endpoints_accept_trimmed_token_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPS_TOKEN", "ops-secret")
+    get_settings.cache_clear()
+    try:
+        client = _build_client()
+        headers = {"x-ops-token": "  ops-secret  "}
+        authorized_metrics = client.get("/api/ops/metrics", headers=headers)
+        authorized_alerts = client.get("/api/ops/alerts", headers=headers)
+        assert authorized_metrics.status_code == 200
+        assert authorized_alerts.status_code == 200
+    finally:
+        get_settings.cache_clear()
 
 
 def test_user_data_contract() -> None:
@@ -836,6 +919,21 @@ def test_alerts_process_requires_token_when_configured(monkeypatch: pytest.Monke
             "/api/alerts/process",
             json={"dry_run": True, "limit": 10},
             headers={"x-alerts-token": "secret-token"},
+        )
+        assert authorized.status_code == 200
+    finally:
+        get_settings.cache_clear()
+
+
+def test_alerts_process_accepts_trimmed_token_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ALERTS_PROCESSOR_TOKEN", "secret-token")
+    get_settings.cache_clear()
+    try:
+        client = _build_client()
+        authorized = client.post(
+            "/api/alerts/process",
+            json={"dry_run": True, "limit": 10},
+            headers={"x-alerts-token": "  secret-token  "},
         )
         assert authorized.status_code == 200
     finally:

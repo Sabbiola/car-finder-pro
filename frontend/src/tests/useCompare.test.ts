@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import React from "react";
-import { CompareProvider, useCompare } from "../hooks/useCompare";
+import { CompareProvider } from "../hooks/CompareProvider";
+import { useCompare } from "../hooks/useCompare";
 
 const wrapper = ({ children }: { children: React.ReactNode }) =>
   React.createElement(CompareProvider, null, children);

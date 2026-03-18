@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { SearchFiltersState } from "@/components/SearchFilters";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useSavedSearches } from "@/hooks/useSavedSearches";
 import { supabase } from "@/integrations/supabase/client";
@@ -70,7 +70,7 @@ export default function Profile() {
   const navigate = useNavigate();
   const { favorites } = useFavorites();
   const { searches, remove: removeSearch } = useSavedSearches();
-  const isFastApiMode = runtime.backendMode === "fastapi" && !!runtime.apiBaseUrl;
+  const isFastApiMode = runtime.backendMode === "fastapi";
 
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(false);
@@ -114,6 +114,9 @@ export default function Profile() {
           .eq("user_id", user.id)
           .order("created_at", { ascending: false });
         setAlerts((data as AlertRow[] | null) || []);
+      } catch (error) {
+        console.error("[Profile] Failed to load alerts:", error);
+        setAlerts([]);
       } finally {
         setAlertsLoading(false);
       }

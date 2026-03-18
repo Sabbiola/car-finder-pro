@@ -10,7 +10,7 @@ import { fetchListingsBatch } from "@/services/api/userData";
 export async function fetchListingsByIds(ids: string[]): Promise<CarListing[]> {
   if (!ids.length) return [];
   const config = getRuntimeConfig();
-  if (config.backendMode === "fastapi" && config.apiBaseUrl) {
+  if (config.backendMode === "fastapi") {
     return fetchListingsBatch(ids);
   }
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 
 import CarCard from "@/components/CarCard";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import type { CarListing } from "@/lib/api/listings";
 import { getRuntimeConfig } from "@/lib/runtimeConfig";
 import { toCardListing } from "@/lib/toCardListing";
 
-import ListingInsightsPanel from "./ListingInsightsPanel";
+const ListingInsightsPanel = lazy(() => import("./ListingInsightsPanel"));
 
 interface Props {
   listing: CarListing;
@@ -72,7 +72,17 @@ const ListingResultCard = ({ listing, index }: Props) => {
             <DrawerDescription>Analisi decisionale dell&apos;annuncio</DrawerDescription>
           </DrawerHeader>
           <div className="px-4 pb-6 overflow-y-auto">
-            <ListingInsightsPanel listing={listing} />
+            {open ? (
+              <Suspense
+                fallback={
+                  <div className="rounded-xl border border-border/60 bg-card p-4 text-sm text-muted-foreground">
+                    Caricamento insights...
+                  </div>
+                }
+              >
+                <ListingInsightsPanel listing={listing} />
+              </Suspense>
+            ) : null}
           </div>
         </DrawerContent>
       </Drawer>

@@ -53,6 +53,7 @@ class SubitoProvider(BaseProvider):
         model_name = request.model or "320d"
         return [
             VehicleListing(
+                id="22222222-2222-4222-8222-222222222222",
                 provider="subito",
                 market="IT",
                 url="https://stub.subito.local/listing-1",
@@ -69,6 +70,9 @@ class SubitoProvider(BaseProvider):
                 city="Roma",
                 country="IT",
                 images=["https://images.example.com/subito-stub.jpg"],
+                color="Nero",
+                doors=4,
+                emission_class="Euro 6",
                 seller_type="private",
             )
         ]

@@ -26,6 +26,15 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+Profilo env canonico locale:
+- `backend/.env.local.example`
+
+Il file `backend/.env.example` resta per compatibilita e va tenuto allineato al profilo locale.
+
+Profili target:
+- staging: `backend/.env.staging.example` con `FASTAPI_PROXY_MODE=fastapi_only`
+- production: `backend/.env.production.example` con `FASTAPI_PROXY_MODE=fastapi_only`
+
 ## Inventory Rotte Correnti
 
 - `POST /api/search`
@@ -74,6 +83,30 @@ Provider search implementati nel backend:
 - `automobile`
 - `brumbrum`
 
+Matrice secret provider (real providers, `TEST_STUB_MODE=false`):
+- `autoscout24`, `subito`, `automobile`, `brumbrum` -> `SCRAPINGBEE_API_KEY`
+- `ebay` -> `EBAY_CLIENT_ID` + `EBAY_CLIENT_SECRET`
+
+`/api/providers` e `/api/providers/health` espongono anche:
+- `configuration_requirements`
+- `missing_configuration`
+- `configuration_message`
+
+per rendere esplicito cosa manca prima dello smoke reale.
+
+## Smoke staging (provider reali)
+
+Checklist:
+- `docs/staging_provider_smoke_checklist.md`
+
+Script rapido:
+
+```powershell
+pwsh -File scripts/run-core-journey-smoke.ps1 `
+  -FastApiBaseUrl "https://<fastapi-staging>" `
+  -OutputFile "artifacts/smoke/core-journey-smoke.json"
+```
+
 ## Note Operative
 
 - timeout, retry e concorrenza provider sono guidati da env
@@ -81,6 +114,7 @@ Provider search implementati nel backend:
 - gli endpoint ops possono essere protetti con `X-Ops-Token` quando `OPS_TOKEN` e configurato
 - l'alerts processor supporta idempotenza, retry metadata e audit di delivery
 - l'export observability via webhook e supportato, ma dashboarding live e runbook restano tema di rollout e non prova interna al repo
+- `/api/ops/metrics` include anche snapshot runtime alerts processor e summary delivery attempts 24h
 
 ## Test
 

@@ -44,6 +44,7 @@ class BrumBrumProvider(BaseProvider):
         model_name = request.model or "320d"
         return [
             VehicleListing(
+                id="55555555-5555-4555-8555-555555555555",
                 provider="brumbrum",
                 market="IT",
                 url="https://stub.brumbrum.local/listing-1",
@@ -60,6 +61,10 @@ class BrumBrumProvider(BaseProvider):
                 city="Roma",
                 country="IT",
                 images=["https://images.example.com/brumbrum-stub.jpg"],
+                color="Nero",
+                doors=4,
+                emission_class="Euro 6",
+                seller_type="dealer",
             )
         ]
 

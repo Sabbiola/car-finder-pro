@@ -1,0 +1,34 @@
+name: Canary Smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  canary-smoke:
+    if: ${{ secrets.FASTAPI_STAGING_BASE_URL != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run core journey smoke on staging
+        shell: pwsh
+        env:
+          FASTAPI_STAGING_BASE_URL: ${{ secrets.FASTAPI_STAGING_BASE_URL }}
+          FASTAPI_OPS_TOKEN: ${{ secrets.FASTAPI_OPS_TOKEN }}
+          ALERTS_PROCESSOR_TOKEN: ${{ secrets.ALERTS_PROCESSOR_TOKEN }}
+        run: |
+          $opsToken = $env:FASTAPI_OPS_TOKEN
+          $alertsToken = $env:ALERTS_PROCESSOR_TOKEN
+          pwsh -File scripts/run-core-journey-smoke.ps1 `
+            -FastApiBaseUrl $env:FASTAPI_STAGING_BASE_URL `
+            -OpsToken $opsToken `
+            -AlertsToken $alertsToken `
+            -OutputFile "canary-smoke.json"
+
+      - name: Upload canary smoke artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canary-smoke
+          path: canary-smoke.json
+          if-no-files-found: ignore

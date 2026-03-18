@@ -5,7 +5,7 @@ import Header from "@/components/Header";
 import { fetchListingsByIds } from "@/lib/api/fetchByIds";
 import type { CarListing, ListingAnalysis } from "@/lib/api/listings";
 import { priceRatingConfig } from "@/lib/rating-config";
-import { getRuntimeConfig } from "@/lib/runtimeConfig";
+import { getFastApiBaseUrlOrThrow, getRuntimeConfig } from "@/lib/runtimeConfig";
 import { analyzeListing } from "@/services/api/listingAnalysis";
 
 import { FALLBACK_IMAGE } from "@/lib/constants";
@@ -89,13 +89,14 @@ const Confronta = () => {
 
   useEffect(() => {
     const runtime = getRuntimeConfig();
-    if (runtime.backendMode !== "fastapi" || !runtime.apiBaseUrl || cars.length === 0) return;
+    if (runtime.backendMode !== "fastapi" || cars.length === 0) return;
+    const apiBaseUrl = getFastApiBaseUrlOrThrow("Compare analysis");
 
     let cancelled = false;
     Promise.all(
       cars.map(async (car) => ({
         id: car.id,
-        analysis: await analyzeListing(runtime.apiBaseUrl!, {
+        analysis: await analyzeListing(apiBaseUrl, {
           listing_id: car.id,
           include: ["deal", "trust", "negotiation", "ownership"],
         }),

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
+from uuid import uuid4
 
 import httpx
 
@@ -27,6 +28,156 @@ def _parse_datetime(value: str | None) -> datetime | None:
 class SupabaseMarketRepository:
     def __init__(self) -> None:
         self.settings = get_settings()
+        self._use_stub_storage = bool(
+            self.settings.test_stub_mode
+            and not (self.settings.supabase_url and self._read_key())
+        )
+        self._stub_listings_by_id: dict[str, dict[str, Any]] = {}
+        self._stub_listings_by_source_url: dict[str, dict[str, Any]] = {}
+        self._stub_price_history: dict[str, list[dict[str, Any]]] = {}
+        self._stub_user_favorites: dict[str, list[dict[str, Any]]] = {}
+        self._stub_user_saved_searches: dict[str, list[dict[str, Any]]] = {}
+        self._stub_price_alerts: list[dict[str, Any]] = []
+        self._stub_alert_delivery_attempts: list[dict[str, Any]] = []
+        self._stub_user_email_by_user_id: dict[str, str] = {}
+        if self._use_stub_storage:
+            self._initialize_stub_storage()
+
+    def _initialize_stub_storage(self) -> None:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        listing_rows = [
+            self._build_stub_listing_row(
+                listing_id="11111111-1111-4111-8111-111111111111",
+                source="autoscout24",
+                source_url="https://stub.autoscout24.local/listing-1",
+                title="BMW 320d Stub AutoScout24",
+                price=24900,
+                year=2021,
+                km=42000,
+                city="Milano",
+                image_url="https://images.example.com/as24-stub.jpg",
+                seller_type="dealer",
+                scraped_at=now_iso,
+            ),
+            self._build_stub_listing_row(
+                listing_id="22222222-2222-4222-8222-222222222222",
+                source="subito",
+                source_url="https://stub.subito.local/listing-1",
+                title="BMW 320d Stub Subito",
+                price=25900,
+                year=2020,
+                km=51000,
+                city="Roma",
+                image_url="https://images.example.com/subito-stub.jpg",
+                seller_type="private",
+                scraped_at=now_iso,
+            ),
+            self._build_stub_listing_row(
+                listing_id="33333333-3333-4333-8333-333333333333",
+                source="ebay",
+                source_url="https://stub.ebay.local/item-1",
+                title="BMW 320d Stub eBay",
+                price=24100,
+                year=2022,
+                km=38000,
+                city="Torino",
+                image_url="https://images.example.com/ebay-stub.jpg",
+                seller_type="dealer",
+                scraped_at=now_iso,
+            ),
+            self._build_stub_listing_row(
+                listing_id="44444444-4444-4444-8444-444444444444",
+                source="automobile",
+                source_url="https://stub.automobile.local/listing-1",
+                title="BMW 320d Stub Automobile.it",
+                price=24700,
+                year=2021,
+                km=47000,
+                city="Milano",
+                image_url="https://images.example.com/automobile-stub.jpg",
+                seller_type="dealer",
+                scraped_at=now_iso,
+            ),
+            self._build_stub_listing_row(
+                listing_id="55555555-5555-4555-8555-555555555555",
+                source="brumbrum",
+                source_url="https://stub.brumbrum.local/listing-1",
+                title="BMW 320d Stub BrumBrum",
+                price=25100,
+                year=2022,
+                km=39000,
+                city="Roma",
+                image_url="https://images.example.com/brumbrum-stub.jpg",
+                seller_type="dealer",
+                scraped_at=now_iso,
+            ),
+        ]
+        for row in listing_rows:
+            listing_id = str(row["id"])
+            source_url = str(row["source_url"])
+            self._stub_listings_by_id[listing_id] = row
+            self._stub_listings_by_source_url[source_url] = row
+            self._stub_price_history[listing_id] = [
+                {
+                    "price": int(row["price"]) + 700,
+                    "recorded_at": datetime(2026, 1, 10, tzinfo=timezone.utc).isoformat(),
+                },
+                {
+                    "price": int(row["price"]),
+                    "recorded_at": datetime(2026, 2, 18, tzinfo=timezone.utc).isoformat(),
+                },
+            ]
+
+        self._stub_user_email_by_user_id = {"test-user": "test-user@example.com"}
+
+    @staticmethod
+    def _build_stub_listing_row(
+        *,
+        listing_id: str,
+        source: str,
+        source_url: str,
+        title: str,
+        price: int,
+        year: int,
+        km: int,
+        city: str,
+        image_url: str,
+        seller_type: str,
+        scraped_at: str,
+    ) -> dict[str, Any]:
+        return {
+            "id": listing_id,
+            "source": source,
+            "source_url": source_url,
+            "title": title,
+            "description": "Stub listing for test mode",
+            "price": price,
+            "year": year,
+            "brand": "BMW",
+            "model": "320d",
+            "trim": "M Sport",
+            "km": km,
+            "fuel": "Diesel",
+            "transmission": "Automatico",
+            "body_type": "Berlina",
+            "condition": "used",
+            "is_new": False,
+            "color": "Nero",
+            "doors": 4,
+            "emission_class": "Euro 6",
+            "seller_type": seller_type,
+            "location": city,
+            "image_url": image_url,
+            "image_urls": [image_url],
+            "created_at": scraped_at,
+            "scraped_at": scraped_at,
+            "extra_data": {
+                "seller_type": seller_type,
+                "seller_name": "Stub Seller",
+                "seller_external_id": f"{source}-seller",
+                "currency": "EUR",
+            },
+        }
 
     def is_configured(self) -> bool:
         return bool(self.settings.supabase_url and self._read_key())
@@ -165,6 +316,8 @@ class SupabaseMarketRepository:
         )
 
     async def fetch_listing_row_by_id(self, listing_id: str) -> dict[str, Any] | None:
+        if self._use_stub_storage:
+            return self._stub_listings_by_id.get(listing_id)
         payload = await self._request(
             "GET",
             "car_listings",
@@ -175,6 +328,8 @@ class SupabaseMarketRepository:
         return payload[0]
 
     async def fetch_listing_row_by_source_url(self, source_url: str) -> dict[str, Any] | None:
+        if self._use_stub_storage:
+            return self._stub_listings_by_source_url.get(source_url)
         payload = await self._request(
             "GET",
             "car_listings",
@@ -188,6 +343,8 @@ class SupabaseMarketRepository:
         cleaned = [item for item in dict.fromkeys(listing_ids) if item]
         if not cleaned:
             return []
+        if self._use_stub_storage:
+            return [self._stub_listings_by_id[item] for item in cleaned if item in self._stub_listings_by_id]
         selector = ",".join(cleaned)
         payload = await self._request(
             "GET",
@@ -201,6 +358,10 @@ class SupabaseMarketRepository:
         return list(payload or [])
 
     async def fetch_user_favorite_rows(self, *, user_id: str) -> list[dict[str, Any]]:
+        if self._use_stub_storage:
+            rows = list(self._stub_user_favorites.get(user_id, []))
+            rows.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+            return rows
         payload = await self._request(
             "GET",
             "user_favorites",
@@ -215,6 +376,22 @@ class SupabaseMarketRepository:
         return list(payload or [])
 
     async def add_user_favorite(self, *, user_id: str, listing_id: str) -> dict[str, Any] | None:
+        if self._use_stub_storage:
+            existing_rows = self._stub_user_favorites.setdefault(user_id, [])
+            existing = next(
+                (row for row in existing_rows if str(row.get("listing_id") or "") == listing_id),
+                None,
+            )
+            if existing:
+                return existing
+            row = {
+                "id": str(uuid4()),
+                "user_id": user_id,
+                "listing_id": listing_id,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            existing_rows.insert(0, row)
+            return row
         payload = await self._request(
             "POST",
             "user_favorites",
@@ -228,6 +405,13 @@ class SupabaseMarketRepository:
         return payload[0]
 
     async def remove_user_favorite(self, *, user_id: str, listing_id: str) -> bool:
+        if self._use_stub_storage:
+            rows = self._stub_user_favorites.get(user_id, [])
+            before = len(rows)
+            self._stub_user_favorites[user_id] = [
+                row for row in rows if str(row.get("listing_id") or "") != listing_id
+            ]
+            return len(self._stub_user_favorites[user_id]) != before
         payload = await self._request(
             "DELETE",
             "user_favorites",
@@ -241,6 +425,10 @@ class SupabaseMarketRepository:
         return bool(payload)
 
     async def fetch_user_saved_search_rows(self, *, user_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        if self._use_stub_storage:
+            rows = list(self._stub_user_saved_searches.get(user_id, []))
+            rows.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+            return rows[:limit]
         payload = await self._request(
             "GET",
             "user_saved_searches",
@@ -261,6 +449,16 @@ class SupabaseMarketRepository:
         name: str,
         filters: dict[str, Any],
     ) -> dict[str, Any] | None:
+        if self._use_stub_storage:
+            row = {
+                "id": str(uuid4()),
+                "user_id": user_id,
+                "name": name,
+                "filters": filters,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            self._stub_user_saved_searches.setdefault(user_id, []).insert(0, row)
+            return row
         payload = await self._request(
             "POST",
             "user_saved_searches",
@@ -273,6 +471,13 @@ class SupabaseMarketRepository:
         return payload[0]
 
     async def delete_user_saved_search(self, *, user_id: str, search_id: str) -> bool:
+        if self._use_stub_storage:
+            rows = self._stub_user_saved_searches.get(user_id, [])
+            before = len(rows)
+            self._stub_user_saved_searches[user_id] = [
+                row for row in rows if str(row.get("id") or "") != search_id
+            ]
+            return len(self._stub_user_saved_searches[user_id]) != before
         payload = await self._request(
             "DELETE",
             "user_saved_searches",
@@ -296,6 +501,28 @@ class SupabaseMarketRepository:
         km_max: int | None,
         limit: int = 30,
     ) -> list[dict[str, Any]]:
+        if self._use_stub_storage:
+            def is_match(row: dict[str, Any]) -> bool:
+                if str(row.get("brand") or "").lower() != brand.lower():
+                    return False
+                if str(row.get("model") or "").lower() != model.lower():
+                    return False
+                year = row.get("year")
+                km = row.get("km")
+                if year_min is not None and (year is None or int(year) < year_min):
+                    return False
+                if year_max is not None and (year is None or int(year) > year_max):
+                    return False
+                if km_min is not None and (km is None or int(km) < km_min):
+                    return False
+                if km_max is not None and (km is None or int(km) > km_max):
+                    return False
+                return True
+
+            rows = [row for row in self._stub_listings_by_id.values() if is_match(row)]
+            rows.sort(key=lambda item: str(item.get("scraped_at") or ""), reverse=True)
+            return rows[:limit]
+
         params: dict[str, str] = {
             "select": "*",
             "brand": f"eq.{brand}",
@@ -325,6 +552,19 @@ class SupabaseMarketRepository:
         order_by: str = "price.asc",
         limit: int = 20,
     ) -> list[dict[str, Any]]:
+        if self._use_stub_storage:
+            rows = [
+                row
+                for row in self._stub_listings_by_id.values()
+                if str(row.get("brand") or "").lower() == brand.lower()
+                and str(row.get("model") or "").lower() == model.lower()
+            ]
+            if order_by == "price.asc":
+                rows.sort(key=lambda item: int(item.get("price") or 0))
+            elif order_by == "price.desc":
+                rows.sort(key=lambda item: int(item.get("price") or 0), reverse=True)
+            return rows[:limit]
+
         payload = await self._request(
             "GET",
             "car_listings",
@@ -339,6 +579,8 @@ class SupabaseMarketRepository:
         return list(payload or [])
 
     async def fetch_price_history(self, listing_id: str, limit: int = 30) -> list[dict[str, Any]]:
+        if self._use_stub_storage:
+            return list(self._stub_price_history.get(listing_id, []))[:limit]
         payload = await self._request(
             "GET",
             "price_history",
@@ -565,6 +807,23 @@ class SupabaseMarketRepository:
         active_only: bool = False,
         limit: int = 200,
     ) -> list[dict[str, Any]]:
+        if self._use_stub_storage:
+            if not user_id and not client_id:
+                return []
+
+            def include_row(row: dict[str, Any]) -> bool:
+                if user_id and str(row.get("user_id") or "") != user_id:
+                    return False
+                if client_id and not user_id and str(row.get("client_id") or "") != client_id:
+                    return False
+                if active_only and not bool(row.get("is_active")):
+                    return False
+                return True
+
+            rows = [row for row in self._stub_price_alerts if include_row(row)]
+            rows.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+            return rows[:limit]
+
         if not user_id and not client_id:
             return []
         params: dict[str, str] = {
@@ -590,6 +849,20 @@ class SupabaseMarketRepository:
         user_id: str | None = None,
         client_id: str | None = None,
     ) -> dict[str, Any] | None:
+        if self._use_stub_storage:
+            for row in self._stub_price_alerts:
+                if str(row.get("listing_id") or "") != listing_id:
+                    continue
+                if int(row.get("target_price") or 0) != target_price:
+                    continue
+                if user_id and str(row.get("user_id") or "") != user_id:
+                    continue
+                if client_id and not user_id and str(row.get("client_id") or "") != client_id:
+                    continue
+                if bool(row.get("is_active")):
+                    return row
+            return None
+
         if not user_id and not client_id:
             return None
         params: dict[str, str] = {
@@ -617,6 +890,27 @@ class SupabaseMarketRepository:
         user_id: str | None = None,
         client_id: str | None = None,
     ) -> dict[str, Any] | None:
+        if self._use_stub_storage:
+            listing = self._stub_listings_by_id.get(listing_id)
+            row = {
+                "id": str(uuid4()),
+                "listing_id": listing_id,
+                "target_price": target_price,
+                "is_active": True,
+                "notified_at": None,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "user_id": user_id,
+                "client_id": client_id,
+                "car_listings": {
+                    "title": str((listing or {}).get("title") or "Annuncio"),
+                    "price": int((listing or {}).get("price") or 0),
+                    "image_url": (listing or {}).get("image_url"),
+                    "source_url": (listing or {}).get("source_url"),
+                },
+            }
+            self._stub_price_alerts.append(row)
+            return row
+
         row = {
             "listing_id": listing_id,
             "target_price": target_price,
@@ -657,6 +951,18 @@ class SupabaseMarketRepository:
         user_id: str | None = None,
         client_id: str | None = None,
     ) -> dict[str, Any] | None:
+        if self._use_stub_storage:
+            for row in self._stub_price_alerts:
+                if str(row.get("id") or "") != alert_id:
+                    continue
+                if user_id and str(row.get("user_id") or "") != user_id:
+                    continue
+                if client_id and not user_id and str(row.get("client_id") or "") != client_id:
+                    continue
+                row["is_active"] = False
+                return row
+            return None
+
         params: dict[str, str] = {"id": f"eq.{alert_id}"}
         if user_id:
             params["user_id"] = f"eq.{user_id}"
@@ -691,6 +997,15 @@ class SupabaseMarketRepository:
         return row
 
     async def fetch_due_price_alert_rows(self, *, limit: int = 200) -> list[dict[str, Any]]:
+        if self._use_stub_storage:
+            rows = [
+                row
+                for row in self._stub_price_alerts
+                if bool(row.get("is_active")) and row.get("notified_at") is None
+            ]
+            rows.sort(key=lambda item: str(item.get("created_at") or ""))
+            return rows[:limit]
+
         payload = await self._request(
             "GET",
             "price_alerts",
@@ -708,6 +1023,21 @@ class SupabaseMarketRepository:
         self,
         alert_ids: list[str],
     ) -> dict[str, dict[str, Any]]:
+        if self._use_stub_storage:
+            cleaned = {item for item in alert_ids if item}
+            latest: dict[str, dict[str, Any]] = {}
+            rows = sorted(
+                self._stub_alert_delivery_attempts,
+                key=lambda item: str(item.get("created_at") or ""),
+                reverse=True,
+            )
+            for row in rows:
+                alert_id = str(row.get("alert_id") or "")
+                if not alert_id or alert_id not in cleaned or alert_id in latest:
+                    continue
+                latest[alert_id] = row
+            return latest
+
         cleaned = sorted({item for item in alert_ids if item})
         if not cleaned:
             return {}
@@ -733,7 +1063,46 @@ class SupabaseMarketRepository:
             latest[alert_id] = row
         return latest
 
+    async def fetch_alert_delivery_attempt_rows(
+        self,
+        *,
+        limit: int = 500,
+        since_iso: str | None = None,
+    ) -> list[dict[str, Any]]:
+        if self._use_stub_storage:
+            rows = sorted(
+                self._stub_alert_delivery_attempts,
+                key=lambda item: str(item.get("created_at") or ""),
+                reverse=True,
+            )
+            if since_iso:
+                rows = [row for row in rows if str(row.get("created_at") or "") >= since_iso]
+            return rows[: max(1, min(limit, 5000))]
+
+        params: dict[str, str] = {
+            "select": "alert_id,attempt_number,status,channel,error_message,created_at,idempotency_key,next_retry_at,delivered_at",
+            "order": "created_at.desc",
+            "limit": str(max(1, min(limit, 5000))),
+        }
+        if since_iso:
+            params["created_at"] = f"gte.{since_iso}"
+        try:
+            payload = await self._request(
+                "GET",
+                "alert_delivery_attempts",
+                params=params,
+            )
+        except httpx.HTTPStatusError:
+            return []
+        return list(payload or [])
+
     async def count_delivery_attempts_by_run(self, run_id: str) -> int:
+        if self._use_stub_storage:
+            return sum(
+                1
+                for row in self._stub_alert_delivery_attempts
+                if str(row.get("idempotency_key") or "") == run_id
+            )
         if not run_id:
             return 0
         try:
@@ -763,6 +1132,27 @@ class SupabaseMarketRepository:
         idempotency_key: str,
         meta: dict[str, Any] | None = None,
     ) -> None:
+        if self._use_stub_storage:
+            self._stub_alert_delivery_attempts.append(
+                {
+                    "alert_id": alert_id,
+                    "attempt_number": attempt_number,
+                    "status": status,
+                    "channel": channel,
+                    "error_message": error_message,
+                    "next_retry_at": next_retry_at.astimezone(timezone.utc).isoformat()
+                    if next_retry_at
+                    else None,
+                    "delivered_at": delivered_at.astimezone(timezone.utc).isoformat()
+                    if delivered_at
+                    else None,
+                    "idempotency_key": idempotency_key,
+                    "meta": meta or {},
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            return
+
         if not self._write_key():
             return
         row = {
@@ -788,6 +1178,13 @@ class SupabaseMarketRepository:
             return
 
     async def fetch_user_email(self, user_id: str) -> str | None:
+        if self._use_stub_storage:
+            if not user_id:
+                return None
+            if user_id in self._stub_user_email_by_user_id:
+                return self._stub_user_email_by_user_id[user_id]
+            return f"{user_id}@example.com"
+
         if not user_id:
             return None
         payload = await self._auth_request("GET", f"/auth/v1/admin/users/{user_id}")
@@ -806,6 +1203,17 @@ class SupabaseMarketRepository:
         alert_id: str,
         notified_at: datetime,
     ) -> bool:
+        if self._use_stub_storage:
+            for row in self._stub_price_alerts:
+                if str(row.get("id") or "") != alert_id:
+                    continue
+                if not bool(row.get("is_active")) or row.get("notified_at") is not None:
+                    return False
+                row["is_active"] = False
+                row["notified_at"] = notified_at.astimezone(timezone.utc).isoformat()
+                return True
+            return False
+
         payload = await self._request(
             "PATCH",
             "price_alerts",

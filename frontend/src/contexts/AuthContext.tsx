@@ -1,18 +1,8 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import type { User, Session } from "@supabase/supabase-js";
+import { useEffect, useState, ReactNode } from "react";
+import type { Session, User } from "@supabase/supabase-js";
+
+import { AuthContext } from "@/contexts/authContextStore";
 import { supabase } from "@/integrations/supabase/client";
-
-interface AuthContextValue {
-  user: User | null;
-  session: Session | null;
-  loading: boolean;
-  signInWithGoogle: () => Promise<void>;
-  signInWithEmail: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUpWithEmail: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signOut: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -20,11 +10,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
+      })
+      .catch((error) => {
+        console.error("[AuthContext] Unable to read Supabase session:", error);
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+      });
 
     const {
       data: { subscription },
@@ -72,10 +70,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
-  return ctx;
 }

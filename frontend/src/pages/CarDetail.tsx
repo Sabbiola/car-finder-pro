@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import {
@@ -35,7 +35,6 @@ import PriceAlertButton from "@/components/PriceAlertButton";
 import CarCard from "@/components/CarCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import ListingInsightsPanel from "@/features/results/components/ListingInsightsPanel";
 import { useListingAnalysis } from "@/features/results/hooks/useListingAnalysis";
 import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,9 +42,11 @@ import { FALLBACK_IMAGE } from "@/lib/constants";
 import type { CarListing } from "@/lib/api/listings";
 import { sourceColors, sourceLabels } from "@/lib/mock-data";
 import { priceRatingConfig as ratingConfig } from "@/lib/rating-config";
-import { getRuntimeConfig } from "@/lib/runtimeConfig";
+import { getFastApiBaseUrlOrThrow, getRuntimeConfig } from "@/lib/runtimeConfig";
 import { toCardListing } from "@/lib/toCardListing";
 import { fetchListingDetailContext } from "@/services/api/listingDetail";
+
+const ListingInsightsPanel = lazy(() => import("@/features/results/components/ListingInsightsPanel"));
 
 interface ExtendedListing extends CarListing {
   description?: string | null;
@@ -207,8 +208,8 @@ const CarDetail = () => {
 
       try {
         const runtime = getRuntimeConfig();
-        if (runtime.backendMode === "fastapi" && runtime.apiBaseUrl) {
-          const detail = await fetchListingDetailContext(runtime.apiBaseUrl, {
+        if (runtime.backendMode === "fastapi") {
+          const detail = await fetchListingDetailContext(getFastApiBaseUrlOrThrow("Listing detail"), {
             listingId: id,
             sourceUrl: sourceUrlFromState,
             includeAnalysis: false,
@@ -300,7 +301,9 @@ const CarDetail = () => {
           setResolvedUrl(fallback.source_url || sourceUrlFromState);
           setFetchError(null);
         } else {
-          setFetchError("Errore imprevisto nel caricamento dell'auto.");
+          setFetchError(
+            error instanceof Error ? error.message : "Errore imprevisto nel caricamento dell'auto.",
+          );
         }
       } finally {
         if (!cancelled) {
@@ -565,7 +568,15 @@ const CarDetail = () => {
                 Caricamento analisi decisionale...
               </div>
             ) : (
-              <ListingInsightsPanel listing={car} analysis={analysisQuery.data} />
+              <Suspense
+                fallback={
+                  <div className="rounded-2xl border border-border/60 bg-card p-4 text-sm text-muted-foreground">
+                    Caricamento insights...
+                  </div>
+                }
+              >
+                <ListingInsightsPanel listing={car} analysis={analysisQuery.data} />
+              </Suspense>
             )}
           </div>
         )}

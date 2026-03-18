@@ -4,8 +4,12 @@ Questo backlog traccia i gap reali che restano dopo il lavoro di migrazione Fast
 
 ## P0 - Da Chiudere Prima di Una Dichiarazione Seria di Production Ready
 
-- Rendere FastAPI il default runtime esplicito end-to-end dove questa e la direzione voluta, non solo una modalita disponibile.
+- Verificare con evidenza operativa (staging/canary) il comportamento runtime gia implementato: fastapi default e fail-closed sui journey core.
 - Raccogliere evidenza staging per `fastapi_only`, canary rollout e rollback drill.
+- Eseguire almeno un ciclo completo:
+  - soak staging 5-7 giorni
+  - canary con gate documentati
+  - rollback drill con evidenza pre/post
 - Verificare il bootstrap locale con toolchain correnti:
   - Python 3.14
   - Node 22
@@ -17,19 +21,20 @@ Questo backlog traccia i gap reali che restano dopo il lavoro di migrazione Fast
 ## P1 - Hardening
 
 - Portare l'observability oltre i raw ops endpoint:
-  - sink reale
-  - ownership dashboard
-  - alert azionabili
+  - consumo dashboard esterna continuativo su payload `ops-metrics/ops-alerts`
+  - ownership e on-call stabile dei runbook
 - Provare operativamente il delivery alerts:
   - send in staging
   - retry behavior
   - audit visibility
-- Estendere la copertura E2E oltre l'attuale spec centrata sullo stream:
+- Stabilizzare in CI/staging la nuova copertura E2E journey core (oltre lo stream):
+  - search fastapi mode
   - detail
   - compare
   - favorites
   - saved searches
   - alerts
+  - auth non-auth redirect path
 - Documentare lo stato branch protection e required checks fuori dal repo e linkarlo dalla release documentation.
 
 ## P2 - Pulizia Boundary

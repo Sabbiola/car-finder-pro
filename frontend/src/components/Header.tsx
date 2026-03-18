@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useFavorites } from "@/hooks/useFavorites";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 import AuthModal from "./AuthModal";
 import AISearchDialog from "./AISearchDialog";
 
