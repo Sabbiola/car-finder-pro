@@ -35,6 +35,36 @@ Profili target:
 - staging: `backend/.env.staging.example` con `FASTAPI_PROXY_MODE=fastapi_only`
 - production: `backend/.env.production.example` con `FASTAPI_PROXY_MODE=fastapi_only`
 
+## Deploy su Railway
+
+Deploy consigliato:
+- servizio Railway separato con root `backend/`
+- build via `backend/Dockerfile`
+- dominio dedicato, ad esempio `api.carfinderpro.app`
+
+Il container supporta sia porta locale `8000` sia la env `PORT` assegnata dal provider.
+
+Env minime di produzione:
+- `ENV=production`
+- `CORS_ORIGINS=https://carfinderpro.app`
+- `FASTAPI_PROXY_MODE=fastapi_only`
+- `TEST_STUB_MODE=false`
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_ANON_KEY`
+- `SCRAPINGBEE_API_KEY`
+- `EBAY_CLIENT_ID`
+- `EBAY_CLIENT_SECRET`
+- `ALERTS_PROCESSOR_TOKEN`
+- `RESEND_API_KEY`
+- `RESEND_FROM_EMAIL`
+
+Verifica minima dopo il deploy:
+
+```bash
+curl https://<backend-domain>/healthz
+```
+
 ## Inventory Rotte Correnti
 
 - `POST /api/search`
