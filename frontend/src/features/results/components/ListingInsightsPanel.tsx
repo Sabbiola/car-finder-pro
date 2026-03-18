@@ -20,10 +20,10 @@ const ListingInsightsPanel = ({ listing, analysis }: Props) => {
   const [negotiationOpen, setNegotiationOpen] = useState(false);
   const merged = useMemo(
     () => ({
-      deal_summary: analysis?.deal_summary || listing.deal_summary || null,
-      trust_summary: analysis?.trust_summary || listing.trust_summary || null,
-      negotiation_summary: analysis?.negotiation_summary || listing.negotiation_summary || null,
-      ownership_estimate: analysis?.ownership_estimate || null,
+      deal_summary: analysis?.deal_summary ?? listing.deal_summary ?? null,
+      trust_summary: analysis?.trust_summary ?? listing.trust_summary ?? null,
+      negotiation_summary: analysis?.negotiation_summary ?? listing.negotiation_summary ?? null,
+      ownership_estimate: analysis?.ownership_estimate ?? null,
     }),
     [analysis, listing],
   );
@@ -57,9 +57,9 @@ const ListingInsightsPanel = ({ listing, analysis }: Props) => {
           </TabsContent>
           <TabsContent value="trust">
             <TrustTab
-              flags={merged.trust_summary?.flags || []}
-              summary={merged.trust_summary?.summary || null}
-              score={merged.trust_summary?.trust_score || null}
+              flags={merged.trust_summary?.flags ?? []}
+              summary={merged.trust_summary?.summary ?? null}
+              score={merged.trust_summary?.trust_score ?? null}
             />
           </TabsContent>
           <TabsContent value="ownership">

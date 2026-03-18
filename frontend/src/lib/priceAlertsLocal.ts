@@ -14,7 +14,23 @@ export interface LocalPriceAlert {
 
 export function readLocalAlerts(): LocalPriceAlert[] {
   try {
-    return JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+    const parsed: unknown = JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter((item): item is LocalPriceAlert => {
+      if (!item || typeof item !== "object") {
+        return false;
+      }
+      const candidate = item as Record<string, unknown>;
+      return (
+        typeof candidate.listingId === "string" &&
+        typeof candidate.title === "string" &&
+        typeof candidate.currentPrice === "number" &&
+        typeof candidate.targetPrice === "number" &&
+        typeof candidate.createdAt === "string"
+      );
+    });
   } catch {
     return [];
   }

@@ -23,7 +23,7 @@ const CLIENT_ID_KEY = "car-finder-client-id";
 
 function getClientId(): string {
   const existing = localStorage.getItem(CLIENT_ID_KEY);
-  if (existing) return existing;
+  if (existing) {return existing;}
   const generated =
     typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
@@ -52,7 +52,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function normalizeCarListingSummary(value: unknown): AlertRow["car_listings"] {
-  const maybeRecord = Array.isArray(value) ? value[0] : value;
+  const maybeRecord: unknown = Array.isArray(value) ? value[0] : value;
   if (!isRecord(maybeRecord)) {
     return null;
   }
@@ -91,15 +91,15 @@ function parseAlertRow(value: unknown): AlertRow | null {
 
 function filtersLabel(filters: SearchFiltersState): string {
   const parts: string[] = [];
-  if (filters.brand) parts.push(filters.brand);
-  if (filters.model) parts.push(filters.model);
+  if (filters.brand) {parts.push(filters.brand);}
+  if (filters.model) {parts.push(filters.model);}
   if (filters.yearMin || filters.yearMax) {
     parts.push(`${filters.yearMin || ""}-${filters.yearMax || ""}`);
   }
   if (filters.priceMax) {
     parts.push(`max EUR ${Number(filters.priceMax).toLocaleString("it-IT")}`);
   }
-  if (filters.fuel) parts.push(filters.fuel);
+  if (filters.fuel) {parts.push(filters.fuel);}
   return parts.length ? parts.join(" | ") : "Tutti i filtri";
 }
 
@@ -118,7 +118,7 @@ export default function Profile() {
   const [activeTab, setActiveTab] = useState("info");
 
   useEffect(() => {
-    if (activeTab !== "alerts" || !user) return;
+    if (activeTab !== "alerts" || !user) {return;}
     setAlertsLoading(true);
     const load = async () => {
       try {
@@ -169,7 +169,7 @@ export default function Profile() {
   }, [activeTab, isFastApiMode, user]);
 
   useEffect(() => {
-    if (activeTab !== "favorites" || !user) return;
+    if (activeTab !== "favorites" || !user) {return;}
     if (!favorites.length) {
       setFavListings([]);
       return;
@@ -197,7 +197,7 @@ export default function Profile() {
     );
   }
 
-  if (!user) return <Navigate to="/" replace />;
+  if (!user) {return <Navigate to="/" replace />;}
 
   const initials = user.email ? user.email.slice(0, 2).toUpperCase() : "U";
   const joinedDate = new Date(user.created_at).toLocaleDateString("it-IT", {
@@ -219,12 +219,12 @@ export default function Profile() {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
       if (key === "isNew") {
-        if (value === true) params.set("isNew", "true");
-        else if (value === false) params.set("isNew", "false");
+        if (value === true) {params.set("isNew", "true");}
+        else if (value === false) {params.set("isNew", "false");}
         return;
       }
       if (Array.isArray(value)) {
-        if (value.length) params.set(key, value.join(","));
+        if (value.length) {params.set(key, value.join(","));}
         return;
       }
       if (value !== "" && value !== null && value !== undefined) {

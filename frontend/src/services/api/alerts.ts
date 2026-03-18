@@ -48,9 +48,9 @@ export async function listAlertsApi(params: {
 }): Promise<AlertListResponse> {
   const baseUrl = resolveApiBaseUrl();
   const query = new URLSearchParams();
-  if (params.userId) query.set("user_id", params.userId);
-  if (params.clientId) query.set("client_id", params.clientId);
-  if (params.activeOnly) query.set("active_only", "true");
+  if (params.userId) {query.set("user_id", params.userId);}
+  if (params.clientId) {query.set("client_id", params.clientId);}
+  if (params.activeOnly) {query.set("active_only", "true");}
 
   const requestId = createRequestId("alerts-list");
   const response = await fetch(`${baseUrl}/api/alerts?${query.toString()}`, {

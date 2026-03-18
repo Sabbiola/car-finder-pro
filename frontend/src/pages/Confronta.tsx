@@ -40,6 +40,7 @@ const rows: RowDef[] = [
   { label: "Porte", get: (c) => c.doors ?? "—" },
   {
     label: "Rating prezzo",
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     get: (c) => priceRatingConfig[c.price_rating || "normal"]?.label || "—",
   },
   { label: "Posizione", get: (c) => c.location || "—" },
@@ -50,7 +51,7 @@ function findBestIndex(values: (number | null)[], mode: "min" | "max"): number |
     v: number;
     i: number;
   }[];
-  if (nums.length < 2) return null;
+  if (nums.length < 2) {return null;}
   const best =
     mode === "min"
       ? nums.reduce((a, b) => (a.v < b.v ? a : b))
@@ -65,7 +66,7 @@ const Confronta = () => {
   const ids = idsParam.split(",").filter(Boolean);
   const idsKey = ids.join(",");
   const [cars, setCars] = useState<CarListing[]>([]);
-  const [analysesById, setAnalysesById] = useState<Record<string, ListingAnalysis>>({});
+  const [analysesById, setAnalysesById] = useState<Partial<Record<string, ListingAnalysis>>>({});
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
@@ -89,7 +90,7 @@ const Confronta = () => {
 
   useEffect(() => {
     const runtime = getRuntimeConfig();
-    if (runtime.backendMode !== "fastapi" || cars.length === 0) return;
+    if (runtime.backendMode !== "fastapi" || cars.length === 0) {return;}
     const apiBaseUrl = getFastApiBaseUrlOrThrow("Compare analysis");
 
     let cancelled = false;
@@ -103,9 +104,9 @@ const Confronta = () => {
       })),
     )
       .then((entries) => {
-        if (cancelled) return;
+        if (cancelled) {return;}
         setAnalysesById(
-          entries.reduce<Record<string, ListingAnalysis>>((acc, entry) => {
+          entries.reduce<Partial<Record<string, ListingAnalysis>>>((acc, entry) => {
             acc[entry.id] = entry.analysis;
             return acc;
           }, {}),
@@ -203,7 +204,7 @@ const Confronta = () => {
                   {rows.map((row, ri) => {
                     const bestIdx =
                       row.bestMode && row.numericGet
-                        ? findBestIndex(cars.map(row.numericGet!), row.bestMode)
+                        ? findBestIndex(cars.map(row.numericGet), row.bestMode)
                         : null;
 
                     return (

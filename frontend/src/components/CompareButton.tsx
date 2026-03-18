@@ -9,14 +9,14 @@ const CompareButton = ({ id }: Props) => {
   const { addToCompare, removeFromCompare, isInCompare, canAdd } = useCompare();
   const active = isInCompare(id);
 
-  if (!active && !canAdd) return null;
+  if (!active && !canAdd) {return null;}
 
   return (
     <button
       onClick={(e) => {
         e.stopPropagation();
-        if (active) removeFromCompare(id);
-        else addToCompare(id);
+        if (active) {removeFromCompare(id);}
+        else {addToCompare(id);}
       }}
       title={active ? "Rimuovi dal confronto" : "Aggiungi al confronto"}
       className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg border transition-colors duration-150 flex items-center gap-1 ${

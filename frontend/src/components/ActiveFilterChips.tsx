@@ -50,14 +50,14 @@ const ActiveFilterChips = ({ filters, onChange }: Props) => {
   const chips: { key: keyof SearchFiltersState; label: string; value: string }[] = [];
 
   for (const [key, val] of Object.entries(filters)) {
-    if (key === "sources" || key === "isNew" || key === "sellerType") continue;
-    if (val === defaultValues[key] || val === "" || val === null || val === undefined) continue;
+    if (key === "sources" || key === "isNew" || key === "sellerType") {continue;}
+    if (val === defaultValues[key] || val === "" || val === null || val === undefined) {continue;}
     const label = labels[key] || key;
     chips.push({ key: key as keyof SearchFiltersState, label, value: String(val) });
   }
 
-  if (filters.isNew === true) chips.push({ key: "isNew", label: "Condizione", value: "Nuovo" });
-  if (filters.isNew === false) chips.push({ key: "isNew", label: "Condizione", value: "Usato" });
+  if (filters.isNew === true) {chips.push({ key: "isNew", label: "Condizione", value: "Nuovo" });}
+  if (filters.isNew === false) {chips.push({ key: "isNew", label: "Condizione", value: "Usato" });}
   if (filters.sellerType !== "all") {
     chips.push({
       key: "sellerType",
@@ -66,7 +66,7 @@ const ActiveFilterChips = ({ filters, onChange }: Props) => {
     });
   }
 
-  if (chips.length === 0) return null;
+  if (chips.length === 0) {return null;}
 
   const remove = (key: keyof SearchFiltersState) => {
     onChange({ ...filters, [key]: defaultValues[key as string] ?? "" });

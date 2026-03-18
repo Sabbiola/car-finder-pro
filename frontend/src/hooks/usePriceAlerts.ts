@@ -50,7 +50,7 @@ export function usePriceAlerts() {
           .eq("user_id", user.id)
           .eq("is_active", true);
         setAlerts(
-          (data || []).map((row) => ({
+          (data ?? []).map((row) => ({
             listingId: row.listing_id,
             title: "",
             currentPrice: 0,

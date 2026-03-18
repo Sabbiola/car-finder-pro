@@ -31,7 +31,7 @@ function isNominatimResultArray(value: unknown): value is NominatimItem[] {
 function loadCache(): Map<string, [number, number] | null> {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return new Map();
+    if (!raw) {return new Map();}
     return new Map(JSON.parse(raw) as [string, [number, number] | null][]);
   } catch {
     return new Map();
@@ -50,7 +50,7 @@ const geocodeCache = loadCache();
 
 async function geocode(location: string): Promise<[number, number] | null> {
   const key = location.toLowerCase().trim();
-  if (geocodeCache.has(key)) return geocodeCache.get(key) ?? null;
+  if (geocodeCache.has(key)) {return geocodeCache.get(key) ?? null;}
 
   try {
     const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(key + ", Italia")}&format=json&limit=1`;
@@ -112,7 +112,7 @@ const ListingsMap = ({ listings }: Props) => {
 
   useEffect(() => {
     const toGeocode = listings.filter((l) => l.location);
-    if (!toGeocode.length) return;
+    if (!toGeocode.length) {return;}
 
     setGeoListings([]);
     setProgress({ done: 0, total: toGeocode.length });
@@ -124,7 +124,7 @@ const ListingsMap = ({ listings }: Props) => {
 
     const run = async () => {
       for (let i = 0; i < toGeocode.length; i += BATCH) {
-        if (!isMounted.current) return;
+        if (!isMounted.current) {return;}
         const batch = toGeocode.slice(i, i + BATCH);
         const coordResults = await Promise.all(
           batch.map((l) => geocode(l.location ?? "")),
@@ -136,12 +136,10 @@ const ListingsMap = ({ listings }: Props) => {
           }
         });
         done += batch.length;
-        if (isMounted.current) {
-          setProgress({ done, total: toGeocode.length });
-          setGeoListings([...results]);
-        }
+        setProgress({ done, total: toGeocode.length });
+        setGeoListings([...results]);
       }
-      if (isMounted.current) setProgress(null);
+      setProgress(null);
     };
 
     void run();

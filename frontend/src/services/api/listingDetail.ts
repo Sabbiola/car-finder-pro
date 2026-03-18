@@ -51,7 +51,7 @@ interface FastApiListingDetailResponse {
   similar_listings?: FastApiVehicleListing[];
   price_samples?: FastApiVehicleListing[];
   price_history?: ListingPriceHistoryPoint[];
-  resolved_by?: "id" | "source_url" | string;
+  resolved_by?: string;
 }
 
 export interface ListingDetailContext {
@@ -89,10 +89,10 @@ export async function fetchListingDetailContext(
 
   return {
     listing: mapFastApiListing(payload.listing),
-    analysis: payload.analysis || null,
-    similarListings: (payload.similar_listings || []).map(mapFastApiListing),
-    priceSamples: (payload.price_samples || []).map(mapFastApiListing),
-    priceHistory: (payload.price_history || []).map((row) => ({
+    analysis: payload.analysis ?? null,
+    similarListings: (payload.similar_listings ?? []).map(mapFastApiListing),
+    priceSamples: (payload.price_samples ?? []).map(mapFastApiListing),
+    priceHistory: (payload.price_history ?? []).map((row) => ({
       price: row.price,
       recorded_at: row.recorded_at,
     })),

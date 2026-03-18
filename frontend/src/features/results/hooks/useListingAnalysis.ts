@@ -32,7 +32,7 @@ export function useListingAnalysis({
     queryFn: async () => {
       return analyzeListing(getFastApiBaseUrlOrThrow("Listing analysis"), {
         listing_id: listingId || undefined,
-        listing: listingId ? undefined : listing || undefined,
+        listing: listingId ? undefined : listing ?? undefined,
         include,
         ownership_profile: ownershipProfile,
       });

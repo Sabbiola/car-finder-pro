@@ -24,7 +24,7 @@ const ListingResultCard = ({ listing, index }: Props) => {
   const [open, setOpen] = useState(false);
   const runtime = getRuntimeConfig();
   const cardListing = toCardListing(listing);
-  const topReasons = listing.deal_summary?.top_reasons || [];
+  const topReasons = listing.deal_summary?.top_reasons ?? [];
   const riskLevel = listing.trust_summary?.risk_level;
   const canShowInsights =
     runtime.backendMode === "fastapi" && (!!listing.deal_summary || !!listing.trust_summary);

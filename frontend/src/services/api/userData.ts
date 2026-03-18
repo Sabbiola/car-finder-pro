@@ -43,7 +43,7 @@ async function callApi<T>(path: string, init?: RequestInit): Promise<T> {
     headers: {
       "x-request-id": requestId,
       ...(hasBody ? { "Content-Type": "application/json" } : {}),
-      ...(init?.headers || {}),
+      ...(init?.headers ?? {}),
     },
   });
   if (!response.ok) {
@@ -54,7 +54,7 @@ async function callApi<T>(path: string, init?: RequestInit): Promise<T> {
 
 export async function listUserFavorites(userId: string): Promise<string[]> {
   const payload = await callApi<FavoriteListResponse>(`/api/user/favorites?user_id=${encodeURIComponent(userId)}`);
-  return (payload.favorites || []).map((item) => item.listing_id).filter(Boolean);
+  return payload.favorites.map((item) => item.listing_id).filter(Boolean);
 }
 
 export async function addUserFavorite(userId: string, listingId: string): Promise<string[]> {
@@ -62,7 +62,7 @@ export async function addUserFavorite(userId: string, listingId: string): Promis
     method: "POST",
     body: JSON.stringify({ user_id: userId, listing_id: listingId }),
   });
-  return (payload.favorites || []).map((item) => item.listing_id).filter(Boolean);
+  return payload.favorites.map((item) => item.listing_id).filter(Boolean);
 }
 
 export async function removeUserFavorite(userId: string, listingId: string): Promise<string[]> {
@@ -70,14 +70,14 @@ export async function removeUserFavorite(userId: string, listingId: string): Pro
     method: "DELETE",
     body: JSON.stringify({ user_id: userId }),
   });
-  return (payload.favorites || []).map((item) => item.listing_id).filter(Boolean);
+  return payload.favorites.map((item) => item.listing_id).filter(Boolean);
 }
 
 export async function listUserSavedSearches(userId: string): Promise<SavedSearchRecord[]> {
   const payload = await callApi<SavedSearchListResponse>(
     `/api/user/saved-searches?user_id=${encodeURIComponent(userId)}`,
   );
-  return payload.saved_searches || [];
+  return payload.saved_searches;
 }
 
 export async function createUserSavedSearch(
@@ -103,12 +103,12 @@ export async function deleteUserSavedSearch(userId: string, searchId: string): P
 }
 
 export async function fetchListingsBatch(ids: string[]): Promise<CarListing[]> {
-  if (!ids.length) return [];
+  if (!ids.length) {return [];}
   const payload = await callApi<ListingsBatchResponse>("/api/listings/batch", {
     method: "POST",
     body: JSON.stringify({ ids }),
   });
-  return (payload.listings || []).map((item) =>
+  return payload.listings.map((item) =>
     mapFastApiListing(item as Parameters<typeof mapFastApiListing>[0]),
   );
 }

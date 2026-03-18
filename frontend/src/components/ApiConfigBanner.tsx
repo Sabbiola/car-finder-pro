@@ -21,7 +21,7 @@ const ApiConfigBanner = () => {
   const [baseUrl, setBaseUrl] = useState(initial.apiBaseUrl || "");
   const [saved, setSaved] = useState(false);
 
-  if (!import.meta.env.DEV) return null;
+  if (!import.meta.env.DEV) {return null;}
 
   const save = () => {
     setRuntimeBackendMode(mode);

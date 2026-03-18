@@ -20,7 +20,23 @@ const LS_KEY = "savedSearches";
 
 function readFromStorage(): SavedSearch[] {
   try {
-    return JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+    const parsed: unknown = JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter((item): item is SavedSearch => {
+      if (!item || typeof item !== "object") {
+        return false;
+      }
+      const candidate = item as Record<string, unknown>;
+      return (
+        typeof candidate.id === "string" &&
+        typeof candidate.name === "string" &&
+        typeof candidate.createdAt === "string" &&
+        !!candidate.filters &&
+        typeof candidate.filters === "object"
+      );
+    });
   } catch {
     return [];
   }
@@ -45,7 +61,7 @@ export function useSavedSearches() {
             data.map((r) => ({
               id: r.id,
               name: r.name,
-              filters: r.filters as SearchFiltersState,
+              filters: r.filters,
               createdAt: r.created_at,
             })),
           ),
@@ -83,7 +99,7 @@ export function useSavedSearches() {
         const entry: SavedSearch = {
           id: data.id,
           name: data.name,
-          filters: data.filters as SearchFiltersState,
+          filters: data.filters,
           createdAt: data.created_at,
         };
         setSearches((prev) => [entry, ...prev].slice(0, 20));

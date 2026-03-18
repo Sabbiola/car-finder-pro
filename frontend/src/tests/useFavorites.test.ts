@@ -75,8 +75,9 @@ describe("useFavorites", () => {
     act(() => {
       result.current.toggle("car-1");
     });
-    const stored = JSON.parse(localStorageMock.getItem("car-finder-favorites") || "[]");
-    expect(stored).toContain("car-1");
+    const stored: unknown = JSON.parse(localStorageMock.getItem("car-finder-favorites") || "[]");
+    const storedArray = Array.isArray(stored) ? stored : [];
+    expect(storedArray).toContain("car-1");
   });
 
   it("can track multiple favorites", () => {

@@ -25,10 +25,10 @@ function parseSseChunk(buffer: string): { events: PartialSseEvent[]; rest: strin
     let eventName = "";
     let data = "";
     for (const line of lines) {
-      if (line.startsWith("event:")) eventName = line.slice(6).trim();
-      if (line.startsWith("data:")) data = line.slice(5).trim();
+      if (line.startsWith("event:")) {eventName = line.slice(6).trim();}
+      if (line.startsWith("data:")) {data = line.slice(5).trim();}
     }
-    if (eventName && data) events.push({ event: eventName, data });
+    if (eventName && data) {events.push({ event: eventName, data });}
   }
 
   return { events, rest };
@@ -64,9 +64,9 @@ export async function streamSearch<TPayload = unknown, TListing = unknown>({
   const decoder = new TextDecoder();
   let pending = "";
 
-  while (true) {
+  for (;;) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) {break;}
     pending += decoder.decode(value, { stream: true });
     const { events, rest } = parseSseChunk(pending);
     pending = rest;

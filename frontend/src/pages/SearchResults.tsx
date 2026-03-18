@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/select";
 import Header from "@/components/Header";
 import ApiConfigBanner from "@/components/ApiConfigBanner";
-import SearchFilters, { SearchFiltersState } from "@/components/SearchFilters";
+import SearchFilters, { type SearchFiltersState } from "@/components/SearchFilters";
 import CarCardSkeleton from "@/components/CarCardSkeleton";
 import ActiveFilterChips from "@/components/ActiveFilterChips";
 import ListingResultCard from "@/features/results/components/ListingResultCard";
@@ -48,6 +48,11 @@ function parseSortParam(raw: string | null): SortOption {
 }
 
 function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
+  const sellerTypeParam = params.get("sellerType");
+  const sellerType: SearchFiltersState["sellerType"] =
+    sellerTypeParam === "all" || sellerTypeParam === "private" || sellerTypeParam === "dealer"
+      ? sellerTypeParam
+      : "all";
   const sourcesRaw = params.get("sources");
   const sources = sourcesRaw
     ? sourcesRaw.split(",").filter((s) => s.length > 0)
@@ -71,18 +76,20 @@ function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
     doors: params.get("doors") ?? "",
     bodyType: params.get("bodyType") ?? "",
     location: params.get("location") ?? "",
-    sellerType: (params.get("sellerType") as "all" | "private" | "dealer") ?? "all",
+    sellerType,
     emissionClass: params.get("emissionClass") ?? "",
   };
 }
 
 function mergeUniqueListings(left: CarListing[], right: CarListing[]): CarListing[] {
-  const map = new Map<string, CarListing>();
+  const byKey: Record<string, CarListing> = {};
   for (const listing of [...left, ...right]) {
     const key = buildListingIdentityKey(listing);
-    if (!map.has(key)) map.set(key, listing);
+    if (!Object.prototype.hasOwnProperty.call(byKey, key)) {
+      byKey[key] = listing;
+    }
   }
-  return [...map.values()];
+  return Object.values(byKey);
 }
 
 const SearchResults = () => {
@@ -125,7 +132,7 @@ const SearchResults = () => {
       const useFastApiStream = runtime.backendMode === "fastapi";
 
       if (useFastApiStream) {
-        const selectedSources = currentFilters.sources?.length
+        const selectedSources = currentFilters.sources.length
           ? currentFilters.sources
           : ["autoscout24", "subito", "ebay", "automobile", "brumbrum"];
         const coreSources = selectedSources.filter((s) => FASTAPI_CORE_SOURCES.includes(s as (typeof FASTAPI_CORE_SOURCES)[number]));
@@ -148,7 +155,7 @@ const SearchResults = () => {
           await streamListings(
             { ...currentFilters, sources: coreSources },
             (event) => {
-              if (isStaleRequest()) return;
+              if (isStaleRequest()) {return;}
               if (event.event === "progress") {
                 setStreamProviderStatus((prev) => ({ ...prev, [event.provider]: event.status }));
                 if (typeof event.fetched_count === "number") {
@@ -162,7 +169,7 @@ const SearchResults = () => {
                   streamedResults = reconcileListingsByResultKeys(streamedResults, event.final_result_keys);
                   setListings(streamedResults);
                 }
-              } else if (event.event === "error") {
+              } else {
                 const formatted =
                   event.code === "provider_excluded_unsupported_filter"
                     ? `${event.provider}: escluso per filtri non supportati`
@@ -176,7 +183,7 @@ const SearchResults = () => {
             streamController.signal,
           );
         }
-        if (isStaleRequest()) return;
+        if (isStaleRequest()) {return;}
 
         const finalResults = streamedResults;
         setListings(finalResults);
@@ -192,7 +199,7 @@ const SearchResults = () => {
 
       if (!forceRefresh) {
         const existing = await fetchListings(currentFilters);
-        if (isStaleRequest()) return;
+        if (isStaleRequest()) {return;}
         if (existing.length > 0) {
           const newestTs = Math.max(...existing.map((l) => new Date(l.scraped_at).getTime()));
           const ageHours = (Date.now() - newestTs) / 3_600_000;
@@ -209,10 +216,10 @@ const SearchResults = () => {
       }
       toast({ title: "Ricerca in corso...", description: "Scraping annunci reali dai portali" });
       const result = await scrapeListings(currentFilters);
-      if (isStaleRequest()) return;
+      if (isStaleRequest()) {return;}
       if (result.success) {
         const fresh = await fetchListings(currentFilters);
-        if (isStaleRequest()) return;
+        if (isStaleRequest()) {return;}
         setListings(fresh);
         setScraped(true);
         toast({ title: `${fresh.length} annunci trovati` });
@@ -296,17 +303,18 @@ const SearchResults = () => {
   const hasMore = visibleCount < results.length;
 
   const stats = useMemo(() => {
-    if (!results.length) return null;
+    if (!results.length) {return null;}
     const prices = results.map((r) => r.price);
     const kms = results.map((r) => r.km).filter((k) => k > 0);
     const fuelCounts = results.reduce(
       (acc, r) => {
-        if (r.fuel) acc[r.fuel] = (acc[r.fuel] ?? 0) + 1;
+        if (r.fuel) {acc[r.fuel] = (acc[r.fuel] ?? 0) + 1;}
         return acc;
       },
       {} as Record<string, number>,
     );
-    const topFuel = Object.entries(fuelCounts).sort((a, b) => b[1] - a[1])[0];
+    const fuelEntries = Object.entries(fuelCounts).sort((a, b) => b[1] - a[1]);
+    const topFuel = fuelEntries.length > 0 ? fuelEntries[0] : null;
     return {
       minPrice: Math.min(...prices),
       avgPrice: Math.round(prices.reduce((s, p) => s + p, 0) / prices.length),
@@ -319,10 +327,10 @@ const SearchResults = () => {
   // Infinite scroll sentinel
   useEffect(() => {
     const el = sentinelRef.current;
-    if (!el) return;
+    if (!el) {return;}
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore) setVisibleCount((c) => c + PAGE_SIZE);
+        if (entries[0].isIntersecting && hasMore) {setVisibleCount((c) => c + PAGE_SIZE);}
       },
       { rootMargin: "200px" },
     );

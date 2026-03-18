@@ -15,14 +15,14 @@ function isBrowser(): boolean {
 }
 
 function normalizeUrl(raw: string | null | undefined): string | null {
-  if (!raw) return null;
+  if (!raw) {return null;}
   const trimmed = raw.trim();
-  if (!trimmed) return null;
+  if (!trimmed) {return null;}
   return trimmed.replace(/\/+$/, "");
 }
 
 function resolveEnvBackendMode(): BackendMode {
-  const raw = import.meta.env.VITE_BACKEND_MODE;
+  const raw = import.meta.env.VITE_BACKEND_MODE as string | undefined;
   if (raw === "fastapi" || raw === "supabase") {
     return raw;
   }
@@ -32,7 +32,7 @@ function resolveEnvBackendMode(): BackendMode {
 
 export function getRuntimeConfig(): RuntimeConfig {
   const envMode = resolveEnvBackendMode();
-  const envApiBaseUrl = normalizeUrl(import.meta.env.VITE_API_BASE_URL);
+  const envApiBaseUrl = normalizeUrl(import.meta.env.VITE_API_BASE_URL as string | undefined);
 
   if (!isBrowser()) {
     return { backendMode: envMode, apiBaseUrl: envApiBaseUrl };
@@ -43,7 +43,7 @@ export function getRuntimeConfig(): RuntimeConfig {
     storedModeRaw === "fastapi" || storedModeRaw === "supabase" ? storedModeRaw : null;
   const storedApiBaseUrl = normalizeUrl(localStorage.getItem(STORAGE_KEYS.apiBaseUrl));
 
-  const backendMode: BackendMode = storedMode || envMode;
+  const backendMode: BackendMode = storedMode ?? envMode;
 
   return {
     backendMode,
@@ -52,12 +52,12 @@ export function getRuntimeConfig(): RuntimeConfig {
 }
 
 export function setRuntimeBackendMode(mode: BackendMode): void {
-  if (!isBrowser()) return;
+  if (!isBrowser()) {return;}
   localStorage.setItem(STORAGE_KEYS.backendMode, mode);
 }
 
 export function setRuntimeApiBaseUrl(url: string): void {
-  if (!isBrowser()) return;
+  if (!isBrowser()) {return;}
   const normalized = normalizeUrl(url);
   if (normalized) {
     localStorage.setItem(STORAGE_KEYS.apiBaseUrl, normalized);

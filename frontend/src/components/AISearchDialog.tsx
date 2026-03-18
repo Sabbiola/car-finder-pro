@@ -14,6 +14,12 @@ interface Props {
   onClose: () => void;
 }
 
+interface AiSearchResponse {
+  success?: boolean;
+  error?: string;
+  filters?: unknown;
+}
+
 const EXAMPLES = [
   "SUV diesel automatico sotto 25.000€ con meno di 80.000 km",
   "Tesla o auto elettrica, immatricolata dopo il 2020",
@@ -61,16 +67,18 @@ const AISearchDialog = ({ open, onClose }: Props) => {
   const { toast } = useToast();
 
   const handleSearch = async () => {
-    if (!query.trim()) return;
+    if (!query.trim()) {return;}
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("ai-search", {
+      const invokeResult = (await supabase.functions.invoke("ai-search", {
         body: { query },
-      });
-      if (error || !data?.success) {
+      })) as { data: AiSearchResponse | null; error: { message: string } | null };
+      const data = invokeResult.data;
+      const error = invokeResult.error;
+      if (error || data?.success !== true) {
         toast({
           title: "Errore AI",
-          description: data?.error || "Impossibile elaborare la ricerca",
+          description: data?.error ?? "Impossibile elaborare la ricerca",
           variant: "destructive",
         });
         return;
@@ -86,18 +94,18 @@ const AISearchDialog = ({ open, onClose }: Props) => {
       const filters = parsed.data as Partial<SearchFiltersState>;
 
       const params = new URLSearchParams();
-      if (filters.brand) params.set("brand", filters.brand);
-      if (filters.model) params.set("model", filters.model);
-      if (filters.yearMin) params.set("yearMin", filters.yearMin);
-      if (filters.yearMax) params.set("yearMax", filters.yearMax);
-      if (filters.priceMin) params.set("priceMin", filters.priceMin);
-      if (filters.priceMax) params.set("priceMax", filters.priceMax);
+      if (filters.brand) {params.set("brand", filters.brand);}
+      if (filters.model) {params.set("model", filters.model);}
+      if (filters.yearMin) {params.set("yearMin", filters.yearMin);}
+      if (filters.yearMax) {params.set("yearMax", filters.yearMax);}
+      if (filters.priceMin) {params.set("priceMin", filters.priceMin);}
+      if (filters.priceMax) {params.set("priceMax", filters.priceMax);}
       if ((filters as Record<string, unknown>).kmMax)
-        params.set("kmMax", String((filters as Record<string, unknown>).kmMax));
-      if (filters.fuel) params.set("fuel", filters.fuel);
-      if (filters.transmission) params.set("transmission", filters.transmission);
-      if (filters.bodyType) params.set("bodyType", filters.bodyType);
-      if (filters.location) params.set("location", filters.location);
+        {params.set("kmMax", String((filters as Record<string, unknown>).kmMax));}
+      if (filters.fuel) {params.set("fuel", filters.fuel);}
+      if (filters.transmission) {params.set("transmission", filters.transmission);}
+      if (filters.bodyType) {params.set("bodyType", filters.bodyType);}
+      if (filters.location) {params.set("location", filters.location);}
       params.set("sources", "autoscout24,subito,ebay,automobile,brumbrum");
       onClose();
       navigate(`/risultati?${params.toString()}`);
@@ -133,7 +141,7 @@ const AISearchDialog = ({ open, onClose }: Props) => {
             onChange={(e) => setQuery(e.target.value)}
             className="min-h-[100px] resize-none"
             onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleSearch();
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {void handleSearch();}
             }}
           />
 

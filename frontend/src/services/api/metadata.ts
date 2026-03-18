@@ -24,7 +24,7 @@ export interface FilterMetadataResponse {
     backend_post_filters: string[];
     provider_filter_union: string[];
     provider_filter_intersection: string[];
-    provider_filter_semantics: "strict_all_active_non_post_filters";
+    provider_filter_semantics: string;
   };
 }
 

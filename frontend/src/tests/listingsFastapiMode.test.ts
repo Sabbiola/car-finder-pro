@@ -2,15 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const runtimeConfigMock = vi.fn();
 const invokeMock = vi.fn();
+type RuntimeConfigStub = { backendMode: "fastapi" | "supabase"; apiBaseUrl: string | null };
 
 vi.mock("@/lib/runtimeConfig", () => ({
-  getRuntimeConfig: () => runtimeConfigMock(),
+  getRuntimeConfig: () => runtimeConfigMock() as RuntimeConfigStub,
 }));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     functions: {
-      invoke: (...args: unknown[]) => invokeMock(...args),
+      invoke: (...args: unknown[]) => invokeMock(...args) as unknown,
     },
   },
 }));

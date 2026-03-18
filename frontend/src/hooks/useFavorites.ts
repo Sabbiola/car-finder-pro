@@ -12,7 +12,8 @@ const LS_KEY = "car-finder-favorites";
 
 function readFromStorage(): string[] {
   try {
-    return JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+    const parsed: unknown = JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
   } catch {
     return [];
   }
@@ -44,15 +45,15 @@ export function useFavorites() {
       .select("listing_id")
       .eq("user_id", user.id)
       .then(({ data }) => {
-        if (data) setFavorites(data.map((r: { listing_id: string }) => r.listing_id));
+        if (data) {setFavorites(data.map((r: { listing_id: string }) => r.listing_id));}
       });
   }, [user, useBackendApi]);
 
   // Listen for localStorage changes when anonymous
   useEffect(() => {
-    if (user) return;
+    if (user) {return;}
     const handler = (e: StorageEvent) => {
-      if (e.key === LS_KEY) setFavorites(readFromStorage());
+      if (e.key === LS_KEY) {setFavorites(readFromStorage());}
     };
     window.addEventListener("storage", handler);
     return () => window.removeEventListener("storage", handler);

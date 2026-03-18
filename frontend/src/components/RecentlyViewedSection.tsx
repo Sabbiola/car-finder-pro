@@ -12,7 +12,7 @@ const RecentlyViewedSection = () => {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (!recentIds.length) return;
+    if (!recentIds.length) {return;}
 
     let cancelled = false;
     setLoading(true);
@@ -20,7 +20,7 @@ const RecentlyViewedSection = () => {
 
     fetchListingsByIds(recentIds.slice(0, 6))
       .then((data) => {
-        if (!cancelled) setListings(data);
+        if (!cancelled) {setListings(data);}
       })
       .catch((err) => {
         if (!cancelled) {
@@ -29,7 +29,7 @@ const RecentlyViewedSection = () => {
         }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {setLoading(false);}
       });
 
     return () => {
@@ -37,7 +37,7 @@ const RecentlyViewedSection = () => {
     };
   }, [recentIds]);
 
-  if (!recentIds.length || (!loading && !listings.length && !error)) return null;
+  if (!recentIds.length || (!loading && !listings.length && !error)) {return null;}
 
   if (error) {
     return (
