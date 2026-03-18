@@ -13,8 +13,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "npm exec --yes playwright@1.54.2 test",
-    "test:e2e:headed": "npm exec --yes playwright@1.54.2 test --headed",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
     "format": "prettier . --write",
     "format:check": "prettier . --check"
   },
@@ -82,6 +82,7 @@
     "@testing-library/react": "^16.0.0",
     "@types/leaflet": "^1.9.3",
     "@types/node": "^22.16.5",
+    "@playwright/test": "1.54.2",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react-swc": "^3.11.0",
