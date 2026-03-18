@@ -71,8 +71,9 @@ test("compare journey works end-to-end via backend listings batch", async ({ pag
 
   await expect(page).toHaveURL(/\/confronta\?ids=/);
   await expect(page.getByRole("heading", { name: "Confronto auto" })).toBeVisible();
-  await expect(page.getByText("BMW 320d Stub AutoScout24")).toBeVisible();
-  await expect(page.getByText("BMW 320d Stub Subito")).toBeVisible();
+  const comparisonTable = page.getByRole("table");
+  await expect(comparisonTable).toContainText("BMW 320d Stub AutoScout24");
+  await expect(comparisonTable).toContainText("BMW 320d Stub Subito");
 });
 
 test("favorites journey works in fastapi mode for anonymous users", async ({ page }) => {
