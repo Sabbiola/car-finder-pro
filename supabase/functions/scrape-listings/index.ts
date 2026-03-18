@@ -25,6 +25,33 @@ interface ParsedListing {
   extra_data?: Record<string, unknown> | null;
 }
 
+interface ApiRateLimitRow {
+  id: string;
+  client_key: string;
+  action: string;
+  request_count: number;
+  window_start: string;
+  last_request: string;
+}
+
+type RateLimitStore = {
+  from: (table: "api_rate_limits") => {
+    select: (columns: string) => {
+      eq: (column: string, value: string) => {
+        eq: (column: string, value: string) => {
+          single: () => Promise<{ data: ApiRateLimitRow | null }>;
+        };
+      };
+    };
+    update: (
+      values: Partial<Pick<ApiRateLimitRow, "request_count" | "window_start" | "last_request">>,
+    ) => {
+      eq: (column: string, value: string) => Promise<unknown>;
+    };
+    insert: (values: Omit<ApiRateLimitRow, "id">) => Promise<unknown>;
+  };
+};
+
 function detectFuel(text: string): string | null {
   // Explicit keywords (highest priority)
   if (/\bdiesel\b/i.test(text)) return "Diesel";
@@ -1162,11 +1189,12 @@ function deduplicateCrossSource(listings: ParsedListing[]): ParsedListing[] {
 
 // Rate limiting: max 10 scrape requests per client per hour
 async function checkRateLimit(
-  supabase: ReturnType<typeof createClient>,
+  supabaseClient: unknown,
   clientKey: string,
 ): Promise<boolean> {
   const MAX_REQUESTS = 10;
   const WINDOW_MINUTES = 60;
+  const supabase = supabaseClient as RateLimitStore;
   try {
     const { data: existing } = await supabase
       .from("api_rate_limits")
