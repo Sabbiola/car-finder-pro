@@ -1,7 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
-// @ts-ignore esm.sh CJS→ESM shim
-import TurndownService from "https://esm.sh/turndown@7.1.2";
+import TurndownService from "npm:turndown@7.1.2";
 
 const _td = new TurndownService({ headingStyle: "atx", bulletListMarker: "-" });
 function htmlToMarkdown(html: string): string {
