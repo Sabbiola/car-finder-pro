@@ -31,6 +31,7 @@ export default defineConfig({
       env: {
         TEST_STUB_MODE: "true",
         LOG_LEVEL: "info",
+        CORS_ORIGINS: `http://127.0.0.1:${FRONTEND_PORT},http://localhost:${FRONTEND_PORT}`,
       },
       url: `http://127.0.0.1:${BACKEND_PORT}/healthz`,
       reuseExistingServer: !process.env.CI,
