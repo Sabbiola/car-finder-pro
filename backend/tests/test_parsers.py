@@ -18,6 +18,31 @@ def test_parse_autoscout_markdown_extracts_listing() -> None:
     assert listings[0].price_amount == 25500
 
 
+def test_parse_autoscout_markdown_supports_unicode_euro() -> None:
+    markdown = """
+![img](https://prod.pictures.autoscout24.net/listing-images/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/640x480.jpg)
+[Audi Q3 35 TDI](https://www.autoscout24.it/annunci/audi-q3-test)
+EUR 28.900
+02/2021
+39.000 km
+"""
+    listings = parse_autoscout_markdown(markdown, "Audi", "Q3")
+    assert listings
+    assert listings[0].price_amount == 28900
+
+
+def test_parse_autoscout_markdown_fallback_from_url_context() -> None:
+    markdown = """
+[Audi Q3 35 TDI S line](https://www.autoscout24.it/annunci/audi-q3-35-tdi-s-line-test)
+EUR 33.400
+06/2022
+29.000 km
+"""
+    listings = parse_autoscout_markdown(markdown, "Audi", "Q3")
+    assert listings
+    assert listings[0].price_amount == 33400
+
+
 def test_parse_subito_markdown_extracts_listing() -> None:
     markdown = """
 ![img](https://images.sbito.it/test.jpg)
@@ -31,6 +56,20 @@ Milano (MI)
     assert listings
     assert listings[0].provider == "subito"
     assert listings[0].price_amount == 25000
+
+
+def test_parse_subito_markdown_supports_unicode_euro() -> None:
+    markdown = """
+![img](https://images.sbito.it/test.jpg)
+### Audi Q3 35 TDI
+[link](https://www.subito.it/auto/audi-q3-35-tdi-test.htm)
+€ 31.500
+05/2022 22.000 Km
+Roma (RM)
+"""
+    listings = parse_subito_markdown(markdown, "Audi", "Q3")
+    assert listings
+    assert listings[0].price_amount == 31500
 
 
 def test_parse_automobile_markdown_extracts_listing() -> None:

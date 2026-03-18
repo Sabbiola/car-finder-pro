@@ -41,6 +41,9 @@ async def fetch_markdown(url: str, wait_ms: int = 7000, premium_proxy: bool = Fa
             return response.text
         except Exception as exc:  # noqa: BLE001
             last_error = exc
+            status_code = getattr(getattr(exc, "response", None), "status_code", None)
+            if status_code is not None and 400 <= status_code < 500 and status_code not in {408, 429}:
+                break
             if attempt >= attempts:
                 break
             sleep_seconds = (backoff_ms * attempt) / 1000

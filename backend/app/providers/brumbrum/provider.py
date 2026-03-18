@@ -74,10 +74,21 @@ class BrumBrumProvider(BaseProvider):
             return self._stub_listings(request)
 
         all_listings: list[VehicleListing] = []
-        for url in self._build_urls(request):
-            markdown = await fetch_markdown(url, wait_ms=8000, premium_proxy=True)
-            parsed = parse_brumbrum_markdown(markdown, request.brand, request.model)
-            all_listings.extend(parsed)
+        urls = self._build_urls(request)
+        if request.mode == "fast":
+            urls = urls[:1]
+
+        last_error: Exception | None = None
+        for url in urls:
+            try:
+                markdown = await fetch_markdown(url, wait_ms=8000, premium_proxy=True)
+                parsed = parse_brumbrum_markdown(markdown, request.brand, request.model)
+                all_listings.extend(parsed)
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                continue
+        if not all_listings and last_error is not None:
+            raise RuntimeError(f"BrumBrum scraping failed: {last_error}") from last_error
         return all_listings
 
     async def health(self) -> ProviderHealth:

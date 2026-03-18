@@ -10,12 +10,19 @@ from app.providers.common.text_utils import (
     parse_price,
 )
 
+_SUBITO_IMAGE_URL_PATTERN = re.compile(r"^!\[.*\]\((https://[^\s)]*sbito\.it[^\s)]*)", re.I)
+_EURO_TOKEN = r"(?:\u20ac|EUR|\u00e2\u201a\u00ac|\u00c3\u00a2\u00e2\u20ac\u0161\u00c2\u00ac)"
+_EURO_PATTERN = re.compile(
+    rf"{_EURO_TOKEN}\s*([\d.]+)|([\d.]+)\s*{_EURO_TOKEN}",
+    re.I,
+)
+
 
 def _split_blocks(markdown: str) -> list[str]:
     blocks: list[str] = []
     current = ""
     for line in markdown.splitlines():
-        if re.match(r"^!\[.*\]\(https://(?:images|static)\.sbito\.it", line):
+        if _SUBITO_IMAGE_URL_PATTERN.match(line):
             if len(current) > 50:
                 blocks.append(current)
             current = line
@@ -39,10 +46,10 @@ def parse_subito_markdown(markdown: str, brand: str | None, model: str | None) -
         if model_pattern and not model_pattern.search(title):
             continue
 
-        price_match = re.search(r"([\d.]+)\s*€", block, re.I)
+        price_match = _EURO_PATTERN.search(block)
         if not price_match:
             continue
-        price = parse_price(price_match.group(1))
+        price = parse_price(price_match.group(1) or price_match.group(2) or "")
         if not price:
             continue
 
@@ -61,11 +68,7 @@ def parse_subito_markdown(markdown: str, brand: str | None, model: str | None) -
             source_url = url_match.group(1).rstrip(')>"')
 
         image_url = None
-        image_match = re.search(
-            r"!\[.*?\]\((https://(?:images|static)\.sbito\.it[^\s)]+)\)",
-            block,
-            re.I,
-        )
+        image_match = re.search(r"!\[.*?\]\((https://[^\s)]*sbito\.it[^\s)]+)\)", block, re.I)
         if image_match:
             image_url = image_match.group(1)
 
