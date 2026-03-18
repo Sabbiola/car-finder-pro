@@ -45,6 +45,7 @@ export default defineConfig({
         VITE_SUPABASE_PUBLISHABLE_KEY: "test-publishable-key",
         VITE_BACKEND_MODE: "fastapi",
         VITE_API_BASE_URL: `http://127.0.0.1:${BACKEND_PORT}`,
+        VITE_E2E: "true",
       },
       url: `http://127.0.0.1:${FRONTEND_PORT}`,
       reuseExistingServer: !process.env.CI,

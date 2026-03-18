@@ -57,7 +57,7 @@ test("compare journey works end-to-end via backend listings batch", async ({ pag
   const compareButtons = page.locator('button[title="Aggiungi al confronto"]');
   await expect(compareButtons).toHaveCount(2);
   await compareButtons.first().click();
-  await compareButtons.nth(1).click();
+  await compareButtons.first().click();
 
   const batchResponsePromise = page.waitForResponse(
     (response) =>
@@ -89,7 +89,7 @@ test("favorites journey works in fastapi mode for anonymous users", async ({ pag
       response.request().method() === "POST",
   );
 
-  await page.getByRole("button", { name: "Preferiti" }).click();
+  await page.getByRole("button", { name: "Preferiti", exact: true }).click();
   const batchResponse = await batchResponsePromise;
   expect(batchResponse.ok()).toBeTruthy();
 
