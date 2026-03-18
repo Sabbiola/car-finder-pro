@@ -24,6 +24,7 @@ class ProviderRegistry:
     def __init__(self) -> None:
         settings = get_settings()
         disabled = set(settings.disabled_provider_list)
+        api_only_mode = settings.provider_mode == "api_only"
         self._providers: dict[str, BaseProvider] = {
             "autoscout24": AutoScout24Provider(),
             "subito": SubitoProvider(),
@@ -31,6 +32,10 @@ class ProviderRegistry:
             "automobile": AutomobileProvider(),
             "brumbrum": BrumBrumProvider(),
         }
+        if api_only_mode:
+            for provider in self._providers.values():
+                if provider.info.provider_type in {"html_scraper", "browser_scraper"}:
+                    provider.info.enabled = False
         for provider_id in disabled:
             provider = self._providers.get(provider_id)
             if provider is not None:

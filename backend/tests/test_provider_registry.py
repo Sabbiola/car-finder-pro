@@ -75,3 +75,23 @@ def test_provider_registry_includes_migrated_html_providers() -> None:
     registry = ProviderRegistry()
     assert registry.get("automobile") is not None
     assert registry.get("brumbrum") is not None
+
+
+def test_provider_registry_api_only_mode_disables_scrapers(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PROVIDER_MODE", "api_only")
+    get_settings.cache_clear()
+    try:
+        registry = ProviderRegistry()
+        autoscout24 = registry.get("autoscout24")
+        subito = registry.get("subito")
+        automobile = registry.get("automobile")
+        brumbrum = registry.get("brumbrum")
+        ebay = registry.get("ebay")
+
+        assert autoscout24 is not None and autoscout24.info.enabled is False
+        assert subito is not None and subito.info.enabled is False
+        assert automobile is not None and automobile.info.enabled is False
+        assert brumbrum is not None and brumbrum.info.enabled is False
+        assert ebay is not None and ebay.info.enabled is True
+    finally:
+        get_settings.cache_clear()

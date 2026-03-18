@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     search_rate_limit: str = "20/minute"
     search_stream_rate_limit: str = "10/minute"
     analysis_max_concurrency: int = 8
+    provider_mode: str = "hybrid"
     disabled_providers: str = ""
     scrapingbee_api_key: str | None = None
     ebay_client_id: str | None = None
@@ -67,6 +68,14 @@ class Settings(BaseSettings):
         if not self.disabled_providers:
             return []
         return [item.strip() for item in self.disabled_providers.split(",") if item.strip()]
+
+    @field_validator("provider_mode")
+    @classmethod
+    def validate_provider_mode(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"hybrid", "api_only"}:
+            raise ValueError("PROVIDER_MODE must be either 'hybrid' or 'api_only'.")
+        return normalized
 
 
 @lru_cache(maxsize=1)
