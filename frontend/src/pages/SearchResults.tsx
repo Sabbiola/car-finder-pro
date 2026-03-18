@@ -54,25 +54,25 @@ function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
     : ["autoscout24", "subito", "ebay", "automobile", "brumbrum"];
 
   return {
-    brand: params.get("brand") || "",
-    model: params.get("model") || "",
-    trim: params.get("trim") || "",
-    yearMin: params.get("yearMin") || "",
-    yearMax: params.get("yearMax") || "",
-    priceMin: params.get("priceMin") || "",
-    priceMax: params.get("priceMax") || "",
-    kmMin: params.get("kmMin") || "",
-    kmMax: params.get("kmMax") || "",
-    fuel: params.get("fuel") || "",
-    transmission: params.get("transmission") || "",
+    brand: params.get("brand") ?? "",
+    model: params.get("model") ?? "",
+    trim: params.get("trim") ?? "",
+    yearMin: params.get("yearMin") ?? "",
+    yearMax: params.get("yearMax") ?? "",
+    priceMin: params.get("priceMin") ?? "",
+    priceMax: params.get("priceMax") ?? "",
+    kmMin: params.get("kmMin") ?? "",
+    kmMax: params.get("kmMax") ?? "",
+    fuel: params.get("fuel") ?? "",
+    transmission: params.get("transmission") ?? "",
     isNew: params.get("isNew") === "true" ? true : params.get("isNew") === "false" ? false : null,
     sources,
-    color: params.get("color") || "",
-    doors: params.get("doors") || "",
-    bodyType: params.get("bodyType") || "",
-    location: params.get("location") || "",
-    sellerType: (params.get("sellerType") as "all" | "private" | "dealer") || "all",
-    emissionClass: params.get("emissionClass") || "",
+    color: params.get("color") ?? "",
+    doors: params.get("doors") ?? "",
+    bodyType: params.get("bodyType") ?? "",
+    location: params.get("location") ?? "",
+    sellerType: (params.get("sellerType") as "all" | "private" | "dealer") ?? "all",
+    emissionClass: params.get("emissionClass") ?? "",
   };
 }
 
@@ -152,7 +152,7 @@ const SearchResults = () => {
               if (event.event === "progress") {
                 setStreamProviderStatus((prev) => ({ ...prev, [event.provider]: event.status }));
                 if (typeof event.fetched_count === "number") {
-                  setStreamProviderCount((prev) => ({ ...prev, [event.provider]: event.fetched_count || 0 }));
+                  setStreamProviderCount((prev) => ({ ...prev, [event.provider]: event.fetched_count ?? 0 }));
                 }
               } else if (event.event === "result") {
                 streamedResults = mergeUniqueListings(streamedResults, [event.listing]);
@@ -210,7 +210,7 @@ const SearchResults = () => {
       toast({ title: "Ricerca in corso...", description: "Scraping annunci reali dai portali" });
       const result = await scrapeListings(currentFilters);
       if (isStaleRequest()) return;
-      if (result?.success) {
+      if (result.success) {
         const fresh = await fetchListings(currentFilters);
         if (isStaleRequest()) return;
         setListings(fresh);
@@ -219,7 +219,7 @@ const SearchResults = () => {
       } else {
         toast({
           title: "Errore",
-          description: result?.error || "Scraping fallito",
+          description: result.error ?? "Scraping fallito",
           variant: "destructive",
         });
       }
@@ -242,7 +242,7 @@ const SearchResults = () => {
   }, [toast]);
 
   useEffect(() => {
-    doSearch(filters);
+    void doSearch(filters);
   }, [doSearch, filters]);
 
   useEffect(() => {
@@ -283,8 +283,8 @@ const SearchResults = () => {
       case "best-deal":
         list.sort((a, b) => {
           const order: Record<string, number> = { best: 0, good: 1, normal: 2 };
-          const ra = order[a.price_rating || "normal"] ?? 2;
-          const rb = order[b.price_rating || "normal"] ?? 2;
+          const ra = order[a.price_rating ?? "normal"] ?? 2;
+          const rb = order[b.price_rating ?? "normal"] ?? 2;
           return ra !== rb ? ra - rb : a.price - b.price;
         });
         break;
@@ -301,7 +301,7 @@ const SearchResults = () => {
     const kms = results.map((r) => r.km).filter((k) => k > 0);
     const fuelCounts = results.reduce(
       (acc, r) => {
-        if (r.fuel) acc[r.fuel] = (acc[r.fuel] || 0) + 1;
+        if (r.fuel) acc[r.fuel] = (acc[r.fuel] ?? 0) + 1;
         return acc;
       },
       {} as Record<string, number>,
@@ -426,7 +426,9 @@ const SearchResults = () => {
             )}
             {!loading && scraped && (
               <button
-                onClick={() => doSearch(filters, true)}
+                onClick={() => {
+                  void doSearch(filters, true);
+                }}
                 className="text-xs text-muted-foreground hover:text-accent hover:underline transition-colors"
               >
                 Aggiorna
@@ -567,7 +569,9 @@ const SearchResults = () => {
             <p className="text-sm font-semibold text-foreground">Nessun risultato</p>
             <p className="text-xs">Modifica i filtri di ricerca o cambia brand/modello</p>
             <button
-              onClick={() => doSearch(filters, true)}
+              onClick={() => {
+                void doSearch(filters, true);
+              }}
               className="text-xs text-violet-600 hover:underline mt-2 block mx-auto"
             >
               Riprova

@@ -31,7 +31,7 @@ export function useFavorites() {
       return;
     }
     if (useBackendApi) {
-      listUserFavorites(user.id)
+      void listUserFavorites(user.id)
         .then((ids) => setFavorites(ids))
         .catch((error) => {
           console.error("[useFavorites] Failed to load favorites via backend API:", error);
@@ -39,7 +39,7 @@ export function useFavorites() {
         });
       return;
     }
-    supabase
+    void supabase
       .from("user_favorites")
       .select("listing_id")
       .eq("user_id", user.id)

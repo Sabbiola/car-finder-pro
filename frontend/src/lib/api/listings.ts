@@ -183,6 +183,14 @@ interface FastApiSearchResponse {
   }>;
 }
 
+interface LegacyScrapeResponse {
+  success: boolean;
+  count?: number;
+  source?: string;
+  error?: string;
+  provider_errors?: string[];
+}
+
 export interface FastApiSearchRequest {
   query?: string;
   brand?: string;
@@ -221,7 +229,7 @@ const LEGACY_ONLY_SOURCES: string[] = [];
 const mergedCacheByQuery = new Map<string, CarListing[]>();
 
 function getCacheKey(filters: SearchFiltersState): string {
-  const normalizedSources = [...(filters.sources || [])].sort();
+  const normalizedSources = [...filters.sources].sort();
   return JSON.stringify({ ...filters, sources: normalizedSources });
 }
 
@@ -243,7 +251,7 @@ function parseMaybeNumber(value: string): number | undefined {
 }
 
 function normalizeSources(filters: SearchFiltersState): string[] {
-  return filters.sources?.length
+  return filters.sources.length
     ? filters.sources
     : ["autoscout24", "subito", "ebay", "automobile", "brumbrum"];
 }
@@ -393,7 +401,7 @@ async function runFastApiSearch(filters: SearchFiltersState, apiBaseUrl: string)
     throw new Error(detailMessage);
   }
   const payload = (await response.json()) as FastApiSearchResponse;
-  return (payload.listings || []).map(mapFastApiListing);
+  return payload.listings.map(mapFastApiListing);
 }
 
 async function streamFastApiSearch(
@@ -428,9 +436,12 @@ function mergeListings(...chunks: CarListing[][]): CarListing[] {
 }
 
 async function scrapeLegacy(filters: SearchFiltersState) {
-  const { data, error } = await supabase.functions.invoke("scrape-listings", {
-    body: { filters },
-  });
+  const { data, error } = await supabase.functions.invoke<LegacyScrapeResponse>(
+    "scrape-listings",
+    {
+      body: { filters },
+    },
+  );
   if (error) throw error;
   return data;
 }
@@ -443,7 +454,7 @@ async function fetchLegacyListings(filters: SearchFiltersState): Promise<CarList
   if (filters.trim) query = query.ilike("trim", `%${filters.trim}%`);
   if (filters.fuel) query = query.eq("fuel", filters.fuel);
   if (filters.transmission) query = query.eq("transmission", filters.transmission);
-  if (filters.isNew !== null && filters.isNew !== undefined) query = query.eq("is_new", filters.isNew);
+  if (filters.isNew != null) query = query.eq("is_new", filters.isNew);
   if (filters.location) query = query.ilike("location", `%${filters.location}%`);
   if (filters.priceMin) query = query.gte("price", Number(filters.priceMin));
   if (filters.priceMax) query = query.lte("price", Number(filters.priceMax));
@@ -456,13 +467,16 @@ async function fetchLegacyListings(filters: SearchFiltersState): Promise<CarList
   if (filters.bodyType) query = query.eq("body_type", filters.bodyType);
   if (filters.emissionClass) query = query.eq("emission_class", filters.emissionClass);
 
-  if (filters.sources?.length) {
+  if (filters.sources.length) {
     query = query.in("source", filters.sources);
   }
 
-  const { data, error } = await query.order("price", { ascending: true }).limit(500);
+  const { data, error } = await query
+    .order("price", { ascending: true })
+    .limit(500)
+    .returns<CarListing[]>();
   if (error) throw error;
-  return (data as CarListing[]) || [];
+  return data ?? [];
 }
 
 function applyInMemoryFilters(listings: CarListing[], filters: SearchFiltersState): CarListing[] {
@@ -487,7 +501,7 @@ function applyInMemoryFilters(listings: CarListing[], filters: SearchFiltersStat
     if (filters.emissionClass && listing.emission_class !== filters.emissionClass) return false;
     if (filters.sellerType === "private" && listing.condition !== "private") return false;
     if (filters.sellerType === "dealer" && listing.condition !== "dealer") return false;
-    if (filters.sources?.length && !filters.sources.includes(listing.source)) return false;
+    if (filters.sources.length && !filters.sources.includes(listing.source)) return false;
     return true;
   });
 }
@@ -566,7 +580,7 @@ export async function fetchListings(filters: SearchFiltersState): Promise<CarLis
     let cached = mergedCacheByQuery.get(cacheKey);
     if (!cached?.length) {
       await scrapeListings(filters);
-      cached = mergedCacheByQuery.get(cacheKey) || [];
+      cached = mergedCacheByQuery.get(cacheKey) ?? [];
     }
     return applyInMemoryFilters(cached, filters)
       .sort((a, b) => a.price - b.price)

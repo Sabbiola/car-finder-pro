@@ -278,7 +278,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
   };
 
   const handleSaveConfirm = (name: string) => {
-    save(name, filters);
+    void save(name, filters);
   };
 
   const normalizeFilters = (current: SearchFiltersState): SearchFiltersState => {

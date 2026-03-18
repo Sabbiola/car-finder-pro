@@ -39,7 +39,7 @@ export function useSavedSearches() {
       return;
     }
     if (useBackendApi) {
-      listUserSavedSearches(user.id)
+      void listUserSavedSearches(user.id)
         .then((data) =>
           setSearches(
             data.map((r) => ({
@@ -56,7 +56,7 @@ export function useSavedSearches() {
         });
       return;
     }
-    supabase
+    void supabase
       .from("user_saved_searches")
       .select("id, name, filters, created_at")
       .eq("user_id", user.id)

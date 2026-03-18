@@ -14,7 +14,7 @@ const FavoriteButton = ({ id, className = "" }: Props) => {
     <button
       onClick={(e) => {
         e.stopPropagation();
-        toggle(id);
+        void toggle(id);
       }}
       aria-label={active ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
       className={`p-1.5 rounded-xl border border-border/60 bg-background/90 hover:bg-rose-50 hover:border-rose-300 hover:text-rose-500 dark:hover:bg-rose-900/20 dark:hover:border-rose-700 transition-colors duration-150 ${className}`}
