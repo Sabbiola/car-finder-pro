@@ -7,15 +7,28 @@ on:
 
 jobs:
   k6-load:
-    if: ${{ secrets.FASTAPI_STAGING_BASE_URL != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      - name: Evaluate perf load configuration
+        id: gate
+        shell: bash
+        env:
+          FASTAPI_STAGING_BASE_URL: ${{ secrets.FASTAPI_STAGING_BASE_URL }}
+        run: |
+          if [ -z "${FASTAPI_STAGING_BASE_URL}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup k6
+        if: steps.gate.outputs.enabled == 'true'
         uses: grafana/setup-k6-action@v1
 
       - name: Run search load test
+        if: steps.gate.outputs.enabled == 'true'
         env:
           FASTAPI_BASE_URL: ${{ secrets.FASTAPI_STAGING_BASE_URL }}
         run: k6 run --summary-export=perf-load-summary.json backend/perf/search-load.js

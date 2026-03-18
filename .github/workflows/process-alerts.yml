@@ -7,10 +7,29 @@ on:
 
 jobs:
   process-alerts:
-    if: ${{ secrets.ALERTS_PROCESS_URL != '' && secrets.ALERTS_PROCESSOR_TOKEN != '' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Evaluate alerts processor configuration
+        id: gate
+        shell: bash
+        env:
+          ALERTS_PROCESS_URL: ${{ secrets.ALERTS_PROCESS_URL }}
+          ALERTS_PROCESSOR_TOKEN: ${{ secrets.ALERTS_PROCESSOR_TOKEN }}
+          ALERTS_SMOKE_LISTING_ID: ${{ secrets.ALERTS_SMOKE_LISTING_ID }}
+        run: |
+          if [ -n "${ALERTS_PROCESS_URL}" ] && [ -n "${ALERTS_PROCESSOR_TOKEN}" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "${ALERTS_SMOKE_LISTING_ID}" ]; then
+            echo "smoke_enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "smoke_enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Invoke alerts processor
+        if: steps.gate.outputs.enabled == 'true'
         env:
           ALERTS_PROCESS_URL: ${{ secrets.ALERTS_PROCESS_URL }}
           ALERTS_PROCESSOR_TOKEN: ${{ secrets.ALERTS_PROCESSOR_TOKEN }}
@@ -68,7 +87,7 @@ jobs:
           PY
 
       - name: Optional synthetic alerts smoke (create -> trigger -> list)
-        if: ${{ secrets.ALERTS_SMOKE_LISTING_ID != '' }}
+        if: steps.gate.outputs.enabled == 'true' && steps.gate.outputs.smoke_enabled == 'true'
         env:
           ALERTS_PROCESS_URL: ${{ secrets.ALERTS_PROCESS_URL }}
           ALERTS_PROCESSOR_TOKEN: ${{ secrets.ALERTS_PROCESSOR_TOKEN }}

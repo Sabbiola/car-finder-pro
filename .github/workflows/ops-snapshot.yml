@@ -7,10 +7,22 @@ on:
 
 jobs:
   snapshot:
-    if: ${{ secrets.FASTAPI_OPS_BASE_URL != '' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Evaluate ops snapshot configuration
+        id: gate
+        shell: bash
+        env:
+          FASTAPI_OPS_BASE_URL: ${{ secrets.FASTAPI_OPS_BASE_URL }}
+        run: |
+          if [ -z "${FASTAPI_OPS_BASE_URL}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Pull metrics snapshot
+        if: steps.gate.outputs.enabled == 'true'
         env:
           FASTAPI_OPS_BASE_URL: ${{ secrets.FASTAPI_OPS_BASE_URL }}
           FASTAPI_OPS_TOKEN: ${{ secrets.FASTAPI_OPS_TOKEN }}
