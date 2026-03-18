@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     provider_timeout_seconds: int = 30
     provider_retry_attempts: int = 3
     provider_retry_backoff_ms: int = 250
+    search_rate_limit: str = "20/minute"
+    search_stream_rate_limit: str = "10/minute"
     analysis_max_concurrency: int = 8
     disabled_providers: str = ""
     scrapingbee_api_key: str | None = None

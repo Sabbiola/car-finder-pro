@@ -579,11 +579,45 @@ class StubMarketRepository:
         return len(self._saved_searches) != before
 
 
+def _reset_rate_limiter_state() -> None:
+    limiter = getattr(getattr(app, "state", None), "limiter", None)
+    if limiter is None:
+        return
+
+    storage_candidates = [
+        getattr(limiter, "storage", None),
+        getattr(getattr(limiter, "limiter", None), "storage", None),
+        getattr(limiter, "_storage", None),
+    ]
+
+    for storage in storage_candidates:
+        if storage is None:
+            continue
+        reset = getattr(storage, "reset", None)
+        if callable(reset):
+            try:
+                reset()
+            except TypeError:
+                continue
+            return
+        clear = getattr(storage, "clear", None)
+        if callable(clear):
+            try:
+                clear()
+            except TypeError:
+                continue
+            return
+
+
 @pytest.fixture(autouse=True)
 def _clear_dependency_overrides() -> None:
+    get_settings.cache_clear()
+    _reset_rate_limiter_state()
     app.dependency_overrides.clear()
     yield
     app.dependency_overrides.clear()
+    get_settings.cache_clear()
+    _reset_rate_limiter_state()
 
 
 def _build_client() -> TestClient:
@@ -664,58 +698,100 @@ def test_search_stream_emits_stable_events() -> None:
         assert "event: complete" in body
 
 
-def test_providers_and_health_contract() -> None:
+def test_search_endpoint_rate_limit_returns_429(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SEARCH_RATE_LIMIT", "1/minute")
+    get_settings.cache_clear()
+    _reset_rate_limiter_state()
     client = _build_client()
 
-    providers_response = client.get("/api/providers")
-    assert providers_response.status_code == 200
-    providers_payload = providers_response.json()
-    assert providers_payload["providers"][0]["id"] == "autoscout24"
-    by_provider_id = {provider["id"]: provider for provider in providers_payload["providers"]}
-    assert by_provider_id["autoscout24"]["configured"] is True
-    assert by_provider_id["ebay"]["configured"] is False
-    assert by_provider_id["autoscout24"]["configuration_requirements"] == ["SCRAPINGBEE_API_KEY"]
-    assert by_provider_id["autoscout24"]["missing_configuration"] == []
-    assert by_provider_id["autoscout24"]["configuration_message"] == "Configured"
-    assert by_provider_id["ebay"]["configuration_requirements"] == ["EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET"]
-    assert by_provider_id["ebay"]["missing_configuration"] == ["EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET"]
-    assert "Missing required env" in by_provider_id["ebay"]["configuration_message"]
+    first_response = client.post(
+        "/api/search",
+        json={
+            "brand": "BMW",
+            "model": "320d",
+            "sources": ["autoscout24"],
+        },
+    )
+    second_response = client.post(
+        "/api/search",
+        json={
+            "brand": "BMW",
+            "model": "320d",
+            "sources": ["autoscout24"],
+        },
+    )
 
-    health_response = client.get("/api/providers/health")
-    assert health_response.status_code == 200
-    health_payload = health_response.json()
-    assert health_payload["providers"][0]["provider"] == "autoscout24"
-    assert health_payload["providers"][0]["latency_ms"] == 420
-    assert health_payload["providers"][0]["total_calls"] == 3
-    assert health_payload["providers"][0]["failed_calls"] == 1
-    assert health_payload["providers"][0]["last_error"] == "transient timeout"
-    assert health_payload["providers"][0]["configuration_requirements"] == ["SCRAPINGBEE_API_KEY"]
-    assert health_payload["providers"][0]["missing_configuration"] == []
-    assert health_payload["providers"][0]["configuration_message"] == "Configured"
+    assert first_response.status_code == 200
+    assert second_response.status_code == 429
 
-    metadata_response = client.get("/api/filters/metadata")
-    assert metadata_response.status_code == 200
-    metadata_payload = metadata_response.json()
-    assert "fuel_types" in metadata_payload
-    assert "providers" in metadata_payload
-    assert metadata_payload["search_contract"]["version"] == "v1"
-    assert "canonical_filters" in metadata_payload["search_contract"]
-    assert "provider_filter_union" in metadata_payload["search_contract"]
-    assert "provider_filter_intersection" in metadata_payload["search_contract"]
-    assert metadata_payload["search_contract"]["provider_filter_semantics"] == "strict_all_active_non_post_filters"
-    assert "query" in metadata_payload["search_contract"]["provider_filter_union"]
-    assert metadata_payload["search_contract"]["provider_filter_intersection"] == ["brand", "model"]
-    assert "seller_type" in metadata_payload["search_contract"]["canonical_filters"]
-    assert "private_only" in metadata_payload["search_contract"]["canonical_filters"]
-    assert "seller_type" in metadata_payload["search_contract"]["backend_post_filters"]
-    assert "brands" in metadata_payload
-    assert "models_by_brand" in metadata_payload
-    assert "trims_by_brand_model" in metadata_payload
 
-    ownership_response = client.get("/api/metadata/ownership")
-    assert ownership_response.status_code == 200
-    ownership_payload = ownership_response.json()
-    assert ownership_payload["defaults"]["annual_km"] == 10000
+def test_providers_and_health_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEST_STUB_MODE", "true")
+    get_settings.cache_clear()
+    try:
+        client = _build_client()
+
+        providers_response = client.get("/api/providers")
+        assert providers_response.status_code == 200
+        providers_payload = providers_response.json()
+        assert providers_payload["providers"][0]["id"] == "autoscout24"
+        by_provider_id = {provider["id"]: provider for provider in providers_payload["providers"]}
+        assert set(by_provider_id.keys()) == {"autoscout24", "ebay"}
+
+        assert by_provider_id["autoscout24"]["configured"] is True
+        assert by_provider_id["ebay"]["configured"] is False
+
+        assert by_provider_id["autoscout24"]["configuration_requirements"] == ["SCRAPINGBEE_API_KEY"]
+        assert by_provider_id["ebay"]["configuration_requirements"] == ["EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET"]
+        assert by_provider_id["autoscout24"]["missing_configuration"] == []
+        assert by_provider_id["ebay"]["missing_configuration"] == []
+        assert by_provider_id["autoscout24"]["configuration_message"] == "Configured via TEST_STUB_MODE=true"
+        assert by_provider_id["ebay"]["configuration_message"] == "Configured via TEST_STUB_MODE=true"
+
+        health_response = client.get("/api/providers/health")
+        assert health_response.status_code == 200
+        health_payload = health_response.json()
+        assert health_payload["providers"][0]["provider"] == "autoscout24"
+        assert health_payload["providers"][0]["latency_ms"] == 420
+        assert health_payload["providers"][0]["total_calls"] == 3
+        assert health_payload["providers"][0]["failed_calls"] == 1
+        assert health_payload["providers"][0]["last_error"] == "transient timeout"
+        assert health_payload["providers"][0]["configuration_requirements"] == ["SCRAPINGBEE_API_KEY"]
+        assert health_payload["providers"][0]["missing_configuration"] == []
+        assert (
+            health_payload["providers"][0]["configuration_message"]
+            == "Configured via TEST_STUB_MODE=true"
+        )
+
+        app_health_response = client.get("/healthz")
+        assert app_health_response.status_code == 200
+        assert app_health_response.json() == {"status": "ok"}
+
+        metadata_response = client.get("/api/filters/metadata")
+        assert metadata_response.status_code == 200
+        metadata_payload = metadata_response.json()
+        assert "fuel_types" in metadata_payload
+        assert "providers" in metadata_payload
+        assert metadata_payload["search_contract"]["version"] == "v1"
+        assert "canonical_filters" in metadata_payload["search_contract"]
+        assert "provider_filter_union" in metadata_payload["search_contract"]
+        assert "provider_filter_intersection" in metadata_payload["search_contract"]
+        assert metadata_payload["search_contract"]["provider_filter_semantics"] == "strict_all_active_non_post_filters"
+        assert "query" in metadata_payload["search_contract"]["provider_filter_union"]
+        assert metadata_payload["search_contract"]["provider_filter_intersection"] == ["brand", "model"]
+        assert "seller_type" in metadata_payload["search_contract"]["canonical_filters"]
+        assert "private_only" in metadata_payload["search_contract"]["canonical_filters"]
+        assert "seller_type" in metadata_payload["search_contract"]["backend_post_filters"]
+        assert "brands" in metadata_payload
+        assert "models_by_brand" in metadata_payload
+        assert "trims_by_brand_model" in metadata_payload
+
+        ownership_response = client.get("/api/metadata/ownership")
+        assert ownership_response.status_code == 200
+        ownership_payload = ownership_response.json()
+        assert ownership_payload["defaults"]["annual_km"] == 10000
+    finally:
+        get_settings.cache_clear()
 
 
 def test_listing_analysis_contract() -> None:

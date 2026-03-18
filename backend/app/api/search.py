@@ -1,10 +1,11 @@
 import json
 from typing import Union
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.core.dependencies import get_search_orchestrator
+from app.core.rate_limiter import _search_limit, _search_stream_limit, limiter
 from app.models.search import SearchRequest, SearchResponse
 from app.services.search_orchestrator import SearchOrchestrator
 
@@ -13,11 +14,13 @@ router = APIRouter()
 
 
 @router.post("/search", response_model=SearchResponse)
+@limiter.limit(_search_limit)
 async def search(
-    request: SearchRequest,
+    request: Request,
+    payload: SearchRequest,
     orchestrator: SearchOrchestrator = Depends(get_search_orchestrator),
 ) -> Union[SearchResponse, JSONResponse]:
-    response = await orchestrator.run_search(request)
+    response = await orchestrator.run_search(payload)
     has_no_eligible = any(
         detail.code in {"no_provider_eligible_for_filters", "no_provider"}
         for detail in response.provider_error_details
@@ -28,15 +31,17 @@ async def search(
 
 
 @router.post("/search/stream")
+@limiter.limit(_search_stream_limit)
 async def search_stream(
-    request: SearchRequest,
+    request: Request,
+    payload: SearchRequest,
     orchestrator: SearchOrchestrator = Depends(get_search_orchestrator),
 ) -> StreamingResponse:
     async def event_generator():
-        async for event in orchestrator.stream_search(request):
+        async for event in orchestrator.stream_search(payload):
             event_name = event["event"]
-            payload = json.dumps(event, ensure_ascii=False)
-            yield f"event: {event_name}\ndata: {payload}\n\n"
+            serialized_event = json.dumps(event, ensure_ascii=False)
+            yield f"event: {event_name}\ndata: {serialized_event}\n\n"
 
     return StreamingResponse(
         event_generator(),

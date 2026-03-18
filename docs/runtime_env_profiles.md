@@ -76,6 +76,9 @@ Boundary ibrido finale:
 Backend ops security:
 - se `OPS_TOKEN` e valorizzato nel backend, ogni chiamata a `/api/ops/*` deve includere `x-ops-token`
 - in GitHub Actions usare `FASTAPI_OPS_TOKEN` nel workflow `ops-snapshot`
+- rate limiting search configurabile via env backend:
+  - `SEARCH_RATE_LIMIT` (default `20/minute`)
+  - `SEARCH_STREAM_RATE_LIMIT` (default `10/minute`)
 
 ## Secret Matrix per Workflow GitHub
 
