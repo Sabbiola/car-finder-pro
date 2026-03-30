@@ -65,6 +65,8 @@ Ogni provider espone anche:
 Frontend (`frontend/src/lib/runtimeConfig.ts`):
 - `backendMode` supporta `supabase | fastapi`
 - precedenza runtime: localStorage -> env vars -> fallback
+- diagnostica runtime disponibile via `getRuntimeConfigDiagnostics()` (source per campo + override browser attivi)
+- se sono attivi override browser, il frontend mostra un warning low-noise con azione esplicita `Rimuovi override`
 - se `VITE_BACKEND_MODE` manca o e invalido:
   - fallback `fastapi` (tutti gli ambienti)
 - in `backendMode=fastapi`, i journey core non fanno fallback implicito a Supabase quando `VITE_API_BASE_URL` manca: falliscono in modo esplicito
@@ -90,6 +92,7 @@ Backend ops security:
 | `.github/workflows/ops-snapshot.yml` | `FASTAPI_OPS_BASE_URL` (+ `FASTAPI_OPS_TOKEN` se `OPS_TOKEN` e attivo) | Polling endpoint ops metrics/alerts |
 | `.github/workflows/process-alerts.yml` | `ALERTS_PROCESS_URL`, `ALERTS_PROCESSOR_TOKEN` | Trigger schedulato alerts processor |
 | `.github/workflows/canary-smoke.yml` | `FASTAPI_STAGING_BASE_URL` (+ opzionali `FASTAPI_OPS_TOKEN`, `ALERTS_PROCESSOR_TOKEN`) | Smoke manuale canary su journey core |
+| `.github/workflows/e2e-staging-smoke.yml` | `PLAYWRIGHT_STAGING_FRONTEND_URL` (+ opzionale `PLAYWRIGHT_STAGING_SEARCH_PATH`) | Smoke E2E frontend su staging reale |
 
 ## Note Operative
 

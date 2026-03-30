@@ -15,8 +15,43 @@ npm run dev
 npm run lint
 npm run test
 npm run test:e2e
+npm run test:e2e:staging-smoke
 npm run build
 ```
+
+## Playwright lanes
+
+Lane locale/stub (CI veloce, backend locale con `TEST_STUB_MODE=true`):
+
+```bash
+npm run test:e2e:stub
+```
+
+Lane staging smoke (frontend staging + backend reale, nessun backend locale avviato da Playwright):
+
+```bash
+PLAYWRIGHT_STAGING_FRONTEND_URL="https://<frontend-staging-url>" npm run test:e2e:staging-smoke
+```
+
+Variabili supportate per la lane staging smoke:
+
+- `PLAYWRIGHT_STAGING_FRONTEND_URL` (obbligatoria): base URL frontend staging.
+- `PLAYWRIGHT_STAGING_SEARCH_PATH` (opzionale): path/query iniziale per la smoke search.
+  - default: `/risultati?brand=BMW&model=320d&sources=autoscout24,subito`
+
+## Security Headers e Service Worker
+
+Header CSP in `vercel.json`:
+- `script-src` ora e limitato a `'self'` (rimosso `unsafe-inline` e `unsafe-eval`).
+- restano eccezioni intenzionali:
+  - `style-src 'unsafe-inline'` per style inline usati dalla UI React/Tailwind.
+  - `img-src https: data: blob:` per immagini listing da provider esterni e immagini generate localmente.
+  - `connect-src` su Supabase HTTPS/WSS per auth/realtime.
+
+Service worker (`public/sw.js`):
+- naming cache allineato a `carfinder-pro`.
+- versioning esplicito via `SW_CACHE_VERSION` per busting/rollback governabile.
+- cleanup cache legacy supportato (`autodeal-*`, `carfinder-pro-v*`).
 
 ## Note architetturali
 

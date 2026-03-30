@@ -404,7 +404,7 @@ const CarDetail = () => {
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
-        <title>{`${listing.title} - EUR ${listing.price.toLocaleString("it-IT")} | AutoDeal Finder`}</title>
+        <title>{`${listing.title} - EUR ${listing.price.toLocaleString("it-IT")} | CarFinder Pro`}</title>
         <meta
           name="description"
           content={`${listing.title} a EUR ${listing.price.toLocaleString("it-IT")} - ${listing.year}, ${listing.km.toLocaleString("it-IT")} km, ${listing.fuel || ""} ${listing.transmission || ""}. ${listing.location || ""}`}

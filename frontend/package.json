@@ -1,5 +1,5 @@
 {
-  "name": "vite_react_shadcn_ts",
+  "name": "carfinder-pro-frontend",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -13,8 +13,10 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "npm exec --yes playwright@1.54.2 test",
-    "test:e2e:headed": "npm exec --yes playwright@1.54.2 test --headed",
+    "test:e2e": "playwright test --config=playwright.config.ts",
+    "test:e2e:stub": "playwright test --config=playwright.config.ts",
+    "test:e2e:headed": "playwright test --config=playwright.config.ts --headed",
+    "test:e2e:staging-smoke": "playwright test --config=playwright.staging.config.ts",
     "format": "prettier . --write",
     "format:check": "prettier . --check"
   },
@@ -76,6 +78,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@playwright/test": "^1.54.2",
     "@eslint/js": "^9.32.0",
     "@tailwindcss/typography": "^0.5.16",
     "@testing-library/jest-dom": "^6.6.0",

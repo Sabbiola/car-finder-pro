@@ -110,7 +110,7 @@ jobs:
           pip install -r ../backend/requirements.txt
 
       - name: Install Playwright browser
-        run: npm exec --yes playwright@1.54.2 install --with-deps chromium
+        run: npx playwright install --with-deps chromium
 
       - name: Run Playwright E2E smoke
         run: npm run test:e2e

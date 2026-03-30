@@ -31,6 +31,8 @@ import {
   brandModels,
   modelTrims,
 } from "@/lib/mock-data";
+import { isFastApiSourceSupported } from "@/lib/providerSupport";
+import { getRuntimeConfig } from "@/lib/runtimeConfig";
 import { useFilterMetadata } from "@/features/search/hooks/useFilterMetadata";
 import { useNavigate } from "react-router-dom";
 import AutocompleteInput from "./AutocompleteInput";
@@ -153,6 +155,7 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
   const [showAdvanced, setShowAdvanced] = useState(!compact);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const { data: metadata } = useFilterMetadata();
+  const isFastApiMode = getRuntimeConfig().backendMode === "fastapi";
 
   const navigate = useNavigate();
   const { save } = useSavedSearches();
@@ -183,6 +186,18 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
       };
     });
   }, [metadata]);
+  const sourceLabelById = useMemo(
+    () => new Map(availableSources.map((source) => [source.id, source.label])),
+    [availableSources],
+  );
+  const modeUnsupportedSelectedSources = useMemo(() => {
+    if (!isFastApiMode) {return [];}
+    return filters.sources.filter((sourceId) => !isFastApiSourceSupported(sourceId));
+  }, [filters.sources, isFastApiMode]);
+  const modeUnsupportedSelectedLabels = useMemo(
+    () => modeUnsupportedSelectedSources.map((sourceId) => sourceLabelById.get(sourceId) ?? sourceId),
+    [modeUnsupportedSelectedSources, sourceLabelById],
+  );
 
   const selectedProviderCapabilitySet = useMemo(() => {
     const contract = metadata?.search_contract;
@@ -753,24 +768,42 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
               <div className="col-span-2 sm:col-span-3 lg:col-span-6 space-y-2">
                 <Label className="text-xs text-muted-foreground">Fonti</Label>
                 <div className="flex flex-wrap gap-4">
-                  {availableSources.map(({ id, label, configured }) => (
+                  {availableSources.map(({ id, label, configured }) => {
+                    const unavailableInFastApi = isFastApiMode && !isFastApiSourceSupported(id);
+                    const disabled = configured === false || unavailableInFastApi;
+                    return (
                     <label key={id} className="flex items-center gap-2 cursor-pointer">
                       <Checkbox
                         checked={filters.sources.includes(id)}
-                        disabled={configured === false}
+                        disabled={disabled}
                         onCheckedChange={() => {
-                          if (configured === false) {return;}
+                          if (disabled) {return;}
                           toggleSource(id);
                         }}
                       />
                       <span
-                        className={`text-sm ${configured === false ? "text-muted-foreground line-through" : ""}`}
+                        className={`text-sm ${
+                          configured === false || unavailableInFastApi
+                            ? "text-muted-foreground line-through"
+                            : ""
+                        }`}
                       >
-                        {configured === false ? `${label} (setup richiesto)` : label}
+                        {configured === false
+                          ? `${label} (setup richiesto)`
+                          : isFastApiMode && !isFastApiSourceSupported(id)
+                            ? `${label} (non disponibile in fastapi mode)`
+                            : label}
                       </span>
                     </label>
-                  ))}
+                    );
+                  })}
                 </div>
+                {modeUnsupportedSelectedLabels.length > 0 && (
+                  <p className="text-xs text-amber-700">
+                    Fonti selezionate non disponibili in fastapi mode:{" "}
+                    {modeUnsupportedSelectedLabels.join(", ")}. Verranno escluse dalla ricerca.
+                  </p>
+                )}
               </div>
 
               {/* Bottom actions */}

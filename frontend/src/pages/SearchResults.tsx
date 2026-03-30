@@ -1,32 +1,22 @@
-import { lazy, Suspense, useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { ArrowUpDown, Loader2, LayoutGrid, Map, Link2, Check } from "lucide-react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { Helmet } from "react-helmet-async";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
 import Header from "@/components/Header";
 import ApiConfigBanner from "@/components/ApiConfigBanner";
 import SearchFilters, { type SearchFiltersState } from "@/components/SearchFilters";
 import CarCardSkeleton from "@/components/CarCardSkeleton";
 import ActiveFilterChips from "@/components/ActiveFilterChips";
 import ListingResultCard from "@/features/results/components/ListingResultCard";
-import { useSearchParams } from "react-router-dom";
 import {
-  FASTAPI_CORE_SOURCES,
-  buildListingIdentityKey,
-  fetchListings,
-  reconcileListingsByResultKeys,
-  scrapeListings,
-  streamListings,
-  type CarListing,
-} from "@/lib/api/listings";
-import { useToast } from "@/hooks/use-toast";
-import { sourceLabels, sourceColors } from "@/lib/mock-data";
-import { VALID_SORT_OPTIONS, type SortOption, PAGE_SIZE, CACHE_TTL_HOURS } from "@/lib/constants";
+  SearchModeProviderNotice,
+  SearchStreamDiagnostics,
+} from "@/features/results/components/SearchProviderDiagnostics";
+import SearchResultsToolbar from "@/features/results/components/SearchResultsToolbar";
+import SearchStatsChips from "@/features/results/components/SearchStatsChips";
+import { useSearchResultsOrchestration } from "@/features/results/hooks/useSearchResultsOrchestration";
+import { useSearchParams } from "react-router-dom";
+import { PAGE_SIZE, VALID_SORT_OPTIONS, type SortOption } from "@/lib/constants";
 import { getRuntimeConfig } from "@/lib/runtimeConfig";
 
 const ListingsMap = lazy(() => import("@/components/ListingsMap"));
@@ -81,188 +71,30 @@ function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
   };
 }
 
-function mergeUniqueListings(left: CarListing[], right: CarListing[]): CarListing[] {
-  const byKey: Record<string, CarListing> = {};
-  for (const listing of [...left, ...right]) {
-    const key = buildListingIdentityKey(listing);
-    if (!Object.prototype.hasOwnProperty.call(byKey, key)) {
-      byKey[key] = listing;
-    }
-  }
-  return Object.values(byKey);
-}
-
 const SearchResults = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [sort, setSort] = useState<SortOption>(() => parseSortParam(searchParams.get("sort")));
   const [filters, setFilters] = useState<SearchFiltersState>(() => parseFiltersFromParams(searchParams));
-  const [listings, setListings] = useState<CarListing[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [scraped, setScraped] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
-  const [copied, setCopied] = useState(false);
-  const [streamProviderStatus, setStreamProviderStatus] = useState<Record<string, string>>({});
-  const [streamProviderCount, setStreamProviderCount] = useState<Record<string, number>>({});
-  const [streamErrors, setStreamErrors] = useState<string[]>([]);
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const activeRequestRef = useRef(0);
-  const streamAbortRef = useRef<AbortController | null>(null);
-  const { toast } = useToast();
+  const isFastApiMode = getRuntimeConfig().backendMode === "fastapi";
 
-  const doSearch = useCallback(async (currentFilters: SearchFiltersState, forceRefresh = false) => {
-    if (!currentFilters.brand) {
-      streamAbortRef.current?.abort();
-      setLoading(false);
-      return;
-    }
-    const requestId = activeRequestRef.current + 1;
-    activeRequestRef.current = requestId;
-    streamAbortRef.current?.abort();
-    const streamController = new AbortController();
-    streamAbortRef.current = streamController;
-    const isStaleRequest = () => activeRequestRef.current !== requestId;
-
-    setLoading(true);
-    setStreamProviderStatus({});
-    setStreamProviderCount({});
-    setStreamErrors([]);
-    try {
-      const runtime = getRuntimeConfig();
-      const useFastApiStream = runtime.backendMode === "fastapi";
-
-      if (useFastApiStream) {
-        const selectedSources = currentFilters.sources.length
-          ? currentFilters.sources
-          : ["autoscout24", "subito", "ebay", "automobile", "brumbrum"];
-        const coreSources = selectedSources.filter((s) => FASTAPI_CORE_SOURCES.includes(s as (typeof FASTAPI_CORE_SOURCES)[number]));
-        const legacySources = selectedSources.filter((s) => !coreSources.includes(s));
-
-        let streamedResults: CarListing[] = [];
-        const streamErrorsLocal: string[] = [];
-
-        if (legacySources.length) {
-          const legacyWarning = `Fonti non migrate ignorate in fastapi mode: ${legacySources.join(", ")}`;
-          streamErrorsLocal.push(legacyWarning);
-          setStreamErrors((prev) => [...prev, legacyWarning]);
-        }
-
-        if (!coreSources.length) {
-          throw new Error("Nessun provider FastAPI selezionato.");
-        }
-
-        if (coreSources.length) {
-          await streamListings(
-            { ...currentFilters, sources: coreSources },
-            (event) => {
-              if (isStaleRequest()) {return;}
-              if (event.event === "progress") {
-                setStreamProviderStatus((prev) => ({ ...prev, [event.provider]: event.status }));
-                if (typeof event.fetched_count === "number") {
-                  setStreamProviderCount((prev) => ({ ...prev, [event.provider]: event.fetched_count ?? 0 }));
-                }
-              } else if (event.event === "result") {
-                streamedResults = mergeUniqueListings(streamedResults, [event.listing]);
-                setListings(streamedResults);
-              } else if (event.event === "complete") {
-                if (event.final_result_keys?.length) {
-                  streamedResults = reconcileListingsByResultKeys(streamedResults, event.final_result_keys);
-                  setListings(streamedResults);
-                }
-              } else {
-                const formatted =
-                  event.code === "provider_excluded_unsupported_filter"
-                    ? `${event.provider}: escluso per filtri non supportati`
-                    : event.code === "no_provider_eligible_for_filters"
-                      ? "Nessun provider eleggibile per i filtri attivi"
-                    : `${event.provider ? `${event.provider}: ` : ""}${event.message}`;
-                streamErrorsLocal.push(formatted);
-                setStreamErrors((prev) => [...prev, formatted]);
-              }
-            },
-            streamController.signal,
-          );
-        }
-        if (isStaleRequest()) {return;}
-
-        const finalResults = streamedResults;
-        setListings(finalResults);
-        setScraped(true);
-        toast({
-          title: `${finalResults.length} annunci trovati`,
-          description: streamErrorsLocal.length
-            ? `Ricerca completata con ${streamErrorsLocal.length} errore/i parziale/i`
-            : "Streaming completato",
-        });
-        return;
-      }
-
-      if (!forceRefresh) {
-        const existing = await fetchListings(currentFilters);
-        if (isStaleRequest()) {return;}
-        if (existing.length > 0) {
-          const newestTs = Math.max(...existing.map((l) => new Date(l.scraped_at).getTime()));
-          const ageHours = (Date.now() - newestTs) / 3_600_000;
-          if (ageHours < CACHE_TTL_HOURS) {
-            setListings(existing);
-            setScraped(true);
-            setLoading(false);
-            return;
-          }
-          // Cache stale: show existing while re-scraping in background
-          setListings(existing);
-          setScraped(true);
-        }
-      }
-      toast({ title: "Ricerca in corso...", description: "Scraping annunci reali dai portali" });
-      const result = await scrapeListings(currentFilters);
-      if (isStaleRequest()) {return;}
-      if (result.success) {
-        const fresh = await fetchListings(currentFilters);
-        if (isStaleRequest()) {return;}
-        setListings(fresh);
-        setScraped(true);
-        toast({ title: `${fresh.length} annunci trovati` });
-      } else {
-        toast({
-          title: "Errore",
-          description: result.error ?? "Scraping fallito",
-          variant: "destructive",
-        });
-      }
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") {
-        return;
-      }
-      console.error("[SearchResults] Error fetching listings:", err);
-      const message = err instanceof Error ? err.message : "Impossibile caricare gli annunci";
-      toast({
-        title: "Errore",
-        description: message,
-        variant: "destructive",
-      });
-    } finally {
-      if (activeRequestRef.current === requestId) {
-        setLoading(false);
-      }
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    void doSearch(filters);
-  }, [doSearch, filters]);
-
-  useEffect(() => {
-    return () => {
-      streamAbortRef.current?.abort();
-    };
-  }, []);
-
-  const handleSearch = (newFilters: SearchFiltersState) => {
-    setScraped(false);
-    setListings([]);
-    setFilters(newFilters);
-  };
+  const {
+    listings,
+    loading,
+    scraped,
+    streamProviderStatus,
+    streamProviderCount,
+    streamErrors,
+    modeUnsupportedVisibleSources,
+    handleSearch,
+    refreshSearch,
+  } = useSearchResultsOrchestration({
+    filters,
+    setFilters,
+    isFastApiMode,
+  });
 
   const results = useMemo(() => {
     const list = [...listings];
@@ -324,7 +156,6 @@ const SearchResults = () => {
     };
   }, [results]);
 
-  // Infinite scroll sentinel
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el) {return;}
@@ -338,7 +169,6 @@ const SearchResults = () => {
     return () => observer.disconnect();
   }, [hasMore]);
 
-  // Reset visible count when results change
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [listings, sort]);
@@ -349,7 +179,7 @@ const SearchResults = () => {
     <div className="min-h-screen bg-background">
       <Helmet>
         <title>
-          {brand && model ? `${brand} ${model}` : brand || "Risultati ricerca"} - AutoDeal Finder
+          {brand && model ? `${brand} ${model}` : brand || "Risultati ricerca"} - CarFinder Pro
         </title>
         <meta
           name="description"
@@ -364,172 +194,43 @@ const SearchResults = () => {
           <SearchFilters compact onSearch={handleSearch} initialFilters={filters} />
         </div>
 
+        <SearchModeProviderNotice
+          isFastApiMode={isFastApiMode}
+          modeUnsupportedVisibleSources={modeUnsupportedVisibleSources}
+        />
+
         <ActiveFilterChips filters={filters} onChange={handleSearch} />
 
-        {(Object.keys(streamProviderStatus).length > 0 || streamErrors.length > 0) && (
-          <div className="rounded-xl border border-border/70 bg-card p-3 space-y-2">
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(streamProviderStatus).map(([provider, status]) => (
-                <span key={provider} className="text-[11px] px-2 py-1 rounded-full bg-muted text-foreground">
-                  {provider}: {status}
-                  {typeof streamProviderCount[provider] === "number"
-                    ? ` (${streamProviderCount[provider]})`
-                    : ""}
-                </span>
-              ))}
-            </div>
-            {streamErrors.length > 0 && (
-              <p className="text-xs text-destructive">
-                Errori provider: {streamErrors.join(" | ")}
-              </p>
-            )}
-          </div>
-        )}
+        <SearchStreamDiagnostics
+          streamProviderStatus={streamProviderStatus}
+          streamProviderCount={streamProviderCount}
+          streamErrors={streamErrors}
+        />
 
-        <div
-          className="flex items-center justify-between border-b border-border pb-3 animate-brutal-up"
-          style={{ animationDelay: "100ms" }}
-        >
-          <div className="flex items-center gap-3">
-            {loading && !scraped ? (
-              <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Ricerca in corso...
-              </span>
-            ) : (
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-xs text-muted-foreground">
-                  <span className="font-semibold text-foreground">{results.length}</span> risultati
-                </p>
-                {scraped && results.length > 0 && (
-                  <div className="flex items-center gap-1 flex-wrap">
-                    {Object.keys(sourceLabels).map((src) => {
-                      const count = listings.filter((l) => l.source === src).length;
-                      return (
-                        <span
-                          key={src}
-                          className={`text-[9px] font-semibold px-2 py-0.5 rounded-full text-white ${count > 0 ? sourceColors[src] : "bg-muted text-muted-foreground"}`}
-                          style={count === 0 ? { opacity: 0.4 } : undefined}
-                          title={`${sourceLabels[src]}: ${count} annunci`}
-                        >
-                          {sourceLabels[src]
-                            .replace("AutoScout24", "AS24")
-                            .replace("Automobile.it", "Auto.it")
-                            .replace("Subito.it", "Subito")
-                            .replace("eBay Motors", "eBay")
-                            .replace("Brumbrum", "BB")}
-                          : {count}
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-            {loading && scraped && results.length > 0 && (
-              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Aggiornamento...
-              </span>
-            )}
-            {!loading && scraped && (
-              <button
-                onClick={() => {
-                  void doSearch(filters, true);
-                }}
-                className="text-xs text-muted-foreground hover:text-accent hover:underline transition-colors"
-              >
-                Aggiorna
-              </button>
-            )}
-          </div>
+        <SearchResultsToolbar
+          loading={loading}
+          scraped={scraped}
+          resultsCount={results.length}
+          listings={listings}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          sort={sort}
+          sortLabels={sortLabels}
+          onSortChange={(nextSort) => {
+            const parsedSort = parseSortParam(nextSort);
+            setSort(parsedSort);
+            setSearchParams(
+              (prev) => {
+                prev.set("sort", parsedSort);
+                return prev;
+              },
+              { replace: true },
+            );
+          }}
+          onRefresh={refreshSearch}
+        />
 
-          <div className="flex items-center gap-2">
-            {/* View toggle - segmented control */}
-            <div className="flex items-center gap-0.5 bg-muted p-0.5 rounded-lg">
-              <button
-                onClick={() => setViewMode("grid")}
-                className={`p-1.5 rounded-md transition-all ${viewMode === "grid" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                aria-label="Vista griglia"
-              >
-                <LayoutGrid className="h-3.5 w-3.5" />
-              </button>
-              <button
-                onClick={() => setViewMode("map")}
-                className={`p-1.5 rounded-md transition-all ${viewMode === "map" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                aria-label="Vista mappa"
-              >
-                <Map className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
-            {/* Copy link */}
-            <button
-              onClick={async () => {
-                await navigator.clipboard.writeText(window.location.href);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              }}
-              className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              title="Copia link ricerca"
-              aria-label="Copia link"
-            >
-              {copied ? (
-                <Check className="h-3.5 w-3.5 text-emerald-500" />
-              ) : (
-                <Link2 className="h-3.5 w-3.5" />
-              )}
-            </button>
-
-            <Select
-              value={sort}
-              onValueChange={(v) => {
-                const s = parseSortParam(v);
-                setSort(s);
-                setSearchParams(
-                  (prev) => {
-                    prev.set("sort", s);
-                    return prev;
-                  },
-                  { replace: true },
-                );
-              }}
-            >
-              <SelectTrigger className="w-40 bg-card text-xs rounded-lg border">
-                <ArrowUpDown className="h-3 w-3 mr-1 text-muted-foreground" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border shadow-lg">
-                {Object.entries(sortLabels).map(([k, v]) => (
-                  <SelectItem key={k} value={k} className="text-xs">
-                    {v}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {stats && scraped && (
-          <div className="flex flex-wrap gap-2 animate-brutal-in">
-            {[
-              { label: "Min", value: `EUR ${stats.minPrice.toLocaleString("it-IT")}` },
-              { label: "Media", value: `EUR ${stats.avgPrice.toLocaleString("it-IT")}` },
-              { label: "Max", value: `EUR ${stats.maxPrice.toLocaleString("it-IT")}` },
-              ...(stats.avgKm
-                ? [{ label: "Km medi", value: stats.avgKm.toLocaleString("it-IT") }]
-                : []),
-              ...(stats.topFuel ? [{ label: "Carburante", value: stats.topFuel }] : []),
-            ].map(({ label, value }) => (
-              <span
-                key={label}
-                className="text-xs bg-muted px-3 py-1.5 rounded-full text-muted-foreground"
-              >
-                {label} <strong className="text-foreground">{value}</strong>
-              </span>
-            ))}
-          </div>
-        )}
+        <SearchStatsChips stats={stats} scraped={scraped} />
 
         {viewMode === "map" ? (
           <Suspense
@@ -555,7 +256,6 @@ const SearchResults = () => {
           </div>
         )}
 
-        {/* Infinite scroll sentinel - grid mode only */}
         {viewMode === "grid" && (
           <>
             <div ref={sentinelRef} className="h-4" />
@@ -577,9 +277,7 @@ const SearchResults = () => {
             <p className="text-sm font-semibold text-foreground">Nessun risultato</p>
             <p className="text-xs">Modifica i filtri di ricerca o cambia brand/modello</p>
             <button
-              onClick={() => {
-                void doSearch(filters, true);
-              }}
+              onClick={refreshSearch}
               className="text-xs text-violet-600 hover:underline mt-2 block mx-auto"
             >
               Riprova

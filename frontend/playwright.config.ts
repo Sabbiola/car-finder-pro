@@ -5,6 +5,7 @@ const BACKEND_PORT = 8000;
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: ["**/staging-smoke.spec.ts"],
   timeout: 45_000,
   expect: {
     timeout: 15_000,

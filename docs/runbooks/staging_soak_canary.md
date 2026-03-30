@@ -34,6 +34,9 @@ Auth resta Supabase-direct e deve restare funzionante (path non-auth incluso).
   - `FASTAPI_STAGING_BASE_URL`
   - `FASTAPI_OPS_BASE_URL` (+ `FASTAPI_OPS_TOKEN` se richiesto)
   - `ALERTS_PROCESS_URL` + `ALERTS_PROCESSOR_TOKEN`
+- Variabili lane E2E staging smoke:
+  - `PLAYWRIGHT_STAGING_FRONTEND_URL`
+  - opzionale `PLAYWRIGHT_STAGING_SEARCH_PATH`
 
 ## Fase 1 - Soak Staging (5-7 giorni)
 
@@ -83,6 +86,13 @@ Gate di successo canary:
 - nessun `critical` in `ops/alerts`
 - SLO in soglia durante finestra canary
 - rollback drill eseguito e superato
+
+Comando consigliato per evidenza E2E frontend su staging:
+
+```bash
+cd frontend
+PLAYWRIGHT_STAGING_FRONTEND_URL="https://<frontend-staging-url>" npm run test:e2e:staging-smoke
+```
 
 No-go canary:
 - fallimento smoke su journey core

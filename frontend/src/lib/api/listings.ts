@@ -3,6 +3,10 @@ import type { SearchStreamEvent } from "@/features/search/types";
 import { supabase } from "@/integrations/supabase/client";
 import { createRequestId } from "@/lib/requestId";
 import { getRuntimeConfig, type RuntimeConfig } from "@/lib/runtimeConfig";
+import {
+  DEFAULT_SOURCE_SELECTION,
+  partitionSourcesForFastApi,
+} from "@/lib/providerSupport";
 import { streamSearch } from "@/services/api/searchStream";
 
 export type AnalysisConfidence = "high" | "medium" | "low" | "insufficient";
@@ -217,15 +221,6 @@ export interface FastApiSearchRequest {
   sources?: string[];
 }
 
-export const FASTAPI_CORE_SOURCES = [
-  "autoscout24",
-  "subito",
-  "ebay",
-  "automobile",
-  "brumbrum",
-] as const;
-const LEGACY_ONLY_SOURCES: string[] = [];
-
 const mergedCacheByQuery = new Map<string, CarListing[]>();
 
 function getCacheKey(filters: SearchFiltersState): string {
@@ -251,16 +246,15 @@ function parseMaybeNumber(value: string): number | undefined {
 }
 
 function normalizeSources(filters: SearchFiltersState): string[] {
-  return filters.sources.length
-    ? filters.sources
-    : ["autoscout24", "subito", "ebay", "automobile", "brumbrum"];
+  return filters.sources.length ? filters.sources : [...DEFAULT_SOURCE_SELECTION];
 }
 
 function splitSources(filters: SearchFiltersState): { coreSources: string[]; legacySources: string[] } {
   const selected = normalizeSources(filters);
-  const core = selected.filter((s) => FASTAPI_CORE_SOURCES.includes(s as (typeof FASTAPI_CORE_SOURCES)[number]));
-  const legacy = selected.filter((s) => !core.includes(s) || LEGACY_ONLY_SOURCES.includes(s));
-  return { coreSources: core, legacySources: legacy };
+  const { supportedSources, unsupportedSources } = partitionSourcesForFastApi(selected, {
+    fallbackToDefault: false,
+  });
+  return { coreSources: supportedSources, legacySources: unsupportedSources };
 }
 
 export function buildFastApiRequest(

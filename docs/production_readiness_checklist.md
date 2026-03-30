@@ -19,7 +19,7 @@ Significato degli stati:
 | Alerts operations | partial | scheduler workflow con parsing outcome, smoke sintetico opzionale, retry metadata e audit migration | secret runtime reali + prova delivery email in staging |
 | Frontend runtime boundary | done | runtime fail-closed sui journey core in fastapi mode, Auth Supabase-direct intenzionale | prova rollout stabile in staging/canary |
 | Observability plumbing | partial | `/api/ops/*` con token opzionale, summary alerts processor, workflow snapshot/perf con artifact | sink webhook live + dashboard esterna con evidenza continuativa |
-| Automated test coverage | partial | esistono suite backend/frontend, 2 Playwright spec (stream + journey core) e test edge | prova di esecuzione locale e stabilita E2E in CI/staging |
+| Automated test coverage | partial | esistono suite backend/frontend, lane Playwright locale/stub (`test:e2e:stub`), lane Playwright staging smoke (`test:e2e:staging-smoke`) e test edge | prova di esecuzione stabile in CI e su staging reale |
 | Staging soak/canary playbook | done | esistono runbook + script per soak, canary e rollback drill con evidenza JSON | esecuzione reale in staging/canary |
 | CI e release gate | done | esistono `ci.yml` e release gate aggregato | lo stato branch protection non e provabile dal solo repo |
 | DB migrations | done | esistono 15 migration in `supabase/migrations` | prova di applicazione negli ambienti target |

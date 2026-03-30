@@ -157,8 +157,8 @@ Responsabilità principali:
 ### Pagine principali
 
 * `/` -> home / entry search
-* `/search` -> risultati e streaming
-* `/car/:id` -> dettaglio listing
+* `/risultati` -> risultati e streaming
+* `/auto/:id` -> dettaglio listing
 * `/confronta` -> confronto listing
 * `/preferiti` -> favorites
 * `/profilo` -> profilo utente, saved searches e alert
@@ -316,7 +316,7 @@ Eventi canonici:
 
 * `GET /api/listings/{listing_id}`
 * `POST /api/listings/batch`
-* `POST /api/analysis/listing`
+* `POST /api/listings/analyze`
 
 ## User data
 
@@ -457,6 +457,19 @@ E2E:
 
 ```bash
 npm run test:e2e
+npm run test:e2e:staging-smoke
+```
+
+E2E lane locali/stub (default CI):
+
+```bash
+npm run test:e2e:stub
+```
+
+E2E lane staging smoke (frontend staging, backend reale):
+
+```bash
+PLAYWRIGHT_STAGING_FRONTEND_URL="https://<frontend-staging-url>" npm run test:e2e:staging-smoke
 ```
 
 ## Backend
@@ -572,6 +585,11 @@ Framework:
 
 * Playwright
 
+Lanes:
+
+* `test:e2e:stub` -> smoke locale/stub (backend locale con `TEST_STUB_MODE=true`)
+* `test:e2e:staging-smoke` -> smoke staging su backend reale (richiede `PLAYWRIGHT_STAGING_FRONTEND_URL`)
+
 Focus:
 
 * smoke journey core
@@ -606,6 +624,7 @@ Workflow principali:
 * `.github/workflows/ops-snapshot.yml`
 * `.github/workflows/perf-load.yml`
 * `.github/workflows/process-alerts.yml`
+* `.github/workflows/e2e-staging-smoke.yml`
 
 ## Scopo dei workflow
 

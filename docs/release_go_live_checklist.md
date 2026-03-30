@@ -128,6 +128,7 @@ Verificare anche che i workflow schedulati di supporto siano configurati quando 
 - `ops-snapshot.yml`
 - `process-alerts.yml`
 - `canary-smoke.yml` (manuale, obbligatorio durante finestra canary)
+- `e2e-staging-smoke.yml` (manuale, raccomandato per evidenza journey frontend su staging reale)
 
 No-go se i check richiesti sono rossi o se lo stato branch protection e ignoto per il release target.
 
@@ -177,7 +178,10 @@ Validare nell'ambiente target:
 - compare funziona con backend listings batch in modalita FastAPI
 - gli alert possono essere creati e disattivati
 - l'auth continua a funzionare tramite Supabase
-- la suite Playwright copre sia `search-stream.spec.ts` che `journeys-fastapi.spec.ts`
+- la lane Playwright locale/stub resta stabile (`npm run test:e2e:stub`)
+- la lane Playwright staging smoke copre i journey core su ambiente reale (`npm run test:e2e:staging-smoke`)
+  - env minima: `PLAYWRIGHT_STAGING_FRONTEND_URL`
+  - env opzionale: `PLAYWRIGHT_STAGING_SEARCH_PATH`
 
 No-go se il frontend va in fallback verso un runtime non voluto o rompe i journey core.
 
@@ -187,6 +191,7 @@ Verificare la verita runtime:
 - `backendMode` lato frontend risolve come previsto
 - il default e intenzionale per l'ambiente target
 - in staging/production non vengono usati override runtime da localStorage
+- non e visibile il warning `Override runtime browser attivo` sui journey core frontend
 - in `backendMode=fastapi` i journey core falliscono in modo esplicito se `VITE_API_BASE_URL` manca (no fallback implicito)
 - `FASTAPI_PROXY_MODE` lato edge e impostato intenzionalmente
   - target stabile: `fastapi_only`
