@@ -23,6 +23,53 @@ import { partitionSourcesForFastApi } from "@/lib/providerSupport";
 import { getRuntimeConfig } from "@/lib/runtimeConfig";
 import { useToast } from "@/hooks/use-toast";
 
+const SEARCH_CACHE_TTL_MS = 10 * 60 * 1000;
+const SEARCH_CACHE_PREFIX = "carfinder.searchResults.v1:";
+
+interface CachedSearchPayload {
+  storedAt: number;
+  listings: CarListing[];
+}
+
+function canUseBrowserStorage(): boolean {
+  return typeof window !== "undefined" && typeof sessionStorage !== "undefined";
+}
+
+function buildSearchCacheKey(filters: SearchFiltersState): string {
+  const normalizedSources = [...filters.sources].sort();
+  return `${SEARCH_CACHE_PREFIX}${JSON.stringify({ ...filters, sources: normalizedSources })}`;
+}
+
+function readCachedSearch(filters: SearchFiltersState): CarListing[] | null {
+  if (!canUseBrowserStorage()) {return null;}
+  try {
+    const raw = sessionStorage.getItem(buildSearchCacheKey(filters));
+    if (!raw) {return null;}
+    const parsed = JSON.parse(raw) as CachedSearchPayload;
+    if (!parsed?.storedAt || !Array.isArray(parsed.listings)) {return null;}
+    if (Date.now() - parsed.storedAt > SEARCH_CACHE_TTL_MS) {
+      sessionStorage.removeItem(buildSearchCacheKey(filters));
+      return null;
+    }
+    return parsed.listings;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedSearch(filters: SearchFiltersState, listings: CarListing[]): void {
+  if (!canUseBrowserStorage()) {return;}
+  try {
+    const payload: CachedSearchPayload = {
+      storedAt: Date.now(),
+      listings,
+    };
+    sessionStorage.setItem(buildSearchCacheKey(filters), JSON.stringify(payload));
+  } catch {
+    // Ignore browser storage failures (quota/private mode).
+  }
+}
+
 function mergeUniqueListings(left: CarListing[], right: CarListing[]): CarListing[] {
   const byKey: Record<string, CarListing> = {};
   for (const listing of [...left, ...right]) {
@@ -95,6 +142,16 @@ export function useSearchResultsOrchestration({
       const useFastApiStream = runtime.backendMode === "fastapi";
 
       if (useFastApiStream) {
+        if (!forceRefresh) {
+          const cached = readCachedSearch(currentFilters);
+          if (cached && cached.length > 0) {
+            setModeExcludedSources([]);
+            setListings(cached);
+            setScraped(true);
+            return;
+          }
+        }
+
         const { supportedSources, unsupportedSources } = partitionSourcesForFastApi(
           currentFilters.sources,
         );
@@ -147,6 +204,7 @@ export function useSearchResultsOrchestration({
         const finalResults = streamedResults;
         setListings(finalResults);
         setScraped(true);
+        writeCachedSearch(currentFilters, finalResults);
         toast({
           title: `${finalResults.length} annunci trovati`,
           description: streamErrorsLocal.length

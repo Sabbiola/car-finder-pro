@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     request_timeout_seconds: int = 20
     max_provider_concurrency: int = 4
     provider_timeout_seconds: int = 30
-    provider_retry_attempts: int = 3
+    provider_retry_attempts: int = 1
     provider_retry_backoff_ms: int = 250
     search_rate_limit: str = "20/minute"
     search_stream_rate_limit: str = "10/minute"

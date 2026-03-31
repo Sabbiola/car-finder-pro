@@ -35,6 +35,9 @@ async def fetch_markdown(url: str, wait_ms: int = 7000, premium_proxy: bool = Fa
             headers = {"x-request-id": request_id} if request_id else None
             async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.get(endpoint, headers=headers)
+            if 400 <= response.status_code < 500:
+                # Client-side errors are not recoverable via retry and waste credits.
+                raise RuntimeError(f"ScrapingBee non-retryable error {response.status_code}")
             if response.status_code >= 500:
                 raise RuntimeError(f"ScrapingBee transient error {response.status_code}")
             response.raise_for_status()

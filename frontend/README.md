@@ -46,7 +46,7 @@ Header CSP in `vercel.json`:
 - restano eccezioni intenzionali:
   - `style-src 'unsafe-inline'` per style inline usati dalla UI React/Tailwind.
   - `img-src https: data: blob:` per immagini listing da provider esterni e immagini generate localmente.
-  - `connect-src` su Supabase HTTPS/WSS per auth/realtime.
+  - `connect-src` su FastAPI production/staging (`https://api.carfinderpro.app`, `https://api-staging.carfinderpro.app`) e Supabase HTTPS/WSS per auth/realtime.
 
 Service worker (`public/sw.js`):
 - naming cache allineato a `carfinder-pro`.

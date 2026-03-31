@@ -1,0 +1,79 @@
+﻿{
+    "started_at_utc":  "2026-03-18T09:38:27.2001188+00:00",
+    "finished_at_utc":  "2026-03-18T09:38:43.7330778+00:00",
+    "duration_seconds":  16.53,
+    "fastapi_base_url":  "http://127.0.0.1:65530",
+    "overall_ok":  false,
+    "failed_steps":  [
+                         "healthz",
+                         "search_sync",
+                         "search_stream",
+                         "detail",
+                         "listings_batch",
+                         "favorites",
+                         "saved_searches",
+                         "alerts"
+                     ],
+    "results":  [
+                    {
+                        "step":  "healthz",
+                        "ok":  false,
+                        "detail":  "Impossibile effettuare la connessione al server remoto.",
+                        "duration_ms":  2152.21
+                    },
+                    {
+                        "step":  "search_sync",
+                        "ok":  false,
+                        "detail":  "Impossibile effettuare la connessione al server remoto.",
+                        "duration_ms":  2085.17
+                    },
+                    {
+                        "step":  "search_stream",
+                        "ok":  false,
+                        "detail":  "Impossibile effettuare la connessione al server remoto.",
+                        "duration_ms":  2043.5
+                    },
+                    {
+                        "step":  "detail",
+                        "ok":  false,
+                        "detail":  "Impossibile effettuare la connessione al server remoto.",
+                        "duration_ms":  2048.68
+                    },
+                    {
+                        "step":  "listings_batch",
+                        "ok":  false,
+                        "detail":  "Impossibile effettuare la connessione al server remoto.",
+                        "duration_ms":  2026.13
+                    },
+                    {
+                        "step":  "favorites",
+                        "ok":  false,
+                        "detail":  "Impossibile effettuare la connessione al server remoto.",
+                        "duration_ms":  2048.11
+                    },
+                    {
+                        "step":  "saved_searches",
+                        "ok":  false,
+                        "detail":  "Impossibile effettuare la connessione al server remoto.",
+                        "duration_ms":  2048.03
+                    },
+                    {
+                        "step":  "alerts",
+                        "ok":  false,
+                        "detail":  "Impossibile effettuare la connessione al server remoto.",
+                        "duration_ms":  2029.92
+                    },
+                    {
+                        "step":  "alerts_processor_dry_run",
+                        "ok":  true,
+                        "detail":  "skipped (Alerts token not provided)",
+                        "duration_ms":  1.93
+                    },
+                    {
+                        "step":  "ops_endpoints",
+                        "ok":  true,
+                        "detail":  "skipped (Ops token not provided)",
+                        "duration_ms":  0.01
+                    }
+                ]
+}

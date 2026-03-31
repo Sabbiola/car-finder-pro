@@ -1,5 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import {
+  __setRuntimeHostnameOverrideForTests,
+  acknowledgeRuntimeOverridesForSession,
   clearRuntimeOverrides,
   getFastApiBaseUrlOrThrow,
   getRuntimeConfig,
@@ -11,10 +13,13 @@ import {
 describe("runtimeConfig", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
+    __setRuntimeHostnameOverrideForTests(null);
     vi.unstubAllEnvs();
   });
 
   afterEach(() => {
+    __setRuntimeHostnameOverrideForTests(null);
     vi.unstubAllEnvs();
   });
 
@@ -83,6 +88,9 @@ describe("runtimeConfig", () => {
     expect(diagnostics.sources.apiBaseUrl).toBe("localStorage");
     expect(diagnostics.localStorageKeysPresent.backendMode).toBe(true);
     expect(diagnostics.localStorageKeysPresent.apiBaseUrl).toBe(true);
+    expect(diagnostics.browserOverrideFields).toEqual(["backendMode", "apiBaseUrl"]);
+    expect(diagnostics.overrideRiskLevel).toBe("local");
+    expect(diagnostics.requiresProtectedHostAck).toBe(false);
     expect(diagnostics.hasBrowserOverrides).toBe(true);
   });
 
@@ -99,5 +107,27 @@ describe("runtimeConfig", () => {
     expect(diagnostics.hasBrowserOverrides).toBe(false);
     expect(diagnostics.resolved.backendMode).toBe("supabase");
     expect(diagnostics.resolved.apiBaseUrl).toBe("https://env-api.example.com");
+  });
+
+  it("marks browser overrides on non-local hosts as protected risk until acknowledged", () => {
+    __setRuntimeHostnameOverrideForTests("staging.carfinderpro.app");
+
+    setRuntimeBackendMode("supabase");
+    setRuntimeApiBaseUrl("https://api-staging.carfinderpro.app");
+
+    const diagnostics = getRuntimeConfigDiagnostics();
+    expect(diagnostics.hostname).toBe("staging.carfinderpro.app");
+    expect(diagnostics.overrideRiskLevel).toBe("protected");
+    expect(diagnostics.requiresProtectedHostAck).toBe(true);
+    expect(diagnostics.hasBrowserOverrides).toBe(true);
+  });
+
+  it("can acknowledge protected-host overrides for the current browser session", () => {
+    __setRuntimeHostnameOverrideForTests("staging.carfinderpro.app");
+    setRuntimeBackendMode("fastapi");
+
+    expect(getRuntimeConfigDiagnostics().requiresProtectedHostAck).toBe(true);
+    acknowledgeRuntimeOverridesForSession();
+    expect(getRuntimeConfigDiagnostics().requiresProtectedHostAck).toBe(false);
   });
 });

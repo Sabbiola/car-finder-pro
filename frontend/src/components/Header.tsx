@@ -5,9 +5,11 @@ import { useEffect, useState } from "react";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useAuth } from "@/contexts/useAuth";
 import {
+  acknowledgeRuntimeOverridesForSession,
   clearRuntimeOverrides,
   getRuntimeConfigDiagnostics,
   RUNTIME_CONFIG_CHANGED_EVENT,
+  type RuntimeConfigDiagnostics,
 } from "@/lib/runtimeConfig";
 import AuthModal from "./AuthModal";
 import AISearchDialog from "./AISearchDialog";
@@ -17,7 +19,9 @@ const Header = () => {
   const [dark, setDark] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
-  const [runtimeOverrideText, setRuntimeOverrideText] = useState<string | null>(null);
+  const [runtimeOverrideDiagnostics, setRuntimeOverrideDiagnostics] = useState<RuntimeConfigDiagnostics | null>(
+    null,
+  );
   const { count } = useFavorites();
   const { user, signOut } = useAuth();
 
@@ -48,13 +52,10 @@ const Header = () => {
     const refreshRuntimeOverrideState = () => {
       const diagnostics = getRuntimeConfigDiagnostics();
       if (!diagnostics.hasBrowserOverrides) {
-        setRuntimeOverrideText(null);
+        setRuntimeOverrideDiagnostics(null);
         return;
       }
-      const activeFields: string[] = [];
-      if (diagnostics.localStorageKeysPresent.backendMode) {activeFields.push("backendMode");}
-      if (diagnostics.localStorageKeysPresent.apiBaseUrl) {activeFields.push("apiBaseUrl");}
-      setRuntimeOverrideText(`Override runtime browser attivo: ${activeFields.join(", ")}`);
+      setRuntimeOverrideDiagnostics(diagnostics);
     };
 
     refreshRuntimeOverrideState();
@@ -160,20 +161,57 @@ const Header = () => {
         </div>
       </header>
 
-      {runtimeOverrideText && (
-        <div className="border-b border-amber-300/70 bg-amber-50/85 text-amber-900">
-          <div className="container h-8 flex items-center justify-between gap-3">
-            <p className="text-[11px] flex items-center gap-1.5">
-              <AlertTriangle className="h-3.5 w-3.5" />
-              {runtimeOverrideText}
-            </p>
-            <button
-              onClick={clearRuntimeOverrides}
-              className="text-[11px] font-semibold hover:underline"
-              type="button"
-            >
-              Rimuovi override
-            </button>
+      {runtimeOverrideDiagnostics && (
+        <div
+          className={`border-b ${
+            runtimeOverrideDiagnostics.overrideRiskLevel === "protected"
+              ? "border-red-300/70 bg-red-50/90 text-red-900"
+              : "border-amber-300/70 bg-amber-50/85 text-amber-900"
+          }`}
+        >
+          <div className="container py-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <p className="text-xs flex items-center gap-1.5 font-medium">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {runtimeOverrideDiagnostics.overrideRiskLevel === "protected"
+                  ? `Override runtime browser attivo su host non-locale (${runtimeOverrideDiagnostics.hostname ?? "unknown-host"})`
+                  : "Override runtime browser attivo in ambiente locale"}
+              </p>
+              <p className="text-[11px] opacity-90">
+                Sorgente localStorage:{" "}
+                {runtimeOverrideDiagnostics.browserOverrideFields.join(", ")}. Config attiva: backendMode=
+                {runtimeOverrideDiagnostics.resolved.backendMode}
+                {", "}apiBaseUrl=
+                {runtimeOverrideDiagnostics.resolved.apiBaseUrl ?? "non impostato"}.
+              </p>
+              {runtimeOverrideDiagnostics.requiresProtectedHostAck && (
+                <p className="text-[11px] font-semibold">
+                  Conferma o rimuovi gli override per evitare falsi esiti in staging/production.
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {runtimeOverrideDiagnostics.requiresProtectedHostAck && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-[11px]"
+                  onClick={acknowledgeRuntimeOverridesForSession}
+                >
+                  Conferma per sessione
+                </Button>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                variant={runtimeOverrideDiagnostics.overrideRiskLevel === "protected" ? "destructive" : "outline"}
+                className="h-7 text-[11px]"
+                onClick={clearRuntimeOverrides}
+              >
+                Rimuovi override
+              </Button>
+            </div>
           </div>
         </div>
       )}

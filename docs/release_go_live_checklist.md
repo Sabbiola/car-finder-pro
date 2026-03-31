@@ -2,6 +2,10 @@
 
 Usare questa checklist per le decisioni di go-live su staging e produzione.
 
+Regola di coerenza documentale:
+- questa checklist guida l'esecuzione operativa del gate
+- lo stato sintetico GO/NO-GO e i blocker residui devono restare allineati a `docs/production_readiness_checklist.md`
+
 ## 1. Stato Repo e Toolchain
 
 Verificare:
@@ -182,6 +186,8 @@ Validare nell'ambiente target:
 - la lane Playwright staging smoke copre i journey core su ambiente reale (`npm run test:e2e:staging-smoke`)
   - env minima: `PLAYWRIGHT_STAGING_FRONTEND_URL`
   - env opzionale: `PLAYWRIGHT_STAGING_SEARCH_PATH`
+  - evidenza release review: workflow `.github/workflows/e2e-staging-smoke.yml` con artifact `e2e-staging-smoke-report-<run_id>` e `e2e-staging-smoke-results-<run_id>`
+  - se i prerequisiti mancano, il workflow fallisce in pre-check con messaggio esplicito in job summary
 
 No-go se il frontend va in fallback verso un runtime non voluto o rompe i journey core.
 

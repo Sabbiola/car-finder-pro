@@ -36,7 +36,7 @@ class SubitoProvider(BaseProvider):
             else "https://www.subito.it/annunci-italia/vendita/auto/"
         )
         separator = "&" if "?" in base else "?"
-        return [base, f"{base}{separator}o=2", f"{base}{separator}o=3"]
+        return [base, f"{base}{separator}o=2"]
 
     def is_configured(self) -> bool:
         settings = get_settings()
@@ -87,6 +87,8 @@ class SubitoProvider(BaseProvider):
             markdown = await fetch_markdown(url, wait_ms=7000)
             parsed = parse_subito_markdown(markdown, request.brand, request.model)
             all_listings.extend(parsed)
+            if len(all_listings) >= 30:
+                break
         return all_listings
 
     async def health(self) -> ProviderHealth:

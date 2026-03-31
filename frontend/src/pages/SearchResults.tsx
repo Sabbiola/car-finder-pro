@@ -17,6 +17,7 @@ import SearchStatsChips from "@/features/results/components/SearchStatsChips";
 import { useSearchResultsOrchestration } from "@/features/results/hooks/useSearchResultsOrchestration";
 import { useSearchParams } from "react-router-dom";
 import { PAGE_SIZE, VALID_SORT_OPTIONS, type SortOption } from "@/lib/constants";
+import { DEFAULT_SOURCE_SELECTION } from "@/lib/providerSupport";
 import { getRuntimeConfig } from "@/lib/runtimeConfig";
 
 const ListingsMap = lazy(() => import("@/components/ListingsMap"));
@@ -46,7 +47,7 @@ function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
   const sourcesRaw = params.get("sources");
   const sources = sourcesRaw
     ? sourcesRaw.split(",").filter((s) => s.length > 0)
-    : ["autoscout24", "subito", "ebay", "automobile", "brumbrum"];
+    : [...DEFAULT_SOURCE_SELECTION];
 
   return {
     brand: params.get("brand") ?? "",
@@ -221,8 +222,9 @@ const SearchResults = () => {
             setSort(parsedSort);
             setSearchParams(
               (prev) => {
-                prev.set("sort", parsedSort);
-                return prev;
+                const next = new URLSearchParams(prev);
+                next.set("sort", parsedSort);
+                return next;
               },
               { replace: true },
             );

@@ -1,3 +1,4 @@
+import re
 from urllib.parse import quote_plus
 
 from app.core.settings import get_settings
@@ -28,11 +29,18 @@ class AutomobileProvider(BaseProvider):
 
     @staticmethod
     def _build_urls(request: SearchRequest) -> list[str]:
+        brand = (request.brand or "").strip().lower()
+        model = (request.model or "").strip().lower()
+        if brand and model:
+            model_slug = re.sub(r"[^a-z0-9]+", "_", model).strip("_")
+            return [f"https://www.automobile.it/{brand}-{model_slug}"]
+        if brand:
+            return [f"https://www.automobile.it/{brand}"]
+
         query = request.query or " ".join([request.brand or "", request.model or "", request.trim or ""]).strip()
         encoded_query = quote_plus(query) if query else ""
         base = f"https://www.automobile.it/annunci?q={encoded_query}" if encoded_query else "https://www.automobile.it/annunci"
-
-        return [base, f"{base}&p=2" if "?" in base else f"{base}?p=2"]
+        return [base]
 
     def is_configured(self) -> bool:
         settings = get_settings()

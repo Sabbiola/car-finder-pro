@@ -4,6 +4,7 @@ import {
   DEFAULT_SOURCE_SELECTION,
   isFastApiSourceSupported,
   partitionSourcesForFastApi,
+  sanitizeSourcesForFastApi,
 } from "@/lib/providerSupport";
 
 describe("providerSupport", () => {
@@ -36,5 +37,12 @@ describe("providerSupport", () => {
   it("checks source support explicitly", () => {
     expect(isFastApiSourceSupported("autoscout24")).toBe(true);
     expect(isFastApiSourceSupported("legacy-source")).toBe(false);
+  });
+
+  it("sanitizes unsupported sources preserving only fastapi-supported ids", () => {
+    const sanitized = sanitizeSourcesForFastApi(["legacy-source", "autoscout24", "legacy-source"]);
+
+    expect(sanitized.sanitizedSources).toEqual(["autoscout24"]);
+    expect(sanitized.removedSources).toEqual(["legacy-source"]);
   });
 });

@@ -1,0 +1,16 @@
+﻿{
+    "started_at_utc":  "2026-03-18T09:38:59.2872825+00:00",
+    "fastapi_base_url":  "http://127.0.0.1:65530",
+    "target_proxy_mode":  "primary_with_fallback",
+    "restore_proxy_mode":  "fastapi_only",
+    "apply_edge_proxy_mode":  false,
+    "pre_smoke_ok":  false,
+    "post_smoke_ok":  false,
+    "mode_switch_applied":  false,
+    "mode_restore_applied":  false,
+    "mode_switch_notes":  [
+                              "Manual mode switch required before post-smoke: supabase secrets set FASTAPI_PROXY_MODE=primary_with_fallback --project-ref \u003cPROJECT_REF\u003e"
+                          ],
+    "finished_at_utc":  "2026-03-18T09:39:32.4531584+00:00",
+    "drill_ok":  false
+}

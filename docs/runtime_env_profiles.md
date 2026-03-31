@@ -67,6 +67,7 @@ Frontend (`frontend/src/lib/runtimeConfig.ts`):
 - precedenza runtime: localStorage -> env vars -> fallback
 - diagnostica runtime disponibile via `getRuntimeConfigDiagnostics()` (source per campo + override browser attivi)
 - se sono attivi override browser, il frontend mostra un warning low-noise con azione esplicita `Rimuovi override`
+- su host non-locali (staging/production), gli override browser vengono segnalati come rischio operativo: banner evidente, campi coinvolti espliciti e azione `Conferma per sessione` / `Rimuovi override`
 - se `VITE_BACKEND_MODE` manca o e invalido:
   - fallback `fastapi` (tutti gli ambienti)
 - in `backendMode=fastapi`, i journey core non fanno fallback implicito a Supabase quando `VITE_API_BASE_URL` manca: falliscono in modo esplicito

@@ -31,7 +31,7 @@ import {
   brandModels,
   modelTrims,
 } from "@/lib/mock-data";
-import { isFastApiSourceSupported } from "@/lib/providerSupport";
+import { isFastApiSourceSupported, sanitizeSourcesForFastApi } from "@/lib/providerSupport";
 import { getRuntimeConfig } from "@/lib/runtimeConfig";
 import { useFilterMetadata } from "@/features/search/hooks/useFilterMetadata";
 import { useNavigate } from "react-router-dom";
@@ -152,6 +152,7 @@ function pruneUnsupportedFilters(
 
 const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => {
   const [filters, setFilters] = useState<SearchFiltersState>(initialFilters ?? defaultFilters);
+  const [modeAutoPrunedSourceIds, setModeAutoPrunedSourceIds] = useState<string[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(!compact);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const { data: metadata } = useFilterMetadata();
@@ -197,6 +198,10 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
   const modeUnsupportedSelectedLabels = useMemo(
     () => modeUnsupportedSelectedSources.map((sourceId) => sourceLabelById.get(sourceId) ?? sourceId),
     [modeUnsupportedSelectedSources, sourceLabelById],
+  );
+  const modeAutoPrunedSourceLabels = useMemo(
+    () => modeAutoPrunedSourceIds.map((sourceId) => sourceLabelById.get(sourceId) ?? sourceId),
+    [modeAutoPrunedSourceIds, sourceLabelById],
   );
 
   const selectedProviderCapabilitySet = useMemo(() => {
@@ -264,12 +269,33 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
 
     setFilters((current) => {
       const nextSources = current.sources.filter((source) => !disabledProviderIds.has(source));
-      if (nextSources.length === current.sources.length || nextSources.length === 0) {
+      if (nextSources.length === current.sources.length) {
         return current;
       }
       return { ...current, sources: nextSources };
     });
   }, [metadata]);
+
+  useEffect(() => {
+    if (!isFastApiMode) {
+      if (modeAutoPrunedSourceIds.length > 0) {
+        setModeAutoPrunedSourceIds([]);
+      }
+      return;
+    }
+
+    const { removedSources } = sanitizeSourcesForFastApi(filters.sources);
+    if (!removedSources.length) {return;}
+
+    setModeAutoPrunedSourceIds(removedSources);
+    setFilters((current) => {
+      const nextSanitized = sanitizeSourcesForFastApi(current.sources).sanitizedSources;
+      if (nextSanitized.length === current.sources.length) {
+        return current;
+      }
+      return { ...current, sources: nextSanitized };
+    });
+  }, [filters.sources, isFastApiMode, modeAutoPrunedSourceIds.length]);
 
   const update = (
     key: keyof SearchFiltersState,
@@ -312,7 +338,15 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
   };
 
   const handleSearch = () => {
-    const nextFilters = pruneUnsupportedFilters(normalizeFilters(filters), selectedProviderCapabilitySet);
+    const normalized = pruneUnsupportedFilters(normalizeFilters(filters), selectedProviderCapabilitySet);
+    let nextFilters = normalized;
+    if (isFastApiMode) {
+      const { sanitizedSources, removedSources } = sanitizeSourcesForFastApi(normalized.sources);
+      if (removedSources.length > 0) {
+        setModeAutoPrunedSourceIds(removedSources);
+      }
+      nextFilters = { ...normalized, sources: sanitizedSources };
+    }
     setFilters(nextFilters);
 
     if (onSearch) {
@@ -771,6 +805,11 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                   {availableSources.map(({ id, label, configured }) => {
                     const unavailableInFastApi = isFastApiMode && !isFastApiSourceSupported(id);
                     const disabled = configured === false || unavailableInFastApi;
+                    const sourceState = configured === false
+                      ? "setup richiesto"
+                      : unavailableInFastApi
+                        ? "non disponibile in fastapi mode"
+                        : "disponibile";
                     return (
                     <label key={id} className="flex items-center gap-2 cursor-pointer">
                       <Checkbox
@@ -781,18 +820,25 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                           toggleSource(id);
                         }}
                       />
-                      <span
-                        className={`text-sm ${
-                          configured === false || unavailableInFastApi
-                            ? "text-muted-foreground line-through"
-                            : ""
-                        }`}
-                      >
-                        {configured === false
-                          ? `${label} (setup richiesto)`
-                          : isFastApiMode && !isFastApiSourceSupported(id)
-                            ? `${label} (non disponibile in fastapi mode)`
-                            : label}
+                      <span className="flex items-center gap-2">
+                        <span
+                          className={`text-sm ${
+                            configured === false || unavailableInFastApi
+                              ? "text-muted-foreground line-through"
+                              : ""
+                          }`}
+                        >
+                          {label}
+                        </span>
+                        <span
+                          className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full border ${
+                            sourceState === "disponibile"
+                              ? "border-emerald-500/30 text-emerald-700 bg-emerald-50"
+                              : "border-amber-500/30 text-amber-700 bg-amber-50"
+                          }`}
+                        >
+                          {sourceState}
+                        </span>
                       </span>
                     </label>
                     );
@@ -800,8 +846,14 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                 </div>
                 {modeUnsupportedSelectedLabels.length > 0 && (
                   <p className="text-xs text-amber-700">
-                    Fonti selezionate non disponibili in fastapi mode:{" "}
-                    {modeUnsupportedSelectedLabels.join(", ")}. Verranno escluse dalla ricerca.
+                    Fonti non disponibili in fastapi mode: {modeUnsupportedSelectedLabels.join(", ")}.
+                    Sono disabilitate e vengono deselezionate automaticamente.
+                  </p>
+                )}
+                {modeAutoPrunedSourceLabels.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Fonti deselezionate automaticamente in fastapi mode:{" "}
+                    {modeAutoPrunedSourceLabels.join(", ")}.
                   </p>
                 )}
               </div>

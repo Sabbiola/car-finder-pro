@@ -1,5 +1,7 @@
 import re
 
+_EURO_TOKEN = r"(?:\u20ac|EUR|\u00e2\u201a\u00ac|\u00c3\u00a2\u00e2\u20ac\u0161\u00c2\u00ac)"
+
 
 def detect_fuel(text: str) -> str | None:
     if re.search(r"\bdiesel\b", text, re.I):
@@ -64,3 +66,16 @@ def parse_km(raw: str) -> int | None:
     if value < 0:
         return None
     return value
+
+
+def extract_euro_price(text: str) -> int | None:
+    # Token-first match avoids false positives on nearby card counters (e.g. "15" before "€ 32.900").
+    token_first = re.compile(rf"{_EURO_TOKEN}\s*([\d][\d.]*)", re.I)
+    token_last = re.compile(rf"([\d][\d.]*)\s*{_EURO_TOKEN}", re.I)
+
+    for pattern in (token_first, token_last):
+        for match in pattern.finditer(text):
+            price = parse_price(match.group(1))
+            if price:
+                return price
+    return None
