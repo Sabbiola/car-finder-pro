@@ -88,9 +88,9 @@ function snapshotToExtendedListing(
     km: getNumber("km") || 0,
     fuel: getString("fuel"),
     transmission: getString("transmission"),
-    power: null,
-    color: null,
-    doors: null,
+    power: getString("power"),
+    color: getString("color"),
+    doors: getNumber("doors"),
     body_type: getString("bodyType"),
     source: getString("source") || "autoscout24",
     source_url: getString("url"),
@@ -113,6 +113,40 @@ function snapshotToExtendedListing(
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+type AutoscoutPayloadView = {
+  specs: Array<{ label: string; value: string }>;
+  equipment: string[];
+};
+
+function parseAutoscoutPayload(extraData: Record<string, unknown> | null | undefined): AutoscoutPayloadView {
+  const rawPayload = extraData?.raw_payload;
+  if (!rawPayload || typeof rawPayload !== "object") {
+    return { specs: [], equipment: [] };
+  }
+  const autoscout = (rawPayload as Record<string, unknown>).autoscout;
+  if (!autoscout || typeof autoscout !== "object") {
+    return { specs: [], equipment: [] };
+  }
+  const autoscoutRecord = autoscout as Record<string, unknown>;
+  const specsObj = autoscoutRecord.specs;
+  const equipmentObj = autoscoutRecord.equipment;
+  const specs: Array<{ label: string; value: string }> = [];
+  if (specsObj && typeof specsObj === "object") {
+    for (const [label, value] of Object.entries(specsObj as Record<string, unknown>)) {
+      if (typeof value === "string" && value.trim().length > 0) {
+        specs.push({ label, value: value.trim() });
+      }
+    }
+  }
+  const equipment = Array.isArray(equipmentObj)
+    ? equipmentObj.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+  return {
+    specs: specs.slice(0, 20),
+    equipment: equipment.slice(0, 30),
+  };
+}
 
 const CarDetail = () => {
   const { id } = useParams();
@@ -339,6 +373,8 @@ const CarDetail = () => {
     return Math.round(allPrices.reduce((acc, item) => acc + item.price, 0) / allPrices.length);
   }, [allPrices]);
 
+  const autoscoutPayload = useMemo(() => parseAutoscoutPayload(car?.extra_data), [car?.extra_data]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -376,6 +412,14 @@ const CarDetail = () => {
     { label: "Carrozzeria", value: listing.bodyType || "N/A" },
     ...(car.emission_class ? [{ label: "Emissioni", value: car.emission_class }] : []),
     ...(car.condition ? [{ label: "Condizione", value: car.condition }] : []),
+    ...(car.seller_type
+      ? [
+          {
+            label: "Venditore",
+            value: car.seller_type === "dealer" ? "Rivenditore" : "Privato",
+          },
+        ]
+      : []),
     ...(car.version ? [{ label: "Versione", value: car.version }] : []),
     ...(car.seats ? [{ label: "Posti", value: car.seats }] : []),
     ...(car.doors ? [{ label: "Porte", value: car.doors }] : []),
@@ -566,11 +610,16 @@ const CarDetail = () => {
           </div>
         )}
 
-        {(analysisQuery.isLoading || Boolean(analysisQuery.data)) && (
+        {(analysisQuery.isLoading || Boolean(analysisQuery.data) || analysisQuery.isError) && (
           <div className="animate-brutal-up" style={{ animationDelay: "90ms" }}>
             {analysisQuery.isLoading ? (
               <div className="rounded-2xl border border-border/60 bg-card p-4 text-sm text-muted-foreground">
                 Caricamento analisi decisionale...
+              </div>
+            ) : analysisQuery.isError ? (
+              <div className="rounded-2xl border border-border/60 bg-card p-4 text-sm text-muted-foreground">
+                Analisi decisionale non disponibile:{" "}
+                {analysisQuery.error instanceof Error ? analysisQuery.error.message : "errore runtime"}
               </div>
             ) : (
               <Suspense
@@ -594,6 +643,39 @@ const CarDetail = () => {
             </div>
             <div className="p-5">
               <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">{car.description}</p>
+            </div>
+          </div>
+        )}
+
+        {(autoscoutPayload.specs.length > 0 || autoscoutPayload.equipment.length > 0) && (
+          <div className="rounded-2xl border border-border/60 overflow-hidden animate-brutal-up" style={{ animationDelay: "120ms" }}>
+            <div className="border-b border-border/60 px-5 py-3 flex items-center gap-2 bg-muted/40">
+              <FileText className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold">Dettagli AutoScout</h2>
+            </div>
+            <div className="p-5 space-y-4">
+              {autoscoutPayload.specs.length > 0 && (
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {autoscoutPayload.specs.map((item) => (
+                    <div key={item.label} className="bg-muted/60 rounded-xl px-3 py-2.5">
+                      <div className="text-[10px] font-medium text-muted-foreground mb-0.5">{item.label}</div>
+                      <div className="text-sm font-bold">{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {autoscoutPayload.equipment.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-semibold text-muted-foreground mb-2">Equipaggiamento</h3>
+                  <div className="flex flex-wrap gap-1.5">
+                    {autoscoutPayload.equipment.map((item) => (
+                      <Badge key={item} variant="outline" className="rounded-full text-[11px]">
+                        {item}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

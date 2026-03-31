@@ -122,6 +122,7 @@ export interface CarListing {
   detail_scraped?: boolean;
   image_urls?: string[] | null;
   extra_data?: Record<string, unknown> | null;
+  seller_type?: string | null;
   seller_name?: string | null;
   seller_external_id?: string | null;
   seller_url?: string | null;
@@ -150,7 +151,10 @@ interface FastApiVehicleListing {
   mileage_value?: number | null;
   fuel_type?: string | null;
   transmission?: string | null;
+  power?: string | null;
   body_style?: string | null;
+  version?: string | null;
+  seats?: number | null;
   condition?: string | null;
   is_new?: boolean | null;
   color?: string | null;
@@ -331,7 +335,7 @@ export function mapFastApiListing(item: FastApiVehicleListing): CarListing {
     km: item.mileage_value || 0,
     fuel: item.fuel_type || null,
     transmission: item.transmission || null,
-    power: null,
+    power: item.power || null,
     color: item.color || null,
     doors: item.doors ?? null,
     body_type: item.body_style || null,
@@ -345,9 +349,9 @@ export function mapFastApiListing(item: FastApiVehicleListing): CarListing {
     scraped_at: item.scraped_at || new Date().toISOString(),
     description: item.description || null,
     emission_class: item.emission_class || null,
-    version: null,
-    seats: null,
-    condition: item.seller_type || item.condition || null,
+    version: item.version || null,
+    seats: item.seats ?? null,
+    condition: item.condition || null,
     detail_scraped: false,
     image_urls: item.images ?? null,
     extra_data: {
@@ -357,6 +361,7 @@ export function mapFastApiListing(item: FastApiVehicleListing): CarListing {
       raw_payload: item.raw_payload ?? null,
       deal_score: item.deal_score ?? null,
     },
+    seller_type: item.seller_type || null,
     seller_name: item.seller_name || null,
     seller_external_id: item.seller_external_id || null,
     seller_url: item.seller_url || null,

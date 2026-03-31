@@ -23,7 +23,10 @@ class VehicleListing(BaseModel):
     mileage_unit: str = "km"
     fuel_type: str | None = None
     transmission: str | None = None
+    power: str | None = None
     body_style: str | None = None
+    version: str | None = None
+    seats: int | None = None
     condition: str | None = None
     is_new: bool | None = None
     color: str | None = None

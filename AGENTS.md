@@ -91,9 +91,7 @@ Ogni task deve chiudersi con:
 - rischi residui / follow-up
 
 ## Cosa non fare
-- non fare commit
 - non creare branch
-- non fare push
 - non cambiare naming o struttura senza motivo forte
 - non aggiornare docs in modo ottimistico se il codice non supporta ancora quel comportamento
 
