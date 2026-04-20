@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 
@@ -9,6 +9,7 @@ import CarCardSkeleton from "@/components/CarCardSkeleton";
 import ActiveFilterChips from "@/components/ActiveFilterChips";
 import SaveSearchDialog from "@/components/SaveSearchDialog";
 import ListingResultCard from "@/features/results/components/ListingResultCard";
+import AdCard from "@/components/AdCard";
 import {
   SearchModeProviderNotice,
   SearchStreamDiagnostics,
@@ -271,7 +272,12 @@ const SearchResults = () => {
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 stagger-children">
             {visibleResults.map((listing, i) => (
-              <ListingResultCard key={listing.id} listing={listing} index={i} />
+              <Fragment key={listing.id}>
+                <ListingResultCard listing={listing} index={i} />
+                {(i + 1) % 6 === 0 && (
+                  <AdCard slot="SLOT_RESULTS_CARD" />
+                )}
+              </Fragment>
             ))}
           </div>
         )}

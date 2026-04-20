@@ -39,7 +39,7 @@ export function ListingGallery({ images, title, source, priceRating }: ListingGa
 
   return (
     <>
-      <div className="relative aspect-[4/3] lg:aspect-auto overflow-hidden">
+      <div className="relative aspect-[4/3] lg:aspect-auto lg:flex-1 overflow-hidden">
         <img
           src={currentSrc}
           alt={`${title} - foto ${imgIndex + 1}`}

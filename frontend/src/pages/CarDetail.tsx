@@ -14,6 +14,7 @@ import {
 import FavoriteButton from "@/components/FavoriteButton";
 import Header from "@/components/Header";
 import LoanCalculator from "@/components/LoanCalculator";
+import AdBanner from "@/components/AdBanner";
 import PriceAlertButton from "@/components/PriceAlertButton";
 import CarCard from "@/components/CarCard";
 import { Badge } from "@/components/ui/badge";
@@ -177,12 +178,14 @@ const CarDetail = () => {
 
         <div className="rounded-2xl border border-border/60 shadow-sm overflow-hidden animate-brutal-up">
           <div className="grid lg:grid-cols-2">
-            <ListingGallery
-              images={galleryImages}
-              title={listing.title}
-              source={listing.source}
-              priceRating={priceRating}
-            />
+            <div className="flex flex-col">
+              <ListingGallery
+                images={galleryImages}
+                title={listing.title}
+                source={listing.source}
+                priceRating={priceRating}
+              />
+            </div>
 
             <div className="p-6 lg:p-8 space-y-6 bg-card">
               <div className="space-y-1">
@@ -329,6 +332,8 @@ const CarDetail = () => {
         <div className="animate-brutal-up" style={{ animationDelay: "180ms" }}>
           <LoanCalculator price={car.price} />
         </div>
+
+        <AdBanner slot="SLOT_DETAIL_BANNER" className="animate-brutal-up" />
 
         <PriceHistoryChart history={priceHistory} />
 

@@ -5,6 +5,7 @@ import RecentlyViewedSection from "@/components/RecentlyViewedSection";
 import { useSavedSearches } from "@/hooks/useSavedSearches";
 import { useNavigate } from "react-router-dom";
 import { Bookmark, X } from "lucide-react";
+import AdBanner from "@/components/AdBanner";
 import { Helmet } from "react-helmet-async";
 
 function buildParams(filters: SearchFiltersState): string {
@@ -122,6 +123,10 @@ const Index = () => {
           </div>
         </div>
       </section>
+
+      <div className="container pb-2">
+        <AdBanner slot="SLOT_HOMEPAGE_BANNER" />
+      </div>
 
       {searches.length > 0 && (
         <section className="border-t border-border/60">
