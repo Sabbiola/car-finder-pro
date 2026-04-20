@@ -21,7 +21,15 @@ interface FastApiVehicleListing {
   mileage_value?: number | null;
   fuel_type?: string | null;
   transmission?: string | null;
+  power?: string | null;
   body_style?: string | null;
+  version?: string | null;
+  seats?: number | null;
+  condition?: string | null;
+  is_new?: boolean | null;
+  color?: string | null;
+  doors?: number | null;
+  emission_class?: string | null;
   seller_type?: string | null;
   city?: string | null;
   region?: string | null;

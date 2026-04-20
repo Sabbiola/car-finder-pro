@@ -15,6 +15,7 @@ export type CardListing = {
   source: "autoscout24" | "subito" | "ebay" | "automobile" | "brumbrum";
   allSources: string[];
   imageUrl: string;
+  imageUrls: string[];
   location: string;
   isNew: boolean;
   url: string;
@@ -23,6 +24,9 @@ export type CardListing = {
   color: string;
   doors: number;
   bodyType: string;
+  sellerType?: string | null;
+  emissionClass?: string | null;
+  condition?: string | null;
   dealSummary?: DealSummary | null;
   trustSummary?: TrustSummary | null;
   negotiationSummary?: NegotiationSummary | null;
@@ -43,6 +47,10 @@ function normalizeUrl(url: string | null | undefined): string | null {
 }
 
 export function toCardListing(l: CarListing): CardListing {
+  const mainImageUrl = normalizeUrl(l.image_url) || FALLBACK_IMAGE;
+  const extraImageUrls = (l.image_urls ?? [])
+    .map(normalizeUrl)
+    .filter((u): u is string => Boolean(u) && u !== mainImageUrl);
   return {
     id: l.id,
     title: l.title,
@@ -56,7 +64,8 @@ export function toCardListing(l: CarListing): CardListing {
     power: l.power || "",
     source: l.source as CardListing["source"],
     allSources: (l.extra_data?.all_sources as string[] | undefined) ?? [l.source],
-    imageUrl: normalizeUrl(l.image_url) || FALLBACK_IMAGE,
+    imageUrl: mainImageUrl,
+    imageUrls: [mainImageUrl, ...extraImageUrls],
     location: l.location || "",
     isNew: l.is_new,
     url: l.source_url || "#",
@@ -65,6 +74,9 @@ export function toCardListing(l: CarListing): CardListing {
     color: l.color || "",
     doors: l.doors || 4,
     bodyType: l.body_type || "",
+    sellerType: l.seller_type ?? null,
+    emissionClass: l.emission_class ?? null,
+    condition: l.condition ?? null,
     dealSummary: l.deal_summary ?? null,
     trustSummary: l.trust_summary ?? null,
     negotiationSummary: l.negotiation_summary ?? null,

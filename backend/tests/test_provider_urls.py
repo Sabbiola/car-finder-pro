@@ -18,7 +18,6 @@ def test_subito_urls_with_query_use_ampersand_separator() -> None:
     request = SearchRequest(query="test", sources=["subito"])
     urls = SubitoProvider._build_urls(request)
     assert urls[1].endswith("&o=2")
-    assert urls[2].endswith("&o=3")
 
 
 def test_subito_urls_include_trim_when_query_is_derived() -> None:
@@ -33,15 +32,14 @@ def test_autoscout_query_includes_trim() -> None:
     assert "q=320d+M+Sport" in urls[0]
 
 
-def test_automobile_urls_include_query_and_pagination() -> None:
+def test_automobile_urls_prefer_brand_model_slug() -> None:
     request = SearchRequest(brand="BMW", model="320d", trim="M Sport", sources=["automobile"])
     urls = AutomobileProvider._build_urls(request)
-    assert "q=BMW+320d+M+Sport" in urls[0]
-    assert urls[1].endswith("&p=2")
+    assert urls == ["https://www.automobile.it/bmw-320d", "https://www.automobile.it/bmw-320d/page-2"]
 
 
 def test_brumbrum_urls_include_query_and_pagination() -> None:
     request = SearchRequest(brand="BMW", model="320d", sources=["brumbrum"])
     urls = BrumBrumProvider._build_urls(request)
     assert "q=BMW+320d" in urls[0]
-    assert urls[1].endswith("&p=2")
+    assert urls[1].endswith("&page=2")

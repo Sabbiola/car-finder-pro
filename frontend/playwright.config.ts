@@ -1,10 +1,23 @@
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 
 const FRONTEND_PORT = 4173;
 const BACKEND_PORT = 8000;
+const CONFIG_DIR = dirname(fileURLToPath(import.meta.url));
+const BACKEND_PYTHON_CANDIDATES = [
+  resolve(CONFIG_DIR, "../backend/.venv/Scripts/python.exe"),
+  resolve(CONFIG_DIR, "../backend/.venv/bin/python"),
+];
+const backendPythonExecutable =
+  BACKEND_PYTHON_CANDIDATES.find((candidate) => existsSync(candidate)) ?? "python";
+const backendPythonCommand =
+  backendPythonExecutable === "python" ? backendPythonExecutable : `"${backendPythonExecutable}"`;
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: ["**/staging-smoke.spec.ts"],
   timeout: 45_000,
   expect: {
     timeout: 15_000,
@@ -26,11 +39,12 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `python -m uvicorn app.main:app --host 127.0.0.1 --port ${BACKEND_PORT}`,
+      command: `${backendPythonCommand} -m uvicorn app.main:app --host 127.0.0.1 --port ${BACKEND_PORT}`,
       cwd: "../backend",
       env: {
         TEST_STUB_MODE: "true",
         LOG_LEVEL: "info",
+        CORS_ORIGINS: `["http://127.0.0.1:${FRONTEND_PORT}"]`,
       },
       url: `http://127.0.0.1:${BACKEND_PORT}/healthz`,
       reuseExistingServer: !process.env.CI,

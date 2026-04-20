@@ -1,24 +1,12 @@
-import { useEffect, useState } from "react";
 import { X, GitCompare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 
 import { useCompare } from "@/hooks/useCompare";
-import { fetchListingsByIds } from "@/lib/api/fetchByIds";
-import type { CarListing } from "@/lib/api/listings";
 
 const CompareBar = () => {
-  const { compareIds, removeFromCompare, clearCompare } = useCompare();
+  const { compareIds, compareListings, removeFromCompare, clearCompare } = useCompare();
   const navigate = useNavigate();
-  const [previews, setPreviews] = useState<CarListing[]>([]);
-
-  useEffect(() => {
-    if (!compareIds.length) {
-      setPreviews([]);
-      return;
-    }
-    fetchListingsByIds(compareIds).then(setPreviews).catch(console.error);
-  }, [compareIds]);
 
   return (
     <AnimatePresence>
@@ -32,38 +20,43 @@ const CompareBar = () => {
         >
           <div className="container flex items-center justify-between h-16 gap-4">
             <div className="flex items-center gap-2 overflow-x-auto flex-1 min-w-0">
-              {previews.map((car) => (
-                <div
-                  key={car.id}
-                  className="flex items-center gap-1.5 border border-border/60 rounded-xl px-2 py-1.5 flex-shrink-0 bg-muted/40"
-                >
-                  {car.image_url && (
-                    <img
-                      src={car.image_url}
-                      alt={car.title}
-                      className="w-8 h-6 object-cover border border-border"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                      }}
-                    />
-                  )}
-                  <div>
-                    <div className="text-[10px] font-semibold leading-none max-w-[80px] truncate">
-                      {car.brand} {car.model}
-                    </div>
-                    <div className="text-[9px] font-bold">
-                      EUR {car.price.toLocaleString("it-IT")}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => removeFromCompare(car.id)}
-                    className="ml-1 text-muted-foreground hover:text-accent transition-colors"
-                    aria-label="Rimuovi"
+              {compareIds.map((id) => {
+                const car = compareListings[id];
+                return (
+                  <div
+                    key={id}
+                    className="flex items-center gap-1.5 border border-border/60 rounded-xl px-2 py-1.5 flex-shrink-0 bg-muted/40"
                   >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
+                    {car?.imageUrl && (
+                      <img
+                        src={car.imageUrl}
+                        alt={car.title}
+                        className="w-8 h-6 object-cover border border-border"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    )}
+                    <div>
+                      <div className="text-[10px] font-semibold leading-none max-w-[80px] truncate">
+                        {car ? `${car.brand} ${car.model}` : id}
+                      </div>
+                      {car && (
+                        <div className="text-[9px] font-bold">
+                          EUR {car.price.toLocaleString("it-IT")}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => removeFromCompare(id)}
+                      className="ml-1 text-muted-foreground hover:text-accent transition-colors"
+                      aria-label="Rimuovi"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="flex items-center gap-3 flex-shrink-0">

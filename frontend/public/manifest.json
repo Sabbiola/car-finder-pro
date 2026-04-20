@@ -1,6 +1,6 @@
 {
-  "name": "AutoDeal Finder",
-  "short_name": "AutoDeal",
+  "name": "CarFinder Pro",
+  "short_name": "CarFinder",
   "description": "Trova la tua prossima auto usata al miglior prezzo",
   "start_url": "/",
   "display": "standalone",

@@ -27,6 +27,9 @@ SearchFilterKey = Literal[
     "doors",
     "emission_class",
     "seller_type",
+    "power_min_cv",
+    "power_max_cv",
+    "max_km_per_year",
     # Legacy alias kept for additive compatibility.
     "private_only",
 ]
@@ -51,6 +54,9 @@ CANONICAL_SEARCH_FILTERS: tuple[SearchFilterKey, ...] = (
     "doors",
     "emission_class",
     "seller_type",
+    "power_min_cv",
+    "power_max_cv",
+    "max_km_per_year",
     "private_only",
 )
 
@@ -64,6 +70,9 @@ BACKEND_POST_FILTERS: tuple[SearchFilterKey, ...] = (
     "doors",
     "emission_class",
     "seller_type",
+    "power_min_cv",
+    "power_max_cv",
+    "max_km_per_year",
     # Backward compatibility for older clients.
     "private_only",
 )
@@ -100,6 +109,9 @@ class SearchRequest(BaseModel):
     condition: str | None = None
     seller_type: SellerType = "all"
     private_only: bool = False
+    power_min_cv: int | None = Field(default=None, ge=1)
+    power_max_cv: int | None = Field(default=None, ge=1)
+    max_km_per_year: int | None = Field(default=None, ge=1)
     mode: SearchMode = "fast"
     sources: list[str] = Field(default_factory=list)
 
@@ -189,6 +201,12 @@ class SearchRequest(BaseModel):
             active.add("seller_type")
         if self.private_only:
             active.add("private_only")
+        if self.power_min_cv is not None:
+            active.add("power_min_cv")
+        if self.power_max_cv is not None:
+            active.add("power_max_cv")
+        if self.max_km_per_year is not None:
+            active.add("max_km_per_year")
         return active
 
 

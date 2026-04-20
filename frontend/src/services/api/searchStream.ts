@@ -76,7 +76,7 @@ export async function streamSearch<TPayload = unknown, TListing = unknown>({
         const parsed = JSON.parse(raw.data) as SearchStreamEvent<TListing>;
         onEvent(parsed);
       } catch {
-        // ignore malformed SSE line payloads in client parser
+        console.warn("[searchStream] dropped malformed SSE payload:", raw.data.slice(0, 200));
       }
     }
   }
@@ -88,7 +88,7 @@ export async function streamSearch<TPayload = unknown, TListing = unknown>({
         const parsed = JSON.parse(raw.data) as SearchStreamEvent<TListing>;
         onEvent(parsed);
       } catch {
-        // ignore malformed trailing SSE payloads
+        console.warn("[searchStream] dropped malformed trailing SSE payload:", raw.data.slice(0, 200));
       }
     }
   }

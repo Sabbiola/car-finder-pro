@@ -30,14 +30,16 @@ class BrumBrumProvider(BaseProvider):
     def _build_urls(request: SearchRequest) -> list[str]:
         query = request.query or " ".join([request.brand or "", request.model or "", request.trim or ""]).strip()
         encoded_query = quote_plus(query) if query else ""
-        base = f"https://www.brumbrum.it/usato/?q={encoded_query}" if encoded_query else "https://www.brumbrum.it/usato/"
-        return [base, f"{base}&p=2" if "?" in base else f"{base}?p=2"]
+        base = f"https://www.brumbrum.it/auto/usata?q={encoded_query}" if encoded_query else "https://www.brumbrum.it/auto/usata"
+        separator = "&" if "?" in base else "?"
+        return [base, f"{base}{separator}page=2"]
 
     def is_configured(self) -> bool:
         settings = get_settings()
         if settings.test_stub_mode:
             return True
-        return bool(settings.scrapingbee_api_key)
+        from app.providers.common.scrapingbee import is_scraper_configured
+        return is_scraper_configured()
 
     @staticmethod
     def _stub_listings(request: SearchRequest) -> list[VehicleListing]:

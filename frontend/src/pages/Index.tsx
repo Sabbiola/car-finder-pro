@@ -53,7 +53,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
-        <title>AutoDeal Finder — Confronta prezzi auto nuove e usate</title>
+        <title>CarFinder Pro - Confronta prezzi auto nuove e usate</title>
         <meta
           name="description"
           content="Trova le migliori offerte auto in Italia. Confronta prezzi da AutoScout24, Subito.it, Automobile.it e BrumBrum in un unico posto."
@@ -156,7 +156,7 @@ const Index = () => {
       <RecentlyViewedSection />
 
       <footer className="border-t border-border/60 py-6">
-        <div className="container text-xs text-muted-foreground">© 2026 AutoDeal Finder</div>
+        <div className="container text-xs text-muted-foreground">© 2026 CarFinder Pro</div>
       </footer>
     </div>
   );

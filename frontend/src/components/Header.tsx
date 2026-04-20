@@ -1,9 +1,16 @@
-import { Moon, Sun, Heart, User, LogOut, Sparkles, CircleUser } from "lucide-react";
+import { Moon, Sun, Heart, User, LogOut, Sparkles, CircleUser, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useAuth } from "@/contexts/useAuth";
+import {
+  acknowledgeRuntimeOverridesForSession,
+  clearRuntimeOverrides,
+  getRuntimeConfigDiagnostics,
+  RUNTIME_CONFIG_CHANGED_EVENT,
+  type RuntimeConfigDiagnostics,
+} from "@/lib/runtimeConfig";
 import AuthModal from "./AuthModal";
 import AISearchDialog from "./AISearchDialog";
 
@@ -12,6 +19,9 @@ const Header = () => {
   const [dark, setDark] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [runtimeOverrideDiagnostics, setRuntimeOverrideDiagnostics] = useState<RuntimeConfigDiagnostics | null>(
+    null,
+  );
   const { count } = useFavorites();
   const { user, signOut } = useAuth();
 
@@ -38,6 +48,25 @@ const Header = () => {
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
+  useEffect(() => {
+    const refreshRuntimeOverrideState = () => {
+      const diagnostics = getRuntimeConfigDiagnostics();
+      if (!diagnostics.hasBrowserOverrides) {
+        setRuntimeOverrideDiagnostics(null);
+        return;
+      }
+      setRuntimeOverrideDiagnostics(diagnostics);
+    };
+
+    refreshRuntimeOverrideState();
+    window.addEventListener("storage", refreshRuntimeOverrideState);
+    window.addEventListener(RUNTIME_CONFIG_CHANGED_EVENT, refreshRuntimeOverrideState);
+    return () => {
+      window.removeEventListener("storage", refreshRuntimeOverrideState);
+      window.removeEventListener(RUNTIME_CONFIG_CHANGED_EVENT, refreshRuntimeOverrideState);
+    };
+  }, []);
+
   const toggleTheme = () => {
     setDark((d) => {
       const next = !d;
@@ -53,11 +82,11 @@ const Header = () => {
         <div className="container flex items-center justify-between h-16">
           <button onClick={() => navigate("/")} className="flex items-center gap-2.5 group">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-sm group-hover:shadow-violet-300/50 group-hover:scale-105 transition-all duration-200">
-              <span className="text-white text-sm font-bold">A</span>
+              <span className="text-white text-sm font-bold">C</span>
             </div>
-            <span className="text-base font-bold text-foreground">AutoDeal</span>
+            <span className="text-base font-bold text-foreground">CarFinder</span>
             <span className="text-base font-bold bg-gradient-to-r from-violet-600 to-indigo-500 bg-clip-text text-transparent">
-              Finder
+              Pro
             </span>
           </button>
 
@@ -131,6 +160,61 @@ const Header = () => {
           </div>
         </div>
       </header>
+
+      {runtimeOverrideDiagnostics && (
+        <div
+          className={`border-b ${
+            runtimeOverrideDiagnostics.overrideRiskLevel === "protected"
+              ? "border-red-300/70 bg-red-50/90 text-red-900"
+              : "border-amber-300/70 bg-amber-50/85 text-amber-900"
+          }`}
+        >
+          <div className="container py-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <p className="text-xs flex items-center gap-1.5 font-medium">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {runtimeOverrideDiagnostics.overrideRiskLevel === "protected"
+                  ? `Override runtime browser attivo su host non-locale (${runtimeOverrideDiagnostics.hostname ?? "unknown-host"})`
+                  : "Override runtime browser attivo in ambiente locale"}
+              </p>
+              <p className="text-[11px] opacity-90">
+                Sorgente localStorage:{" "}
+                {runtimeOverrideDiagnostics.browserOverrideFields.join(", ")}. Config attiva: backendMode=
+                {runtimeOverrideDiagnostics.resolved.backendMode}
+                {", "}apiBaseUrl=
+                {runtimeOverrideDiagnostics.resolved.apiBaseUrl ?? "non impostato"}.
+              </p>
+              {runtimeOverrideDiagnostics.requiresProtectedHostAck && (
+                <p className="text-[11px] font-semibold">
+                  Conferma o rimuovi gli override per evitare falsi esiti in staging/production.
+                </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {runtimeOverrideDiagnostics.requiresProtectedHostAck && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-[11px]"
+                  onClick={acknowledgeRuntimeOverridesForSession}
+                >
+                  Conferma per sessione
+                </Button>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                variant={runtimeOverrideDiagnostics.overrideRiskLevel === "protected" ? "destructive" : "outline"}
+                className="h-7 text-[11px]"
+                onClick={clearRuntimeOverrides}
+              >
+                Rimuovi override
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
       <AISearchDialog open={aiOpen} onClose={() => setAiOpen(false)} />

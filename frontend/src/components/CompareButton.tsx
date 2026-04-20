@@ -1,11 +1,13 @@
 import { Plus, Check } from "lucide-react";
 import { useCompare } from "@/hooks/useCompare";
+import type { CardListing } from "@/lib/toCardListing";
 
 interface Props {
   id: string;
+  listing?: CardListing;
 }
 
-const CompareButton = ({ id }: Props) => {
+const CompareButton = ({ id, listing }: Props) => {
   const { addToCompare, removeFromCompare, isInCompare, canAdd } = useCompare();
   const active = isInCompare(id);
 
@@ -16,7 +18,7 @@ const CompareButton = ({ id }: Props) => {
       onClick={(e) => {
         e.stopPropagation();
         if (active) {removeFromCompare(id);}
-        else {addToCompare(id);}
+        else {addToCompare(id, listing);}
       }}
       title={active ? "Rimuovi dal confronto" : "Aggiungi al confronto"}
       className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg border transition-colors duration-150 flex items-center gap-1 ${

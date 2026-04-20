@@ -36,13 +36,17 @@ class SubitoProvider(BaseProvider):
             else "https://www.subito.it/annunci-italia/vendita/auto/"
         )
         separator = "&" if "?" in base else "?"
-        return [base, f"{base}{separator}o=2", f"{base}{separator}o=3"]
+        return [base, f"{base}{separator}o=2"]
 
     def is_configured(self) -> bool:
         settings = get_settings()
         if settings.test_stub_mode:
             return True
-        return bool(settings.scrapingbee_api_key)
+        # Subito blocks direct HTTP requests via WAF; needs a JS-rendering proxy.
+        if settings.scraping_backend == "direct":
+            return False
+        from app.providers.common.scrapingbee import is_scraper_configured
+        return is_scraper_configured()
 
     @staticmethod
     def _stub_listings(request: SearchRequest) -> list[VehicleListing]:
@@ -87,6 +91,8 @@ class SubitoProvider(BaseProvider):
             markdown = await fetch_markdown(url, wait_ms=7000)
             parsed = parse_subito_markdown(markdown, request.brand, request.model)
             all_listings.extend(parsed)
+            if len(all_listings) >= 30:
+                break
         return all_listings
 
     async def health(self) -> ProviderHealth:

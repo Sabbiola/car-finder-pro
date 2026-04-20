@@ -3,6 +3,10 @@ import type { SearchStreamEvent } from "@/features/search/types";
 import { supabase } from "@/integrations/supabase/client";
 import { createRequestId } from "@/lib/requestId";
 import { getRuntimeConfig, type RuntimeConfig } from "@/lib/runtimeConfig";
+import {
+  DEFAULT_SOURCE_SELECTION,
+  partitionSourcesForFastApi,
+} from "@/lib/providerSupport";
 import { streamSearch } from "@/services/api/searchStream";
 
 export type AnalysisConfidence = "high" | "medium" | "low" | "insufficient";
@@ -118,6 +122,7 @@ export interface CarListing {
   detail_scraped?: boolean;
   image_urls?: string[] | null;
   extra_data?: Record<string, unknown> | null;
+  seller_type?: string | null;
   seller_name?: string | null;
   seller_external_id?: string | null;
   seller_url?: string | null;
@@ -146,7 +151,10 @@ interface FastApiVehicleListing {
   mileage_value?: number | null;
   fuel_type?: string | null;
   transmission?: string | null;
+  power?: string | null;
   body_style?: string | null;
+  version?: string | null;
+  seats?: number | null;
   condition?: string | null;
   is_new?: boolean | null;
   color?: string | null;
@@ -213,18 +221,12 @@ export interface FastApiSearchRequest {
   seller_type?: "all" | "private" | "dealer";
   condition?: string;
   private_only?: boolean;
+  power_min_cv?: number;
+  power_max_cv?: number;
+  max_km_per_year?: number;
   mode?: "fast" | "full";
   sources?: string[];
 }
-
-export const FASTAPI_CORE_SOURCES = [
-  "autoscout24",
-  "subito",
-  "ebay",
-  "automobile",
-  "brumbrum",
-] as const;
-const LEGACY_ONLY_SOURCES: string[] = [];
 
 const mergedCacheByQuery = new Map<string, CarListing[]>();
 
@@ -251,16 +253,15 @@ function parseMaybeNumber(value: string): number | undefined {
 }
 
 function normalizeSources(filters: SearchFiltersState): string[] {
-  return filters.sources.length
-    ? filters.sources
-    : ["autoscout24", "subito", "ebay", "automobile", "brumbrum"];
+  return filters.sources.length ? filters.sources : [...DEFAULT_SOURCE_SELECTION];
 }
 
 function splitSources(filters: SearchFiltersState): { coreSources: string[]; legacySources: string[] } {
   const selected = normalizeSources(filters);
-  const core = selected.filter((s) => FASTAPI_CORE_SOURCES.includes(s as (typeof FASTAPI_CORE_SOURCES)[number]));
-  const legacy = selected.filter((s) => !core.includes(s) || LEGACY_ONLY_SOURCES.includes(s));
-  return { coreSources: core, legacySources: legacy };
+  const { supportedSources, unsupportedSources } = partitionSourcesForFastApi(selected, {
+    fallbackToDefault: false,
+  });
+  return { coreSources: supportedSources, legacySources: unsupportedSources };
 }
 
 export function buildFastApiRequest(
@@ -288,6 +289,9 @@ export function buildFastApiRequest(
     emission_class: filters.emissionClass || undefined,
     seller_type: filters.sellerType,
     private_only: filters.sellerType === "private",
+    power_min_cv: parseMaybeNumber(filters.powerMin),
+    power_max_cv: parseMaybeNumber(filters.powerMax),
+    max_km_per_year: parseMaybeNumber(filters.maxKmPerYear),
     mode: options?.mode ?? "fast",
     sources: normalizeSources(filters),
   };
@@ -337,7 +341,7 @@ export function mapFastApiListing(item: FastApiVehicleListing): CarListing {
     km: item.mileage_value || 0,
     fuel: item.fuel_type || null,
     transmission: item.transmission || null,
-    power: null,
+    power: item.power || null,
     color: item.color || null,
     doors: item.doors ?? null,
     body_type: item.body_style || null,
@@ -351,9 +355,9 @@ export function mapFastApiListing(item: FastApiVehicleListing): CarListing {
     scraped_at: item.scraped_at || new Date().toISOString(),
     description: item.description || null,
     emission_class: item.emission_class || null,
-    version: null,
-    seats: null,
-    condition: item.seller_type || item.condition || null,
+    version: item.version || null,
+    seats: item.seats ?? null,
+    condition: item.condition || null,
     detail_scraped: false,
     image_urls: item.images ?? null,
     extra_data: {
@@ -363,6 +367,7 @@ export function mapFastApiListing(item: FastApiVehicleListing): CarListing {
       raw_payload: item.raw_payload ?? null,
       deal_score: item.deal_score ?? null,
     },
+    seller_type: item.seller_type || null,
     seller_name: item.seller_name || null,
     seller_external_id: item.seller_external_id || null,
     seller_url: item.seller_url || null,

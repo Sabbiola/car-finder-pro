@@ -1,0 +1,93 @@
+name: E2E Staging Smoke
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      PLAYWRIGHT_STAGING_FRONTEND_URL:
+        required: true
+      PLAYWRIGHT_STAGING_SEARCH_PATH:
+        required: false
+
+jobs:
+  e2e-staging-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Validate staging smoke prerequisites
+        env:
+          PLAYWRIGHT_STAGING_FRONTEND_URL: ${{ secrets.PLAYWRIGHT_STAGING_FRONTEND_URL }}
+          PLAYWRIGHT_STAGING_SEARCH_PATH: ${{ secrets.PLAYWRIGHT_STAGING_SEARCH_PATH }}
+        run: |
+          if [ -z "$PLAYWRIGHT_STAGING_FRONTEND_URL" ]; then
+            echo "::error::Missing required secret PLAYWRIGHT_STAGING_FRONTEND_URL. Configure it before running E2E staging smoke."
+            {
+              echo "### E2E Staging Smoke - Prerequisite Check"
+              echo "- Status: FAILED"
+              echo "- Missing required secret: \`PLAYWRIGHT_STAGING_FRONTEND_URL\`"
+              echo "- Action: set repository/environment secret and re-run workflow."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          BASE_HOST="$(echo "$PLAYWRIGHT_STAGING_FRONTEND_URL" | sed -E 's#^https?://([^/:]+).*$#\1#')"
+          {
+            echo "### E2E Staging Smoke - Inputs"
+            echo "- Base host: \`$BASE_HOST\`"
+            echo "- Search path: \`${PLAYWRIGHT_STAGING_SEARCH_PATH:-<default>}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright staging smoke lane
+        env:
+          PLAYWRIGHT_STAGING_FRONTEND_URL: ${{ secrets.PLAYWRIGHT_STAGING_FRONTEND_URL }}
+          PLAYWRIGHT_STAGING_SEARCH_PATH: ${{ secrets.PLAYWRIGHT_STAGING_SEARCH_PATH }}
+        run: npm run test:e2e:staging-smoke
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-staging-smoke-report-${{ github.run_id }}
+          path: frontend/playwright-report
+          if-no-files-found: ignore
+
+      - name: Upload Playwright raw results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-staging-smoke-results-${{ github.run_id }}
+          path: |
+            frontend/test-results
+          if-no-files-found: ignore
+
+      - name: Publish staging smoke summary
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          {
+            echo "### E2E Staging Smoke - Result"
+            echo "- Job status: \`$JOB_STATUS\`"
+            echo "- Report artifact: \`e2e-staging-smoke-report-${{ github.run_id }}\`"
+            echo "- Raw results artifact: \`e2e-staging-smoke-results-${{ github.run_id }}\`"
+            if [ "$JOB_STATUS" != "success" ]; then
+              echo "- Next action: inspect HTML report and trace/video in raw results artifact."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

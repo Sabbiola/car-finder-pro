@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     request_timeout_seconds: int = 20
     max_provider_concurrency: int = 4
     provider_timeout_seconds: int = 30
-    provider_retry_attempts: int = 3
+    provider_retry_attempts: int = 1
     provider_retry_backoff_ms: int = 250
     search_rate_limit: str = "20/minute"
     search_stream_rate_limit: str = "10/minute"
@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     fastapi_proxy_mode: str = "primary_with_fallback"
     ops_token: str | None = None
     test_stub_mode: bool = False
+    circuit_breaker_threshold: int = 5
+    circuit_breaker_reset_seconds: int = 60
+    # Scraping backend: "scrapingbee" | "firecrawl" | "direct"
+    scraping_backend: str = "scrapingbee"
+    firecrawl_api_url: str = "https://api.firecrawl.dev"
+    firecrawl_api_key: str | None = None
+    direct_scraper_proxy_url: str | None = None
 
     @field_validator("cors_origins", mode="before")
     @classmethod

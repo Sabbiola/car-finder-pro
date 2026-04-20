@@ -25,6 +25,9 @@ const defaultValues: Record<string, unknown> = {
   location: "",
   sellerType: "all",
   emissionClass: "",
+  powerMin: "",
+  powerMax: "",
+  maxKmPerYear: "",
 };
 
 const labels: Record<string, string> = {
@@ -44,6 +47,9 @@ const labels: Record<string, string> = {
   bodyType: "Carrozzeria",
   location: "Località",
   emissionClass: "Euro",
+  powerMin: "Potenza min (CV)",
+  powerMax: "Potenza max (CV)",
+  maxKmPerYear: "Km/anno max",
 };
 
 const ActiveFilterChips = ({ filters, onChange }: Props) => {
