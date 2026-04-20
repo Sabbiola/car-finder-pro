@@ -46,7 +46,7 @@ function readCachedSearch(filters: SearchFiltersState): CarListing[] | null {
     const raw = sessionStorage.getItem(buildSearchCacheKey(filters));
     if (!raw) {return null;}
     const parsed = JSON.parse(raw) as CachedSearchPayload;
-    if (!parsed?.storedAt || !Array.isArray(parsed.listings)) {return null;}
+    if (!parsed.storedAt || !Array.isArray(parsed.listings)) {return null;}
     if (Date.now() - parsed.storedAt > SEARCH_CACHE_TTL_MS) {
       sessionStorage.removeItem(buildSearchCacheKey(filters));
       return null;
@@ -164,22 +164,25 @@ export function useSearchResultsOrchestration({
           throw new Error("Nessun provider FastAPI selezionato.");
         }
 
-        if (supportedSources.length) {
-          await streamListings(
+        await streamListings(
             { ...currentFilters, sources: supportedSources },
             (event) => {
               if (isStaleRequest()) {return;}
               if (event.event === "progress") {
                 setStreamProviderStatus((prev) => ({ ...prev, [event.provider]: event.status }));
-                if (typeof event.fetched_count === "number") {
+                if (event.status === "started") {
                   setStreamProviderCount((prev) => ({
                     ...prev,
-                    [event.provider]: event.fetched_count ?? 0,
+                    [event.provider]: prev[event.provider] ?? 0,
                   }));
                 }
               } else if (event.event === "result") {
                 streamedResults = mergeUniqueListings(streamedResults, [event.listing]);
                 setListings(streamedResults);
+                setStreamProviderCount((prev) => ({
+                  ...prev,
+                  [event.listing.source]: (prev[event.listing.source] ?? 0) + 1,
+                }));
               } else if (event.event === "complete") {
                 if (event.final_result_keys?.length) {
                   streamedResults = reconcileListingsByResultKeys(streamedResults, event.final_result_keys);
@@ -198,7 +201,6 @@ export function useSearchResultsOrchestration({
             },
             streamController.signal,
           );
-        }
         if (isStaleRequest()) {return;}
 
         const finalResults = streamedResults;

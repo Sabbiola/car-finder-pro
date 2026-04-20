@@ -1,13 +1,17 @@
+import hmac
 from collections import Counter
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from app.core.dependencies import get_market_repository, get_provider_registry
 from app.core.observability import log_event
 from app.core.metrics import get_runtime_metrics
 from app.core.provider_registry import ProviderRegistry
 from app.core.settings import get_settings
+from app.models.alerts import ProcessPriceAlertsResponse
+from app.services.price_alert_processor import PriceAlertProcessor
 from app.services.supabase_market_repository import SupabaseMarketRepository
 
 
@@ -19,7 +23,7 @@ def _verify_ops_token(x_ops_token: str | None = Header(default=None)) -> None:
     settings = get_settings()
     required_token = (getattr(settings, "ops_token", None) or "").strip()
     provided_token = (x_ops_token or "").strip()
-    if required_token and provided_token != required_token:
+    if required_token and not hmac.compare_digest(provided_token, required_token):
         raise HTTPException(status_code=403, detail="Invalid or missing ops token")
 
 
@@ -233,3 +237,31 @@ async def ops_alerts(
             "alerts_retrying_threshold": alerts_retrying_threshold,
         },
     }
+
+
+@router.post("/ops/process-alerts", response_model=ProcessPriceAlertsResponse)
+async def process_alerts(
+    dry_run: bool = Query(default=False, description="Preview without sending notifications or marking alerts"),
+    limit: int = Query(default=200, ge=1, le=1000, description="Max alerts to process per run"),
+    idempotency_key: str | None = Query(default=None, description="Optional run ID for idempotent replay prevention"),
+    repository: SupabaseMarketRepository = Depends(get_market_repository),
+    _auth: None = Depends(_verify_ops_token),
+) -> ProcessPriceAlertsResponse:
+    """Process due price alerts and send notifications.
+
+    Intended to be called by an external scheduler (GitHub Actions cron, Supabase cron, etc.).
+    Protected by the OPS_TOKEN header when OPS_TOKEN env var is configured.
+    """
+    processor = PriceAlertProcessor(repository)
+    run_key = idempotency_key or str(uuid4())
+    result = await processor.process(dry_run=dry_run, limit=limit, idempotency_key=run_key)
+    log_event(
+        "ops_process_alerts_completed",
+        run_id=run_key,
+        dry_run=dry_run,
+        scanned=result.scanned,
+        triggered=result.triggered,
+        notified=result.notified,
+        failed=result.failed,
+    )
+    return result

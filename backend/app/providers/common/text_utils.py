@@ -68,6 +68,44 @@ def parse_km(raw: str) -> int | None:
     return value
 
 
+def normalize_whitespace(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def parse_year(text: str) -> int | None:
+    match = re.search(r"\b(20[0-2]\d)\b", text)
+    if match:
+        year = int(match.group(1))
+        if 2000 <= year <= 2030:
+            return year
+    return None
+
+
+def parse_doors(text: str) -> int | None:
+    match = re.search(r"\b([2-9])\s*(?:porte?|doors?)\b", text, re.I)
+    if match:
+        return int(match.group(1))
+    match = re.search(r"\bporte?\s*[:\-]?\s*([2-9])\b", text, re.I)
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def parse_power_cv(text: str | None) -> int | None:
+    """Extract horsepower (CV/HP) from a power string like '140 kW (190 CV)' or '190 CV'."""
+    if not text:
+        return None
+    # Prefer CV/HP explicitly labelled
+    match = re.search(r"(\d+)\s*(?:cv|hp|ps|ch)\b", text, re.I)
+    if match:
+        return int(match.group(1))
+    # Fall back to kW → CV conversion (1 kW ≈ 1.36 CV)
+    match = re.search(r"(\d+)\s*kw\b", text, re.I)
+    if match:
+        return round(int(match.group(1)) * 1.36)
+    return None
+
+
 def extract_euro_price(text: str) -> int | None:
     # Token-first match avoids false positives on nearby card counters (e.g. "15" before "€ 32.900").
     token_first = re.compile(rf"{_EURO_TOKEN}\s*([\d][\d.]*)", re.I)

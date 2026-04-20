@@ -1,8 +1,10 @@
 import { createContext } from "react";
+import type { CardListing } from "@/lib/toCardListing";
 
 export interface CompareContextValue {
   compareIds: string[];
-  addToCompare: (id: string) => void;
+  compareListings: Record<string, CardListing>;
+  addToCompare: (id: string, listing?: CardListing) => void;
   removeFromCompare: (id: string) => void;
   clearCompare: () => void;
   isInCompare: (id: string) => boolean;

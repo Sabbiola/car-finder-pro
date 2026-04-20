@@ -35,7 +35,7 @@ def test_autoscout_query_includes_trim() -> None:
 def test_automobile_urls_prefer_brand_model_slug() -> None:
     request = SearchRequest(brand="BMW", model="320d", trim="M Sport", sources=["automobile"])
     urls = AutomobileProvider._build_urls(request)
-    assert urls == ["https://www.automobile.it/bmw-320d"]
+    assert urls == ["https://www.automobile.it/bmw-320d", "https://www.automobile.it/bmw-320d/page-2"]
 
 
 def test_brumbrum_urls_include_query_and_pagination() -> None:

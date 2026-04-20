@@ -114,7 +114,7 @@ const CarCard = ({ listing, showCompare }: Props) => {
             >
               {rating.label}
             </Badge>
-            {showCompare && <CompareButton id={listing.id} />}
+            {showCompare && <CompareButton id={listing.id} listing={listing} />}
           </div>
           <button
             className="text-muted-foreground hover:text-accent transition-colors"

@@ -258,6 +258,9 @@ class StubMarketRepository:
             }
         ]
 
+    async def ping(self) -> bool:
+        return True
+
     async def fetch_listing_row_by_id(self, listing_id: str):
         if listing_id != "listing-1":
             return None
@@ -385,7 +388,8 @@ class StubMarketRepository:
         user_id: str | None = None,
         client_id: str | None = None,
         active_only: bool = False,
-        limit: int = 200,
+        limit: int = 100,
+        offset: int = 0,
     ):
         rows = self._alerts
         if user_id:
@@ -394,7 +398,7 @@ class StubMarketRepository:
             rows = [row for row in rows if row.get("client_id") == client_id]
         if active_only:
             rows = [row for row in rows if row.get("is_active")]
-        return rows[:limit]
+        return rows[offset : offset + limit]
 
     async def find_matching_price_alert(
         self,
@@ -529,8 +533,9 @@ class StubMarketRepository:
             return True
         return False
 
-    async def fetch_user_favorite_rows(self, *, user_id: str):
-        return [item for item in self._favorites if item["user_id"] == user_id]
+    async def fetch_user_favorite_rows(self, *, user_id: str, limit: int = 100, offset: int = 0):
+        rows = [item for item in self._favorites if item["user_id"] == user_id]
+        return rows[offset : offset + limit]
 
     async def add_user_favorite(self, *, user_id: str, listing_id: str):
         existing = [item for item in self._favorites if item["user_id"] == user_id and item["listing_id"] == listing_id]
@@ -554,9 +559,9 @@ class StubMarketRepository:
         ]
         return len(self._favorites) != before
 
-    async def fetch_user_saved_search_rows(self, *, user_id: str, limit: int = 20):
+    async def fetch_user_saved_search_rows(self, *, user_id: str, limit: int = 20, offset: int = 0):
         rows = [item for item in self._saved_searches if item["user_id"] == user_id]
-        return rows[:limit]
+        return rows[offset : offset + limit]
 
     async def create_user_saved_search(self, *, user_id: str, name: str, filters: dict):
         row = {

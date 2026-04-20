@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowUpDown, Check, LayoutGrid, Link2, Loader2, Map } from "lucide-react";
+import { ArrowUpDown, Bookmark, Check, LayoutGrid, Link2, Loader2, Map } from "lucide-react";
 
 import {
   Select,
@@ -23,6 +23,7 @@ interface SearchResultsToolbarProps {
   sortLabels: Record<SortOption, string>;
   onSortChange: (sort: SortOption) => void;
   onRefresh: () => void;
+  onSaveSearch?: () => void;
 }
 
 const SearchResultsToolbar = ({
@@ -36,6 +37,7 @@ const SearchResultsToolbar = ({
   sortLabels,
   onSortChange,
   onRefresh,
+  onSaveSearch,
 }: SearchResultsToolbarProps) => {
   const [copied, setCopied] = useState(false);
 
@@ -113,6 +115,17 @@ const SearchResultsToolbar = ({
             <Map className="h-3.5 w-3.5" />
           </button>
         </div>
+
+        {onSaveSearch && (
+          <button
+            onClick={onSaveSearch}
+            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-violet-600 transition-colors"
+            title="Salva ricerca"
+            aria-label="Salva ricerca"
+          >
+            <Bookmark className="h-3.5 w-3.5" />
+          </button>
+        )}
 
         <button
           onClick={async () => {

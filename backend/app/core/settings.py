@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     fastapi_proxy_mode: str = "primary_with_fallback"
     ops_token: str | None = None
     test_stub_mode: bool = False
+    circuit_breaker_threshold: int = 5
+    circuit_breaker_reset_seconds: int = 60
+    # Scraping backend: "scrapingbee" | "firecrawl" | "direct"
+    scraping_backend: str = "scrapingbee"
+    firecrawl_api_url: str = "https://api.firecrawl.dev"
+    firecrawl_api_key: str | None = None
+    direct_scraper_proxy_url: str | None = None
 
     @field_validator("cors_origins", mode="before")
     @classmethod

@@ -221,6 +221,9 @@ export interface FastApiSearchRequest {
   seller_type?: "all" | "private" | "dealer";
   condition?: string;
   private_only?: boolean;
+  power_min_cv?: number;
+  power_max_cv?: number;
+  max_km_per_year?: number;
   mode?: "fast" | "full";
   sources?: string[];
 }
@@ -286,6 +289,9 @@ export function buildFastApiRequest(
     emission_class: filters.emissionClass || undefined,
     seller_type: filters.sellerType,
     private_only: filters.sellerType === "private",
+    power_min_cv: parseMaybeNumber(filters.powerMin),
+    power_max_cv: parseMaybeNumber(filters.powerMax),
+    max_km_per_year: parseMaybeNumber(filters.maxKmPerYear),
     mode: options?.mode ?? "fast",
     sources: normalizeSources(filters),
   };

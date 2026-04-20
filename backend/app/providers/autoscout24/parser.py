@@ -53,6 +53,20 @@ def _extract_heading_from_pre_context(pre_context: str) -> str | None:
         return candidate
     return None
 
+def _looks_like_noise_heading(value: str | None) -> bool:
+    if not value:
+        return True
+    text = value.strip().lower()
+    if not text:
+        return True
+    if re.fullmatch(r"[\d.\s]+km", text):
+        return True
+    if re.fullmatch(r"€?\s*[\d.\s]+", text):
+        return True
+    if re.fullmatch(r"\d{1,2}/\d{4}", text):
+        return True
+    return False
+
 
 def _extract_power(text: str) -> str | None:
     cv_match = re.search(r"\b(\d{2,4})\s*cv\b", text, re.I)
@@ -82,12 +96,15 @@ def _extract_seats(text: str) -> int | None:
 
 
 def _extract_emission_class(text: str) -> str | None:
-    match = re.search(r"\bclasse emissioni\s*(euro\s*[0-9][a-zA-Z]?)\b", text, re.I)
+    match = re.search(r"\bclasse emissioni\s*(euro\s*\d[a-zA-Z\-]*)", text, re.I)
     if match:
-        return match.group(1).upper().replace("EURO", "Euro")
-    match = re.search(r"\beuro\s*[0-9][a-zA-Z]?\b", text, re.I)
+        raw = match.group(1).strip()
+        # Normalise "euro" prefix to "Euro" but keep sub-class suffix as-is (6e, 6d, 6d-TEMP)
+        return re.sub(r"(?i)^euro\s*", "Euro ", raw).replace("  ", " ")
+    match = re.search(r"\b(euro\s*\d[a-zA-Z\-]*)\b", text, re.I)
     if match:
-        return match.group(0).strip().upper().replace("EURO", "Euro")
+        raw = match.group(1).strip()
+        return re.sub(r"(?i)^euro\s*", "Euro ", raw).replace("  ", " ")
     return None
 
 
@@ -108,9 +125,50 @@ def _extract_condition(text: str) -> str | None:
 
 
 def _extract_color(text: str) -> str | None:
-    match = re.search(r"\bcolore\s*[:\-]?\s*([^\n\r]{2,40})", text, re.I)
+    # Prefer "Colore specifico" (AutoScout detail pages) over generic "Colore"
+    specific = re.search(r"\bcolore specifico\s*[:\-]?\s*(?:\n\s*)?([^\n\r]{2,40})", text, re.I)
+    if specific:
+        val = re.sub(r"\s+", " ", specific.group(1)).strip()
+        if val and val.lower() not in ("e interni",):
+            return val
+    # Fallback: generic "Colore" but skip section headers like "## Colore e interni"
+    match = re.search(r"(?<!#\s)(?<!##\s)\bcolore\s*[:\-]\s*([^\n\r]{2,40})", text, re.I)
     if match:
-        return re.sub(r"\s+", " ", match.group(1)).strip()
+        val = re.sub(r"\s+", " ", match.group(1)).strip()
+        if val and val.lower() not in ("e interni", "interni"):
+            return val
+    return None
+
+
+def _extract_seller_name(text: str) -> str | None:
+    """Extract seller/dealer name from the Venditore section."""
+    # Pattern: ## Venditore\n\nRivenditore\n\n<Seller Name>
+    match = re.search(
+        r"##\s*Venditore\s*\n+\s*(?:Rivenditore|Privato)\s*\n+\s*([^\n#]{3,80})",
+        text,
+        re.I,
+    )
+    if match:
+        name = match.group(1).strip()
+        if name and not name.startswith("*") and not name.startswith("["):
+            return name
+    # Fallback: "Contatta venditore" followed by dealer name
+    match = re.search(r"Contatta venditore.*?\n+\s*([A-Z][^\n]{2,80})\s*\n", text)
+    if match:
+        name = match.group(1).strip()
+        if not name.startswith("http") and not name.startswith("["):
+            return name
+    return None
+
+
+def _extract_seller_url(text: str) -> str | None:
+    """Extract seller profile URL from the markdown."""
+    match = re.search(r"\[Pagina del rivenditore\]\((https://[^\s)]+)\)", text, re.I)
+    if match:
+        return match.group(1).split("#")[0]
+    match = re.search(r"(https://www\.autoscout24\.\w+/concessionari/[^\s)\"'#]+)", text, re.I)
+    if match:
+        return match.group(1)
     return None
 
 
@@ -270,8 +328,14 @@ def parse_autoscout_detail_markdown(markdown: str, source_url: str) -> VehicleLi
         "used" if (specs.get("Tipo di veicolo") or "").lower() == "usato" else None,
         "new" if (specs.get("Tipo di veicolo") or "").lower() == "nuovo" else None,
     )
-    color = _first_non_empty(_extract_color(markdown), specs.get("Colore"))
+    color = _first_non_empty(
+        specs.get("Colore specifico"),
+        _extract_color(markdown),
+        specs.get("Colore"),
+    )
     emission_class = _first_non_empty(_extract_emission_class(markdown), specs.get("Classe emissioni"))
+    seller_name = _extract_seller_name(markdown)
+    seller_url = _extract_seller_url(markdown)
 
     return VehicleListing(
         provider="autoscout24",
@@ -301,6 +365,8 @@ def parse_autoscout_detail_markdown(markdown: str, source_url: str) -> VehicleLi
         power=_extract_power(markdown),
         emission_class=emission_class,
         seller_type=_first_non_empty(_extract_seller_type(markdown), _extract_seller_type(specs.get("Venditore") or "")),
+        seller_name=seller_name,
+        seller_url=seller_url,
         city=_extract_location(markdown),
         region=None,
         country="IT",
@@ -321,6 +387,7 @@ def parse_autoscout_markdown(markdown: str, brand: str | None, model: str | None
     listings: list[VehicleListing] = []
     seen: set[str] = set()
     brand_prefix = (brand or "").lower()[:5]
+    model_pattern = re.compile((model or "").replace(" ", r"\s*"), re.I) if model else None
     blocks = AUTOSCOUT_IMAGE_PATTERN.split(markdown)
 
     for i in range(1, len(blocks), 3):
@@ -344,7 +411,7 @@ def parse_autoscout_markdown(markdown: str, brand: str | None, model: str | None
 
         title = _extract_heading_from_pre_context(pre_context) or ""
         link_title = re.search(r"\[([^\]]{5,120})\]\(https://www\.autoscout24\.it/annunci/", context, re.I)
-        if link_title and not title:
+        if link_title and (not title or _looks_like_noise_heading(title)):
             title = link_title.group(1).replace("**", "").strip()
         if not title:
             bold_title = re.search(r"\*\*([^*]{5,120})\*\*", context)
@@ -353,6 +420,8 @@ def parse_autoscout_markdown(markdown: str, brand: str | None, model: str | None
         if not title and brand and model:
             title = f"{brand} {model}"
         if not title:
+            continue
+        if model_pattern and not (model_pattern.search(title) or model_pattern.search(combined_context)):
             continue
 
         source_match = re.search(r"(https://www\.autoscout24\.it/annunci/[^\s)>\"']+)", context, re.I)

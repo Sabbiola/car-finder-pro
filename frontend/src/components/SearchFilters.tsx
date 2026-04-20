@@ -58,6 +58,9 @@ export interface SearchFiltersState {
   location: string;
   sellerType: "all" | "private" | "dealer";
   emissionClass: string;
+  powerMin: string;
+  powerMax: string;
+  maxKmPerYear: string;
 }
 
 const defaultFilters: SearchFiltersState = {
@@ -80,6 +83,9 @@ const defaultFilters: SearchFiltersState = {
   location: "",
   sellerType: "all",
   emissionClass: "",
+  powerMin: "",
+  powerMax: "",
+  maxKmPerYear: "",
 };
 
 interface Props {
@@ -319,8 +325,8 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
     }));
   };
 
-  const handleSaveConfirm = (name: string) => {
-    void save(name, filters);
+  const handleSaveConfirm = (name: string, alertEnabled: boolean) => {
+    void save(name, filters, alertEnabled);
   };
 
   const normalizeFilters = (current: SearchFiltersState): SearchFiltersState => {
@@ -333,6 +339,9 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
     }
     if (next.kmMin && next.kmMax && parseInt(next.kmMin) > parseInt(next.kmMax)) {
       next.kmMax = "";
+    }
+    if (next.powerMin && next.powerMax && parseInt(next.powerMin) > parseInt(next.powerMax)) {
+      next.powerMax = "";
     }
     return next;
   };
@@ -377,7 +386,10 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
     filters.location ||
     filters.isNew !== null ||
     filters.sellerType !== "all" ||
-    filters.emissionClass
+    filters.emissionClass ||
+    filters.powerMin ||
+    filters.powerMax ||
+    filters.maxKmPerYear
   );
 
   const isFilterSupported = (key: string) => selectedProviderCapabilitySet?.has(key) ?? true;
@@ -786,6 +798,40 @@ const SearchFilters = ({ onSearch, compact = false, initialFilters }: Props) => 
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Potenza min (CV)</Label>
+                <Input
+                  type="number"
+                  placeholder="90"
+                  value={filters.powerMin}
+                  min={0}
+                  onChange={(e) => update("powerMin", e.target.value)}
+                  className="bg-background"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Potenza max (CV)</Label>
+                <Input
+                  type="number"
+                  placeholder="300"
+                  value={filters.powerMax}
+                  min={0}
+                  onChange={(e) => update("powerMax", e.target.value)}
+                  className="bg-background"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Km/anno max</Label>
+                <Input
+                  type="number"
+                  placeholder="25000"
+                  value={filters.maxKmPerYear}
+                  min={0}
+                  onChange={(e) => update("maxKmPerYear", e.target.value)}
+                  className="bg-background"
+                  title="Esclude auto con più km/anno rispetto al limite impostato"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Citta / Regione</Label>

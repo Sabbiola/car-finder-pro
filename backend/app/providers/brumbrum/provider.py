@@ -38,7 +38,8 @@ class BrumBrumProvider(BaseProvider):
         settings = get_settings()
         if settings.test_stub_mode:
             return True
-        return bool(settings.scrapingbee_api_key)
+        from app.providers.common.scrapingbee import is_scraper_configured
+        return is_scraper_configured()
 
     @staticmethod
     def _stub_listings(request: SearchRequest) -> list[VehicleListing]:

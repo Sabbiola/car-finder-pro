@@ -1,7 +1,16 @@
+import asyncio
+import inspect
 from time import perf_counter
 from uuid import uuid4
 
-from fastapi import FastAPI
+# slowapi 0.1.9 uses asyncio.iscoroutinefunction which is deprecated in Python 3.14+.
+# Patch it back to inspect.iscoroutinefunction before slowapi is imported.
+if not hasattr(asyncio, "_iscoroutinefunction_original"):
+    asyncio._iscoroutinefunction_original = asyncio.iscoroutinefunction  # type: ignore[attr-defined]
+    asyncio.iscoroutinefunction = inspect.iscoroutinefunction  # type: ignore[attr-defined]
+
+from fastapi import Depends, FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -14,14 +23,17 @@ from app.api.health import router as health_router
 from app.api.listings import router as listings_router
 from app.api.metadata import router as metadata_router
 from app.api.ops import router as ops_router
+from app.api.prometheus_metrics import router as metrics_router
 from app.api.providers import router as providers_router
 from app.api.search import router as search_router
 from app.api.user import router as user_router
+from app.core.dependencies import get_market_repository
 from app.core.observability import configure_logging, log_event
 from app.core.request_context import set_request_id
 from app.core.settings import get_settings
 from app.core.metrics import get_runtime_metrics
 from app.core.rate_limiter import limiter
+from app.services.supabase_market_repository import SupabaseMarketRepository
 
 
 settings = get_settings()
@@ -57,6 +69,7 @@ app.include_router(providers_router, prefix="/api", tags=["providers"])
 app.include_router(health_router, prefix="/api", tags=["health"])
 app.include_router(metadata_router, prefix="/api", tags=["metadata"])
 app.include_router(ops_router, prefix="/api", tags=["ops"])
+app.include_router(metrics_router, tags=["metrics"])
 
 
 @app.middleware("http")
@@ -88,5 +101,13 @@ async def request_id_middleware(request: Request, call_next):
 
 
 @app.get("/healthz")
-def healthz() -> dict[str, str]:
-    return {"status": "ok"}
+async def healthz(
+    repository: SupabaseMarketRepository = Depends(get_market_repository),
+) -> JSONResponse:
+    db_ok = await repository.ping()
+    if not db_ok:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "degraded", "detail": "database unreachable"},
+        )
+    return JSONResponse(status_code=200, content={"status": "ok"})

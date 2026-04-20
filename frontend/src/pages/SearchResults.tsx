@@ -7,6 +7,7 @@ import ApiConfigBanner from "@/components/ApiConfigBanner";
 import SearchFilters, { type SearchFiltersState } from "@/components/SearchFilters";
 import CarCardSkeleton from "@/components/CarCardSkeleton";
 import ActiveFilterChips from "@/components/ActiveFilterChips";
+import SaveSearchDialog from "@/components/SaveSearchDialog";
 import ListingResultCard from "@/features/results/components/ListingResultCard";
 import {
   SearchModeProviderNotice,
@@ -15,6 +16,7 @@ import {
 import SearchResultsToolbar from "@/features/results/components/SearchResultsToolbar";
 import SearchStatsChips from "@/features/results/components/SearchStatsChips";
 import { useSearchResultsOrchestration } from "@/features/results/hooks/useSearchResultsOrchestration";
+import { useSavedSearches } from "@/hooks/useSavedSearches";
 import { useSearchParams } from "react-router-dom";
 import { PAGE_SIZE, VALID_SORT_OPTIONS, type SortOption } from "@/lib/constants";
 import { DEFAULT_SOURCE_SELECTION } from "@/lib/providerSupport";
@@ -69,6 +71,9 @@ function parseFiltersFromParams(params: URLSearchParams): SearchFiltersState {
     location: params.get("location") ?? "",
     sellerType,
     emissionClass: params.get("emissionClass") ?? "",
+    powerMin: params.get("powerMin") ?? "",
+    powerMax: params.get("powerMax") ?? "",
+    maxKmPerYear: params.get("maxKmPerYear") ?? "",
   };
 }
 
@@ -78,8 +83,10 @@ const SearchResults = () => {
   const [filters, setFilters] = useState<SearchFiltersState>(() => parseFiltersFromParams(searchParams));
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [viewMode, setViewMode] = useState<"grid" | "map">("grid");
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const isFastApiMode = getRuntimeConfig().backendMode === "fastapi";
+  const { save: saveSearch } = useSavedSearches();
 
   const {
     listings,
@@ -175,6 +182,7 @@ const SearchResults = () => {
   }, [listings, sort]);
 
   const { brand, model } = filters;
+  const defaultSearchName = [brand, model].filter(Boolean).join(" ") || "Ricerca salvata";
 
   return (
     <div className="min-h-screen bg-background">
@@ -230,6 +238,16 @@ const SearchResults = () => {
             );
           }}
           onRefresh={refreshSearch}
+          onSaveSearch={() => setSaveDialogOpen(true)}
+        />
+
+        <SaveSearchDialog
+          open={saveDialogOpen}
+          defaultName={defaultSearchName}
+          onSave={(name, alertEnabled) => {
+            void saveSearch(name, filters, alertEnabled);
+          }}
+          onClose={() => setSaveDialogOpen(false)}
         />
 
         <SearchStatsChips stats={stats} scraped={scraped} />

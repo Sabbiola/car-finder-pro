@@ -41,7 +41,7 @@ interface VehicleListingPayload {
   seller_phone_hash?: string | null;
   listing_hash?: string | null;
   deal_score?: number | null;
-  reason_codes?: string[] | null;
+  reason_codes?: string[];
   deal_summary?: CarListing["deal_summary"];
   trust_summary?: CarListing["trust_summary"];
   negotiation_summary?: CarListing["negotiation_summary"];
@@ -81,16 +81,16 @@ function toVehicleListingPayload(listing: Partial<CarListing>): VehicleListingPa
     color: listing.color ?? null,
     doors: listing.doors ?? null,
     emission_class: listing.emission_class ?? null,
-    seller_type: listing.condition ?? null,
+    seller_type: listing.seller_type ?? null,
     city: city ?? null,
-    images: normalizedImages.length ? normalizedImages : null,
+    images: normalizedImages,
     seller_name: listing.seller_name ?? null,
     seller_external_id: listing.seller_external_id ?? null,
     seller_url: listing.seller_url ?? null,
     seller_phone_hash: listing.seller_phone_hash ?? null,
     listing_hash: listing.listing_hash ?? null,
     deal_score: listing.deal_score ?? null,
-    reason_codes: listing.reason_codes ?? null,
+    reason_codes: listing.reason_codes ?? [],
     deal_summary: listing.deal_summary ?? null,
     trust_summary: listing.trust_summary ?? null,
     negotiation_summary: listing.negotiation_summary ?? null,
@@ -123,7 +123,18 @@ export async function analyzeListing(
     body: JSON.stringify(normalizedPayload),
   });
   if (!response.ok) {
-    throw new Error(`Listing analysis failed: HTTP ${response.status}`);
+    let errDetail = "";
+    try {
+      const errBody = await response.json() as { detail?: unknown };
+      if (Array.isArray(errBody?.detail)) {
+        errDetail = (errBody.detail as Array<{ loc?: string[]; msg?: string }>)
+          .map((e) => `${(e.loc ?? []).join(".")}: ${e.msg ?? ""}`)
+          .join("; ");
+      } else if (typeof errBody?.detail === "string") {
+        errDetail = errBody.detail;
+      }
+    } catch { /* ignore */ }
+    throw new Error(`Listing analysis failed: HTTP ${response.status}${errDetail ? ` — ${errDetail}` : ""}`);
   }
   return (await response.json()) as ListingAnalysis;
 }

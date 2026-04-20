@@ -42,7 +42,11 @@ class SubitoProvider(BaseProvider):
         settings = get_settings()
         if settings.test_stub_mode:
             return True
-        return bool(settings.scrapingbee_api_key)
+        # Subito blocks direct HTTP requests via WAF; needs a JS-rendering proxy.
+        if settings.scraping_backend == "direct":
+            return False
+        from app.providers.common.scrapingbee import is_scraper_configured
+        return is_scraper_configured()
 
     @staticmethod
     def _stub_listings(request: SearchRequest) -> list[VehicleListing]:

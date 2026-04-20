@@ -29,4 +29,6 @@ class ProviderHealth(BaseModel):
     total_calls: int = 0
     failed_calls: int = 0
     last_error: str | None = None
+    circuit_open: bool = False
+    consecutive_failures: int = 0
     checked_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

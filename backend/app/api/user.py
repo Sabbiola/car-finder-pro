@@ -25,9 +25,11 @@ router = APIRouter()
 @router.get("/user/favorites", response_model=FavoriteListResponse)
 async def list_user_favorites(
     user_id: str = Query(..., min_length=1),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     repository: SupabaseMarketRepository = Depends(get_market_repository),
 ) -> FavoriteListResponse:
-    rows = await repository.fetch_user_favorite_rows(user_id=user_id)
+    rows = await repository.fetch_user_favorite_rows(user_id=user_id, limit=limit, offset=offset)
     return FavoriteListResponse(
         favorites=[
             FavoriteRecord(
@@ -81,20 +83,29 @@ async def remove_user_favorite(
     )
 
 
+def _row_to_saved_search_record(row: dict) -> SavedSearchRecord:
+    raw_filters: dict = row.get("filters") or {}
+    alert_enabled = bool(raw_filters.pop("__alert_enabled", False))
+    return SavedSearchRecord(
+        id=str(row.get("id")),
+        name=str(row.get("name") or ""),
+        filters=raw_filters,
+        created_at=row.get("created_at"),
+        alert_enabled=alert_enabled,
+    )
+
+
 @router.get("/user/saved-searches", response_model=SavedSearchListResponse)
 async def list_saved_searches(
     user_id: str = Query(..., min_length=1),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     repository: SupabaseMarketRepository = Depends(get_market_repository),
 ) -> SavedSearchListResponse:
-    rows = await repository.fetch_user_saved_search_rows(user_id=user_id, limit=20)
+    rows = await repository.fetch_user_saved_search_rows(user_id=user_id, limit=limit, offset=offset)
     return SavedSearchListResponse(
         saved_searches=[
-            SavedSearchRecord(
-                id=str(row.get("id")),
-                name=str(row.get("name") or ""),
-                filters=row.get("filters") or {},
-                created_at=row.get("created_at"),
-            )
+            _row_to_saved_search_record(dict(row))
             for row in rows
             if row.get("id") and row.get("created_at")
         ]
@@ -106,20 +117,21 @@ async def create_saved_search(
     request: SavedSearchCreateRequest,
     repository: SupabaseMarketRepository = Depends(get_market_repository),
 ) -> SavedSearchRecord:
+    merged_filters = {**request.filters, "__alert_enabled": request.alert_enabled}
     row = await repository.create_user_saved_search(
         user_id=request.user_id,
         name=request.name,
-        filters=request.filters,
+        filters=merged_filters,
     )
     if not row:
         raise HTTPException(status_code=500, detail="Unable to create saved search.")
-    log_event("user_saved_search_created", user_id=request.user_id, saved_search_id=row.get("id"))
-    return SavedSearchRecord(
-        id=str(row.get("id")),
-        name=str(row.get("name") or ""),
-        filters=row.get("filters") or {},
-        created_at=row.get("created_at"),
+    log_event(
+        "user_saved_search_created",
+        user_id=request.user_id,
+        saved_search_id=row.get("id"),
+        alert_enabled=request.alert_enabled,
     )
+    return _row_to_saved_search_record(dict(row))
 
 
 @router.delete("/user/saved-searches/{search_id}")

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.analysis import DealSummary, NegotiationSummary, TrustSummary
 
@@ -14,7 +14,7 @@ class VehicleListing(BaseModel):
     title: str
     description: str | None = None
     price_amount: int
-    price_currency: str = "EUR"
+    price_currency: str = Field(default="EUR", min_length=3, max_length=3)
     year: int | None = None
     make: str | None = None
     model: str | None = None
@@ -50,3 +50,10 @@ class VehicleListing(BaseModel):
     trust_summary: TrustSummary | None = None
     negotiation_summary: NegotiationSummary | None = None
     scraped_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @field_validator("price_currency", mode="before")
+    @classmethod
+    def normalize_currency(cls, v: object) -> str:
+        if isinstance(v, str):
+            return v.strip().upper()
+        return str(v).strip().upper()

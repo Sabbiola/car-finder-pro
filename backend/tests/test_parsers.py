@@ -43,6 +43,25 @@ Classe emissioni Euro 4
     assert listings[0].emission_class == "Euro 4"
 
 
+def test_parse_autoscout_markdown_respects_model_filter_pattern() -> None:
+    markdown = """
+![img](https://prod.pictures.autoscout24.net/listing-images/aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb/640x480.jpg)
+[BMW X1 xDrive20d](https://www.autoscout24.it/annunci/bmw-x1-test)
+€ 25.000
+01/2020
+45.000 km
+![img](https://prod.pictures.autoscout24.net/listing-images/cccccccc-1111-2222-3333-dddddddddddd/640x480.jpg)
+[BMW Serie 3 320 d Msport](https://www.autoscout24.it/annunci/bmw-serie-3-test)
+€ 27.000
+02/2021
+60.000 km
+"""
+    filtered = parse_autoscout_markdown(markdown, "BMW", "Serie 3")
+    assert len(filtered) == 1
+    assert filtered[0].title == "BMW Serie 3 320 d Msport"
+    assert "bmw-serie-3-test" in filtered[0].url
+
+
 def test_parse_autoscout_detail_markdown_extracts_core_fields() -> None:
     markdown = """
 BMW 118

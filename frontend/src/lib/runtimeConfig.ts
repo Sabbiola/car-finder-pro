@@ -80,7 +80,12 @@ function resolveEnvBackendMode(): { value: BackendMode; source: Extract<RuntimeV
   if (raw === "fastapi" || raw === "supabase") {
     return { value: raw, source: "env" };
   }
-  // FastAPI-first default when env is missing or invalid.
+  if (raw !== undefined && raw !== "") {
+    console.warn(
+      `[runtimeConfig] VITE_BACKEND_MODE has unrecognized value "${raw}". ` +
+      `Valid values: "fastapi" | "supabase". Falling back to "fastapi".`
+    );
+  }
   return { value: "fastapi", source: "fallback" };
 }
 

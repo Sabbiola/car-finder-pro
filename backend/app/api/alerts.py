@@ -1,3 +1,4 @@
+import hmac
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from app.core.observability import log_event
@@ -54,6 +55,8 @@ async def list_alerts(
     user_id: str | None = Query(default=None),
     client_id: str | None = Query(default=None),
     active_only: bool = Query(default=False),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     repository: SupabaseMarketRepository = Depends(get_market_repository),
 ) -> PriceAlertListResponse:
     if not user_id and not client_id:
@@ -63,6 +66,8 @@ async def list_alerts(
         user_id=user_id,
         client_id=client_id,
         active_only=active_only,
+        limit=limit,
+        offset=offset,
     )
     latest_attempts = await repository.fetch_latest_delivery_attempts([str(row.get("id") or "") for row in rows])
     records = [_map_alert_row(row, latest_attempts.get(str(row.get("id") or ""))) for row in rows]
@@ -139,7 +144,7 @@ async def process_alerts(
     settings = get_settings()
     expected_token = (settings.alerts_processor_token or "").strip()
     provided_token = (x_alerts_token or "").strip()
-    if expected_token and provided_token != expected_token:
+    if expected_token and not hmac.compare_digest(provided_token, expected_token):
         raise HTTPException(status_code=401, detail="Invalid alerts processor token.")
 
     processor = PriceAlertProcessor(repository=repository)

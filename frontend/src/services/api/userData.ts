@@ -16,6 +16,7 @@ interface SavedSearchRecord {
   name: string;
   filters: SearchFiltersState;
   created_at: string;
+  alert_enabled: boolean;
 }
 
 interface SavedSearchListResponse {
@@ -84,10 +85,11 @@ export async function createUserSavedSearch(
   userId: string,
   name: string,
   filters: SearchFiltersState,
+  alertEnabled = false,
 ): Promise<SavedSearchRecord> {
   return callApi<SavedSearchRecord>("/api/user/saved-searches", {
     method: "POST",
-    body: JSON.stringify({ user_id: userId, name, filters }),
+    body: JSON.stringify({ user_id: userId, name, filters, alert_enabled: alertEnabled }),
   });
 }
 

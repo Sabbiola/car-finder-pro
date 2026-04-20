@@ -95,7 +95,7 @@ async def test_run_search_handles_partial_failures_and_dedup() -> None:
     assert response.total_results == 1
     assert len(response.listings) == 1
     assert response.providers_used == ["autoscout24", "subito"]
-    assert response.provider_errors == ["subito: provider down"]
+    assert response.provider_errors == ["subito: Provider error (RuntimeError)"]
     assert response.listings[0].deal_score is not None
     assert response.listings[0].reason_codes
 
@@ -257,3 +257,26 @@ async def test_run_search_applies_extended_post_filters() -> None:
 
     assert matching.total_results == 1
     assert non_matching.total_results == 0
+
+
+@pytest.mark.asyncio
+async def test_run_search_trim_filter_matches_compact_and_spaced_tokens() -> None:
+    spaced_trim_listing = _listing(
+        "autoscout24",
+        "BMW 320 d Msport",
+        "https://example.com/spaced-trim",
+        23000,
+    ).model_copy(update={"trim": None})
+    registry = ProviderRegistry()
+    registry._providers = {  # type: ignore[attr-defined]
+        "autoscout24": FakeProvider("autoscout24", results=[spaced_trim_listing]),
+    }
+    registry._stats = {"autoscout24": ProviderRuntimeStats()}  # type: ignore[attr-defined]
+    orchestrator = SearchOrchestrator(registry=registry)
+
+    response = await orchestrator.run_search(
+        SearchRequest(brand="BMW", trim="320d", sources=["autoscout24"])
+    )
+
+    assert response.total_results == 1
+    assert response.listings[0].url == "https://example.com/spaced-trim"

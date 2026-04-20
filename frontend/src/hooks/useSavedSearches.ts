@@ -14,6 +14,7 @@ export interface SavedSearch {
   name: string;
   filters: SearchFiltersState;
   createdAt: string;
+  alertEnabled: boolean;
 }
 
 const LS_KEY = "savedSearches";
@@ -24,19 +25,25 @@ function readFromStorage(): SavedSearch[] {
     if (!Array.isArray(parsed)) {
       return [];
     }
-    return parsed.filter((item): item is SavedSearch => {
-      if (!item || typeof item !== "object") {
-        return false;
-      }
-      const candidate = item as Record<string, unknown>;
-      return (
-        typeof candidate.id === "string" &&
-        typeof candidate.name === "string" &&
-        typeof candidate.createdAt === "string" &&
-        !!candidate.filters &&
-        typeof candidate.filters === "object"
-      );
-    });
+    return parsed
+      .filter((item): item is Record<string, unknown> => {
+        if (!item || typeof item !== "object") {return false;}
+        const c = item as Record<string, unknown>;
+        return (
+          typeof c.id === "string" &&
+          typeof c.name === "string" &&
+          typeof c.createdAt === "string" &&
+          !!c.filters &&
+          typeof c.filters === "object"
+        );
+      })
+      .map((c) => ({
+        id: c.id as string,
+        name: c.name as string,
+        filters: c.filters as SavedSearch["filters"],
+        createdAt: c.createdAt as string,
+        alertEnabled: Boolean(c.alertEnabled),
+      }));
   } catch {
     return [];
   }
@@ -63,6 +70,7 @@ export function useSavedSearches() {
               name: r.name,
               filters: r.filters,
               createdAt: r.created_at,
+              alertEnabled: r.alert_enabled ?? false,
             })),
           ),
         )
@@ -81,41 +89,50 @@ export function useSavedSearches() {
       .then(({ data }) => {
         if (data) {
           setSearches(
-            data.map((r) => ({
-              id: r.id,
-              name: r.name,
-              filters: r.filters as SearchFiltersState,
-              createdAt: r.created_at,
-            })),
+            data.map((r) => {
+              const rawFilters = (r.filters ?? {}) as Record<string, unknown>;
+              const alertEnabled = Boolean(rawFilters.__alert_enabled);
+              const { __alert_enabled: _dropped, ...cleanFilters } = rawFilters;
+              return {
+                id: r.id,
+                name: r.name,
+                filters: cleanFilters as SearchFiltersState,
+                createdAt: r.created_at,
+                alertEnabled,
+              };
+            }),
           );
         }
       });
   }, [user, useBackendApi]);
 
-  const save = async (name: string, filters: SearchFiltersState) => {
+  const save = async (name: string, filters: SearchFiltersState, alertEnabled = false) => {
     if (user) {
       if (useBackendApi) {
-        const data = await createUserSavedSearch(user.id, name, filters);
+        const data = await createUserSavedSearch(user.id, name, filters, alertEnabled);
         const entry: SavedSearch = {
           id: data.id,
           name: data.name,
           filters: data.filters,
           createdAt: data.created_at,
+          alertEnabled: data.alert_enabled ?? alertEnabled,
         };
         setSearches((prev) => [entry, ...prev].slice(0, 20));
         return;
       }
+      const mergedFilters = { ...filters, __alert_enabled: alertEnabled };
       const { data } = await supabase
         .from("user_saved_searches")
-        .insert({ user_id: user.id, name, filters })
+        .insert({ user_id: user.id, name, filters: mergedFilters })
         .select("id, name, filters, created_at")
         .single();
       if (data) {
         const entry: SavedSearch = {
           id: data.id,
           name: data.name,
-          filters: data.filters as SearchFiltersState,
+          filters: filters,
           createdAt: data.created_at,
+          alertEnabled,
         };
         setSearches((prev) => [entry, ...prev].slice(0, 20));
       }
@@ -125,6 +142,7 @@ export function useSavedSearches() {
         name,
         filters,
         createdAt: new Date().toISOString(),
+        alertEnabled,
       };
       const next = [entry, ...searches].slice(0, 10);
       setSearches(next);
