@@ -211,13 +211,25 @@ export function useListingDetail(
   return { car, similar, allPrices, priceHistory, loading, detailLoading, fetchError, resolvedUrl };
 }
 
+export interface AutomobileExtras {
+  metallic?: string;
+  interior_color?: string;
+  interior_design?: string;
+  fuel_urban?: string;
+  fuel_extra?: string;
+  fuel_mixed?: string;
+  co2?: string;
+  roadworthy?: string;
+}
+
 export function parseDetailPayload(extraData: Record<string, unknown> | null | undefined): {
   specs: Array<{ label: string; value: string }>;
   equipment: string[];
+  automobileExtras: AutomobileExtras;
 } {
   const rawPayload = extraData?.raw_payload;
   if (!rawPayload || typeof rawPayload !== "object") {
-    return { specs: [], equipment: [] };
+    return { specs: [], equipment: [], automobileExtras: {} };
   }
   const payload = rawPayload as Record<string, unknown>;
 
@@ -237,18 +249,31 @@ export function parseDetailPayload(extraData: Record<string, unknown> | null | u
     const equipment = Array.isArray(equipmentObj)
       ? equipmentObj.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
       : [];
-    return { specs: specs.slice(0, 20), equipment: equipment.slice(0, 30) };
+    return { specs: specs.slice(0, 20), equipment: equipment.slice(0, 30), automobileExtras: {} };
   }
 
   const equipmentDirect = payload.equipment;
-  if (Array.isArray(equipmentDirect)) {
-    const equipment = equipmentDirect.filter(
-      (item): item is string => typeof item === "string" && item.trim().length > 0,
-    );
-    return { specs: [], equipment: equipment.slice(0, 40) };
-  }
+  const equipment = Array.isArray(equipmentDirect)
+    ? equipmentDirect.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
 
-  return { specs: [], equipment: [] };
+  const getString = (key: string) => {
+    const val = payload[key];
+    return typeof val === "string" && val.trim() ? val.trim() : undefined;
+  };
+
+  const automobileExtras: AutomobileExtras = {
+    metallic: getString("metallic"),
+    interior_color: getString("interior_color"),
+    interior_design: getString("interior_design"),
+    fuel_urban: getString("fuel_urban"),
+    fuel_extra: getString("fuel_extra"),
+    fuel_mixed: getString("fuel_mixed"),
+    co2: getString("co2"),
+    roadworthy: getString("roadworthy"),
+  };
+
+  return { specs: [], equipment: equipment.slice(0, 40), automobileExtras };
 }
 
 export function buildGalleryImages(car: ExtendedListing): string[] {

@@ -391,6 +391,14 @@ class AutomobileProvider(BaseProvider):
         emission_class: str | None = None
         color: str | None = None
         equipment: list[str] = []
+        metallic: str | None = None
+        interior_color: str | None = None
+        interior_design: str | None = None
+        fuel_urban: str | None = None
+        fuel_extra: str | None = None
+        fuel_mixed: str | None = None
+        co2: str | None = None
+        roadworthy: str | None = None
 
         if isinstance(vehicle_info, dict):
             # basicInfo: list of {title, values}
@@ -488,6 +496,22 @@ class AutomobileProvider(BaseProvider):
             if color_vals:
                 color = color_vals[0].strip() or None
 
+            # Extra aesthetic fields
+            metallic_vals = aesthetic.get("Metallizzato") or []
+            metallic = metallic_vals[0].strip() if metallic_vals else None
+            interior_color_vals = aesthetic.get("Colore Interni") or aesthetic.get("Colore interni") or []
+            interior_color = interior_color_vals[0].strip() if interior_color_vals else None
+            interior_design_vals = aesthetic.get("Design Interni") or aesthetic.get("Design interni") or []
+            interior_design = interior_design_vals[0].strip() if interior_design_vals else None
+
+            # Consumption / CO2 from basicInfo
+            fuel_urban = " ".join(basic.get("Consumi urbani") or []) or None
+            fuel_extra = " ".join(basic.get("Consumi extraurbani") or []) or None
+            fuel_mixed = " ".join(basic.get("Consumi misti") or []) or None
+            co2 = " ".join(basic.get("CO2") or []) or None
+            roadworthy_vals = basic.get("In grado di viaggiare") or []
+            roadworthy = roadworthy_vals[0].strip() if roadworthy_vals else None
+
             # Equipment from accessories: [{title: "Multimedia", values: [...]}, ...]
             for acc_group in (vehicle_info.get("accessories") or []):
                 if not isinstance(acc_group, dict):
@@ -495,6 +519,23 @@ class AutomobileProvider(BaseProvider):
                 for item in (acc_group.get("values") or []):
                     if isinstance(item, str) and item.strip():
                         equipment.append(item.strip())
+
+        # Build extra fields dict (only include non-None values)
+        extra: dict = {}
+        if equipment:
+            extra["equipment"] = equipment
+        for key, val in [
+            ("metallic", metallic),
+            ("interior_color", interior_color),
+            ("interior_design", interior_design),
+            ("fuel_urban", fuel_urban),
+            ("fuel_extra", fuel_extra),
+            ("fuel_mixed", fuel_mixed),
+            ("co2", co2),
+            ("roadworthy", roadworthy),
+        ]:
+            if val:
+                extra[key] = val
 
         return VehicleListing(
             provider="automobile",
@@ -527,7 +568,7 @@ class AutomobileProvider(BaseProvider):
             country="IT",
             posted_at=None,
             images=images,
-            raw_payload={"equipment": equipment} if equipment else None,
+            raw_payload=extra if extra else None,
             reason_codes=[],
             scraped_at=datetime.now(timezone.utc),
         )

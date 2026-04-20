@@ -26,6 +26,7 @@ import {
   useListingDetail,
   parseDetailPayload,
   buildGalleryImages,
+  type AutomobileExtras,
 } from "@/features/detail/hooks/useListingDetail";
 import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
 import { FALLBACK_IMAGE } from "@/lib/constants";
@@ -82,7 +83,10 @@ const CarDetail = () => {
     [car],
   );
 
-  const autoscoutPayload = useMemo(() => parseDetailPayload(car?.extra_data), [car?.extra_data]);
+  const { specs: autoscoutSpecs, equipment: autoscoutEquipment, automobileExtras } = useMemo(
+    () => parseDetailPayload(car?.extra_data),
+    [car?.extra_data],
+  );
 
   if (loading) {
     return (
@@ -296,16 +300,16 @@ const CarDetail = () => {
           </div>
         )}
 
-        {(autoscoutPayload.specs.length > 0 || autoscoutPayload.equipment.length > 0) && (
+        {(autoscoutSpecs.length > 0 || autoscoutEquipment.length > 0 || hasAutomobileExtras(automobileExtras)) && (
           <div className="rounded-2xl border border-border/60 overflow-hidden animate-brutal-up" style={{ animationDelay: "120ms" }}>
             <div className="border-b border-border/60 px-5 py-3 flex items-center gap-2 bg-muted/40">
               <FileText className="h-4 w-4 text-muted-foreground" />
               <h2 className="text-sm font-semibold">Accessori e dettagli</h2>
             </div>
             <div className="p-5 space-y-4">
-              {autoscoutPayload.specs.length > 0 && (
+              {autoscoutSpecs.length > 0 && (
                 <div className="grid sm:grid-cols-2 gap-2">
-                  {autoscoutPayload.specs.map((item) => (
+                  {autoscoutSpecs.map((item) => (
                     <div key={item.label} className="bg-muted/60 rounded-xl px-3 py-2.5">
                       <div className="text-[10px] font-medium text-muted-foreground mb-0.5">{item.label}</div>
                       <div className="text-sm font-bold">{item.value}</div>
@@ -313,11 +317,14 @@ const CarDetail = () => {
                   ))}
                 </div>
               )}
-              {autoscoutPayload.equipment.length > 0 && (
+
+              <AutomobileExtrasSection extras={automobileExtras} />
+
+              {autoscoutEquipment.length > 0 && (
                 <div>
                   <h3 className="text-xs font-semibold text-muted-foreground mb-2">Equipaggiamento</h3>
                   <div className="flex flex-wrap gap-1.5">
-                    {autoscoutPayload.equipment.map((item) => (
+                    {autoscoutEquipment.map((item) => (
                       <Badge key={item} variant="outline" className="rounded-full text-[11px]">
                         {item}
                       </Badge>
@@ -361,5 +368,58 @@ const CarDetail = () => {
     </div>
   );
 };
+
+function hasAutomobileExtras(e: AutomobileExtras): boolean {
+  return Object.values(e).some(Boolean);
+}
+
+function AutomobileExtrasSection({ extras }: { extras: AutomobileExtras }) {
+  const consumiRows = [
+    extras.fuel_urban && { label: "Consumi urbani", value: extras.fuel_urban },
+    extras.fuel_extra && { label: "Consumi extraurbani", value: extras.fuel_extra },
+    extras.fuel_mixed && { label: "Consumi misti", value: extras.fuel_mixed },
+    extras.co2 && { label: "CO₂", value: extras.co2 },
+  ].filter(Boolean) as Array<{ label: string; value: string }>;
+
+  const aestheticRows = [
+    extras.metallic && { label: "Metallizzato", value: extras.metallic },
+    extras.interior_color && { label: "Colore interni", value: extras.interior_color },
+    extras.interior_design && { label: "Design interni", value: extras.interior_design },
+    extras.roadworthy && { label: "In grado di viaggiare", value: extras.roadworthy },
+  ].filter(Boolean) as Array<{ label: string; value: string }>;
+
+  if (consumiRows.length === 0 && aestheticRows.length === 0) return null;
+
+  return (
+    <>
+      {consumiRows.length > 0 && (
+        <div>
+          <h3 className="text-xs font-semibold text-muted-foreground mb-2">Consumi</h3>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {consumiRows.map((item) => (
+              <div key={item.label} className="bg-muted/60 rounded-xl px-3 py-2.5">
+                <div className="text-[10px] font-medium text-muted-foreground mb-0.5">{item.label}</div>
+                <div className="text-sm font-bold">{item.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {aestheticRows.length > 0 && (
+        <div>
+          <h3 className="text-xs font-semibold text-muted-foreground mb-2">Estetica e condizioni</h3>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {aestheticRows.map((item) => (
+              <div key={item.label} className="bg-muted/60 rounded-xl px-3 py-2.5">
+                <div className="text-[10px] font-medium text-muted-foreground mb-0.5">{item.label}</div>
+                <div className="text-sm font-bold">{item.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 export default CarDetail;

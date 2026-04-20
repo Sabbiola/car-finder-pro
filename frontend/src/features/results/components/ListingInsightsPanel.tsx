@@ -184,6 +184,17 @@ function OwnershipTab({ ownership }: { ownership?: OwnershipEstimate | null }) {
 
   const total = costs.reduce((s, c) => s + (c.value ?? 0), 0) || 1;
 
+  // Derive ownership period in months from total and monthly cost
+  const periodMonths =
+    ownership.monthly_cost && ownership.total_cost_of_ownership
+      ? Math.round(ownership.total_cost_of_ownership / ownership.monthly_cost)
+      : null;
+  const periodLabel = periodMonths
+    ? periodMonths % 12 === 0
+      ? `${periodMonths / 12} ${periodMonths / 12 === 1 ? "anno" : "anni"}`
+      : `${periodMonths} mesi`
+    : null;
+
   const scenarios = [
     { label: "Ottimistico", value: ownership.scenario_best, color: "text-emerald-500" },
     { label: "Base",        value: ownership.scenario_base, color: "text-foreground" },
@@ -202,7 +213,7 @@ function OwnershipTab({ ownership }: { ownership?: OwnershipEstimate | null }) {
           </div>
           {ownership.total_cost_of_ownership != null && (
             <div className="text-xs text-muted-foreground mt-1">
-              Totale annuo: EUR {ownership.total_cost_of_ownership.toLocaleString("it-IT")}
+              Totale per {periodLabel ?? "il periodo"}: EUR {ownership.total_cost_of_ownership.toLocaleString("it-IT")}
             </div>
           )}
         </div>
@@ -211,7 +222,9 @@ function OwnershipTab({ ownership }: { ownership?: OwnershipEstimate | null }) {
       {/* Cost breakdown bars */}
       {costs.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ripartizione costi</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Ripartizione costi{periodLabel ? ` (${periodLabel})` : ""}
+          </h4>
           {costs.map(({ label, value, icon: Icon, color }) => (
             <div key={label} className="space-y-1">
               <div className="flex items-center justify-between text-xs">
